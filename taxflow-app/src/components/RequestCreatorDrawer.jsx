@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
-import { X, Copy } from 'lucide-react'
+import { X, Copy, Plus } from 'lucide-react'
 import { useDocumentWorkflow } from '../context/DocumentWorkflowContext'
 
 const PRIORITIES = ['Low', 'Medium', 'High', 'Urgent']
@@ -78,146 +78,170 @@ export default function RequestCreatorDrawer({ isOpen, onClose }) {
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
-            transition={{ duration: 0.2 }}
-            className="fixed inset-0 z-40 bg-black/60 backdrop-blur-sm"
+            transition={{ duration: 0.3 }}
+            className="fixed inset-0 z-[100] bg-[var(--color-surface)]/80 backdrop-blur-md"
             onClick={handleClose}
           />
 
           {/* Drawer panel */}
           <motion.div
             key="drawer"
-            initial={{ x: '100%', opacity: 0 }}
-            animate={{ x: 0, opacity: 1 }}
-            exit={{ x: '100%', opacity: 0 }}
-            transition={{ type: 'spring', damping: 25, stiffness: 200 }}
-            className="fixed top-0 right-0 z-50 flex h-full w-full max-w-md flex-col rounded-l-2xl border-l border-white/[0.07] bg-white/[0.05] shadow-2xl backdrop-blur-xl"
+            initial={{ x: '100%', opacity: 0, filter: 'blur(10px)' }}
+            animate={{ x: 0, opacity: 1, filter: 'blur(0px)' }}
+            exit={{ x: '100%', opacity: 0, filter: 'blur(10px)' }}
+            transition={{ type: 'spring', damping: 30, stiffness: 300, mass: 0.8 }}
+            className="fixed top-0 right-0 z-[101] flex h-full w-full max-w-lg flex-col border-l border-[var(--color-outline-variant)] bg-[var(--color-surface-high)]/95 shadow-2xl backdrop-blur-2xl"
           >
             {/* Header */}
-            <div className="flex items-center justify-between border-b border-white/[0.07] px-6 py-5">
-              <h2 className="text-lg font-bold tracking-tight text-white">
-                New Document Request
+            <div className="flex items-center justify-between border-b border-[var(--color-outline-variant)] px-8 py-6 bg-[var(--color-surface)]/50 backdrop-blur-md sticky top-0 z-10">
+              <h2 className="text-[20px] font-bold tracking-tight text-[var(--color-on-surface)] m-0 flex items-center gap-2">
+                <Plus size={20} className="text-[var(--color-primary)]" /> New Request
               </h2>
               <button
                 onClick={handleClose}
-                className="flex h-8 w-8 items-center justify-center rounded-lg border border-white/[0.07] bg-white/[0.05] text-white/50 transition-colors duration-100 hover:bg-white/[0.1] hover:text-white"
+                className="flex h-9 w-9 items-center justify-center rounded-full border border-[var(--color-outline-variant)] bg-[var(--color-surface-container)] text-[var(--color-on-surface-variant)] transition-all duration-200 hover:bg-[var(--color-surface-container-high)] hover:text-[var(--color-on-surface)] active:scale-95"
               >
                 <X size={16} />
               </button>
             </div>
 
-            {/* Clone Prior Year Section */}
-            <div className="border-b border-white/[0.07] px-6 py-5">
-              <p className="mb-3 text-xs font-medium tracking-wide text-white/40">
-                Quick Setup
-              </p>
-              <button
-                type="button"
-                onClick={handleClone}
-                className="clone-btn group relative w-full overflow-hidden rounded-xl p-[1px] transition-transform duration-150 hover:scale-[1.02] active:scale-[0.98]"
-              >
-                {/* Animated gradient border */}
-                <span className="clone-border absolute inset-0 rounded-xl" />
-                {/* Inner content */}
-                <span className="relative flex items-center justify-center gap-2.5 rounded-[11px] bg-[#0d1117] px-4 py-3 text-sm font-semibold text-white transition-shadow duration-200 group-hover:shadow-[0_0_20px_rgba(6,182,212,0.25)]">
-                  <Copy size={16} className="text-cyan-400" />
-                  Clone 2024 Requests
-                </span>
-              </button>
-            </div>
-
-            {/* Form */}
-            <form onSubmit={handleSubmit} className="flex flex-1 flex-col gap-5 overflow-y-auto px-6 py-6">
-              {/* Document Name */}
-              <div>
-                <label className="mb-1.5 block text-xs font-medium tracking-wide text-white/50">
-                  Document Name
-                </label>
-                <input
-                  type="text"
-                  value={form.name}
-                  onChange={(e) => handleChange('name', e.target.value)}
-                  placeholder="e.g. W-2 Form"
-                  className={`w-full rounded-xl border bg-white/[0.05] px-4 py-2.5 text-sm text-white placeholder-white/25 outline-none transition-colors duration-150 ${
-                    errors.name
-                      ? 'border-red-500'
-                      : 'border-white/[0.07] focus:border-cyan-500/50'
-                  }`}
-                />
-                {errors.name && (
-                  <p className="mt-1 text-xs text-red-400">{errors.name}</p>
-                )}
-              </div>
-
-              {/* Description */}
-              <div>
-                <label className="mb-1.5 block text-xs font-medium tracking-wide text-white/50">
-                  Description
-                </label>
-                <textarea
-                  value={form.description}
-                  onChange={(e) => handleChange('description', e.target.value)}
-                  placeholder="Describe what the client needs to provide"
-                  rows={3}
-                  className={`w-full resize-none rounded-xl border bg-white/[0.05] px-4 py-2.5 text-sm text-white placeholder-white/25 outline-none transition-colors duration-150 ${
-                    errors.description
-                      ? 'border-red-500'
-                      : 'border-white/[0.07] focus:border-cyan-500/50'
-                  }`}
-                />
-                {errors.description && (
-                  <p className="mt-1 text-xs text-red-400">{errors.description}</p>
-                )}
-              </div>
-
-              {/* Due Date */}
-              <div>
-                <label className="mb-1.5 block text-xs font-medium tracking-wide text-white/50">
-                  Due Date
-                </label>
-                <input
-                  type="date"
-                  value={form.dueDate}
-                  onChange={(e) => handleChange('dueDate', e.target.value)}
-                  className={`w-full rounded-xl border bg-white/[0.05] px-4 py-2.5 text-sm text-white outline-none transition-colors duration-150 [color-scheme:dark] ${
-                    errors.dueDate
-                      ? 'border-red-500'
-                      : 'border-white/[0.07] focus:border-cyan-500/50'
-                  }`}
-                />
-                {errors.dueDate && (
-                  <p className="mt-1 text-xs text-red-400">{errors.dueDate}</p>
-                )}
-              </div>
-
-              {/* Priority */}
-              <div>
-                <label className="mb-1.5 block text-xs font-medium tracking-wide text-white/50">
-                  Priority
-                </label>
-                <select
-                  value={form.priority}
-                  onChange={(e) => handleChange('priority', e.target.value)}
-                  className="w-full rounded-xl border border-white/[0.07] bg-white/[0.05] px-4 py-2.5 text-sm text-white outline-none transition-colors duration-150 [color-scheme:dark] focus:border-cyan-500/50"
+            <div className="flex-1 overflow-y-auto custom-scrollbar">
+              {/* Clone Prior Year Section */}
+              <div className="border-b border-[var(--color-outline-variant)] px-8 py-8 bg-gradient-to-b from-[var(--color-surface-container)]/30 to-transparent">
+                <div className="flex items-center gap-3 mb-4">
+                  <div className="w-8 h-8 rounded-full bg-[var(--color-primary)]/10 flex items-center justify-center text-[var(--color-primary)]">
+                    <Copy size={16} />
+                  </div>
+                  <div>
+                    <h3 className="m-0 text-[14px] font-bold text-[var(--color-on-surface)]">Prior Year Data</h3>
+                    <p className="m-0 text-[12px] text-[var(--color-on-surface-variant)] leading-tight mt-0.5">Save time by carrying over last year's requests.</p>
+                  </div>
+                </div>
+                
+                <button
+                  type="button"
+                  onClick={handleClone}
+                  className="w-full relative overflow-hidden rounded-[16px] p-[1px] transition-transform duration-200 hover:scale-[1.01] active:scale-[0.99] group"
                 >
-                  {PRIORITIES.map((p) => (
-                    <option key={p} value={p} className="bg-gray-900 text-white">
-                      {p}
-                    </option>
-                  ))}
-                </select>
+                  <span className="absolute inset-0 bg-gradient-to-r from-[var(--color-primary)]/40 via-[var(--color-tertiary)]/40 to-[var(--color-primary)]/40 rounded-[16px] animate-[shimmer_3s_linear_infinite] group-hover:from-[var(--color-primary)]/60 group-hover:via-[var(--color-tertiary)]/60 group-hover:to-[var(--color-primary)]/60" />
+                  <span className="relative flex items-center justify-center gap-2 rounded-[15px] bg-[var(--color-surface-high)] px-4 py-3.5 text-[14px] font-bold text-[var(--color-on-surface)] transition-all duration-200 group-hover:bg-[var(--color-surface-container)] shadow-sm">
+                    Clone 2024 Requests
+                  </span>
+                </button>
               </div>
 
-              {/* Spacer */}
-              <div className="flex-1" />
+              {/* Form */}
+              <form id="request-form" onSubmit={handleSubmit} className="flex flex-col gap-6 px-8 py-8">
+                 <h3 className="m-0 text-[12px] font-bold uppercase tracking-[0.15em] text-[var(--color-on-surface-variant)]/70 flex items-center gap-2 mb-2">
+                    <span className="w-1.5 h-1.5 rounded-full bg-[var(--color-on-surface-variant)]/50" />
+                    Manual Entry
+                 </h3>
 
-              {/* Submit button */}
-              <button
-                type="submit"
-                className="w-full rounded-xl bg-gradient-to-r from-cyan-500 to-blue-500 px-4 py-3 text-sm font-semibold text-white shadow-lg shadow-cyan-500/20 transition-all duration-100 hover:shadow-cyan-500/30 hover:brightness-110 active:scale-[0.98]"
-              >
-                Create Request
-              </button>
-            </form>
+                {/* Document Name */}
+                <div className="flex flex-col gap-2">
+                  <label className="text-[13px] font-bold text-[var(--color-on-surface)] tracking-wide">
+                    Document Name <span className="text-red-400">*</span>
+                  </label>
+                  <input
+                    type="text"
+                    value={form.name}
+                    onChange={(e) => handleChange('name', e.target.value)}
+                    placeholder="e.g. W-2 Form, 1099-INT"
+                    className={`w-full rounded-[14px] border bg-[var(--color-surface-container)]/50 px-4 py-3.5 text-[14px] font-medium text-[var(--color-on-surface)] placeholder:text-[var(--color-on-surface-variant)]/50 outline-none transition-all duration-200 focus:bg-[var(--color-surface-container)] focus:shadow-[0_0_0_2px_rgba(var(--color-primary-rgb),0.2)] ${
+                      errors.name
+                        ? 'border-red-500/50 focus:border-red-500'
+                        : 'border-[var(--color-outline-variant)] focus:border-[var(--color-primary)]'
+                    }`}
+                  />
+                  {errors.name && (
+                    <motion.p initial={{ opacity: 0, height: 0 }} animate={{ opacity: 1, height: 'auto' }} className="m-0 mt-1 text-[12px] font-medium text-red-400">{errors.name}</motion.p>
+                  )}
+                </div>
+
+                {/* Description */}
+                <div className="flex flex-col gap-2">
+                  <label className="text-[13px] font-bold text-[var(--color-on-surface)] tracking-wide">
+                    Description <span className="text-red-400">*</span>
+                  </label>
+                  <textarea
+                    value={form.description}
+                    onChange={(e) => handleChange('description', e.target.value)}
+                    placeholder="Describe exactly what the client needs to provide..."
+                    rows={4}
+                    className={`w-full resize-none rounded-[14px] border bg-[var(--color-surface-container)]/50 px-4 py-3.5 text-[14px] font-medium text-[var(--color-on-surface)] placeholder:text-[var(--color-on-surface-variant)]/50 outline-none transition-all duration-200 focus:bg-[var(--color-surface-container)] focus:shadow-[0_0_0_2px_rgba(var(--color-primary-rgb),0.2)] ${
+                      errors.description
+                        ? 'border-red-500/50 focus:border-red-500'
+                        : 'border-[var(--color-outline-variant)] focus:border-[var(--color-primary)]'
+                    }`}
+                  />
+                  {errors.description && (
+                     <motion.p initial={{ opacity: 0, height: 0 }} animate={{ opacity: 1, height: 'auto' }} className="m-0 mt-1 text-[12px] font-medium text-red-400">{errors.description}</motion.p>
+                  )}
+                </div>
+
+                <div className="grid grid-cols-2 gap-5">
+                   {/* Due Date */}
+                  <div className="flex flex-col gap-2">
+                    <label className="text-[13px] font-bold text-[var(--color-on-surface)] tracking-wide">
+                      Due Date <span className="text-red-400">*</span>
+                    </label>
+                    <input
+                      type="date"
+                      value={form.dueDate}
+                      onChange={(e) => handleChange('dueDate', e.target.value)}
+                      className={`w-full rounded-[14px] border bg-[var(--color-surface-container)]/50 px-4 py-3.5 text-[14px] font-medium text-[var(--color-on-surface)] outline-none transition-all duration-200 focus:bg-[var(--color-surface-container)] focus:shadow-[0_0_0_2px_rgba(var(--color-primary-rgb),0.2)] [color-scheme:dark] ${
+                        errors.dueDate
+                          ? 'border-red-500/50 focus:border-red-500'
+                          : 'border-[var(--color-outline-variant)] focus:border-[var(--color-primary)]'
+                      }`}
+                    />
+                     {errors.dueDate && (
+                         <motion.p initial={{ opacity: 0, height: 0 }} animate={{ opacity: 1, height: 'auto' }} className="m-0 mt-1 text-[12px] font-medium text-red-400">{errors.dueDate}</motion.p>
+                      )}
+                  </div>
+
+                  {/* Priority */}
+                  <div className="flex flex-col gap-2">
+                    <label className="text-[13px] font-bold text-[var(--color-on-surface)] tracking-wide">
+                      Priority
+                    </label>
+                    <div className="relative">
+                       <select
+                        value={form.priority}
+                        onChange={(e) => handleChange('priority', e.target.value)}
+                        className="w-full appearance-none rounded-[14px] border border-[var(--color-outline-variant)] bg-[var(--color-surface-container)]/50 px-4 py-3.5 pr-10 text-[14px] font-medium text-[var(--color-on-surface)] outline-none transition-all duration-200 focus:bg-[var(--color-surface-container)] focus:border-[var(--color-primary)] focus:shadow-[0_0_0_2px_rgba(var(--color-primary-rgb),0.2)]"
+                      >
+                        {PRIORITIES.map((p) => (
+                          <option key={p} value={p} className="bg-[var(--color-surface-high)] text-[var(--color-on-surface)]">
+                            {p}
+                          </option>
+                        ))}
+                      </select>
+                      <div className="absolute top-1/2 right-4 -translate-y-1/2 pointer-events-none text-[var(--color-on-surface-variant)]">
+                        <svg width="10" height="6" viewBox="0 0 10 6" fill="none" xmlns="http://www.w3.org/2000/svg">
+                           <path d="M1 1L5 5L9 1" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
+                        </svg>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+                
+                {/* Visual padding at bottom */}
+                <div className="h-8" />
+              </form>
+            </div>
+            
+            {/* Footer with sticky submit button */}
+            <div className="border-t border-[var(--color-outline-variant)] p-6 bg-[var(--color-surface-high)]/95 backdrop-blur-md">
+               <button
+                  type="submit"
+                  form="request-form"
+                  className="w-full rounded-[14px] bg-[var(--color-on-surface)] text-[var(--color-surface-lowest)] px-4 py-4 text-[14px] font-bold tracking-wide transition-all duration-200 hover:bg-[var(--color-on-surface-variant)] active:scale-[0.98] shadow-lg flex justify-center items-center gap-2"
+                >
+                  <Plus size={18} />
+                  Create Request
+                </button>
+            </div>
           </motion.div>
         </>
       )}

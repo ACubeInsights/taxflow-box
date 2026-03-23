@@ -2,10 +2,10 @@ import { useAuth } from '../context/AuthContext'
 import { Bell, LogOut } from 'lucide-react'
 
 const ROLE_META = {
-  superadmin: { label: 'Super Admin', color: '#a78bfa', badge: 'SYSTEM', badgeBg: 'rgba(167,139,250,0.12)', badgeColor: '#a78bfa' },
-  cxo: { label: 'CXO / Partner', color: '#06b6d4', badge: 'EXECUTIVE', badgeBg: 'rgba(6,182,212,0.1)', badgeColor: '#06b6d4' },
-  employee: { label: 'Tax Preparer', color: '#34d399', badge: 'PREPARER', badgeBg: 'rgba(52,211,153,0.1)', badgeColor: '#34d399' },
-  client: { label: 'Client Portal', color: '#fbbf24', badge: 'CLIENT', badgeBg: 'rgba(251,191,36,0.1)', badgeColor: '#fbbf24' },
+  superadmin: { label: 'Super Admin', color: 'var(--color-primary)', badge: 'SYSTEM' },
+  cxo: { label: 'CXO / Partner', color: 'var(--color-tertiary)', badge: 'EXECUTIVE' },
+  employee: { label: 'Tax Preparer', color: 'var(--color-secondary)', badge: 'PREPARER' },
+  client: { label: 'Client Portal', color: 'var(--color-on-surface-variant)', badge: 'CLIENT' },
 }
 
 export default function TopNav() {
@@ -16,162 +16,70 @@ export default function TopNav() {
   const dateStr = now.toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric', year: 'numeric' })
 
   return (
-    <div
-      style={{
-        height: 65,
-        background: 'rgba(0,0,0,0.4)',
-        borderBottom: '1px solid rgba(255,255,255,0.05)',
-        backdropFilter: 'blur(20px)',
-        WebkitBackdropFilter: 'blur(20px)',
-        boxShadow: '0 4px 30px rgba(0,0,0,0.25)',
-        display: 'flex',
-        alignItems: 'center',
-        padding: '0 28px',
-        gap: 16,
-        position: 'sticky',
-        top: 0,
-        zIndex: 50,
-      }}
-    >
+    <div className="h-[65px] glass-panel border-b border-[var(--color-outline-variant)] shadow-[0_4px_30px_rgba(0,0,0,0.5)] flex items-center px-7 gap-4 sticky top-0 z-50">
       {/* Left: date */}
-      <div style={{ flex: 1 }}>
-        <div style={{ fontSize: 12, color: 'rgba(255,255,255,0.3)', fontWeight: 400 }}>
+      <div className="flex-1">
+        <div className="text-[12px] text-[var(--color-on-surface-variant)] font-medium tracking-wide">
           {dateStr}
         </div>
       </div>
 
       {/* Center: Box AI badge */}
-      <div
-        style={{
-          display: 'flex',
-          alignItems: 'center',
-          gap: 7,
-          padding: '5px 14px',
-          borderRadius: 999,
-          background: 'rgba(6,182,212,0.08)',
-          border: '1px solid rgba(6,182,212,0.18)',
-        }}
-      >
-        <div
-          style={{
-            width: 6,
-            height: 6,
-            borderRadius: '50%',
-            background: '#06b6d4',
-            boxShadow: '0 0 8px rgba(6,182,212,0.8)',
-          }}
-          className="animate-pulse-glow"
-        />
-        <span style={{ fontSize: 11, fontWeight: 600, color: 'rgba(6,182,212,0.9)', letterSpacing: '0.06em' }}>
+      <div className="flex items-center gap-[7px] px-[14px] py-[6px] rounded-full bg-[var(--color-primary)]/10 border border-[var(--color-primary)]/20 shadow-[0_0_12px_var(--color-primary)]/10">
+        <div className="w-1.5 h-1.5 rounded-full bg-[var(--color-primary)] shadow-[0_0_8px_var(--color-primary)] animate-pulse-glow" />
+        <span className="text-[10px] font-bold text-[var(--color-primary)] tracking-widest uppercase mt-[1px]">
           BOX AI CONNECTED
         </span>
       </div>
 
       {/* Right: actions */}
-      <div style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'flex-end', gap: 8 }}>
-        {/* Role label */}
-        <span style={{ fontSize: 12, fontWeight: 500, color: meta.color, marginRight: 4 }}>
-          {meta.label}
-        </span>
-
-        {/* Role badge */}
-        <div
-          style={{
-            padding: '4px 10px',
-            borderRadius: 999,
-            background: meta.badgeBg,
-            border: `1px solid ${meta.color}25`,
-          }}
-        >
-          <span style={{ fontSize: 10, fontWeight: 700, color: meta.badgeColor, letterSpacing: '0.07em' }}>
-            {meta.badge}
+      <div className="flex-1 flex items-center justify-end gap-3">
+        {/* Role label & badge */}
+        <div className="flex items-center gap-2 mr-1">
+          <span 
+            className="text-[12px] font-semibold tracking-tight"
+            style={{ color: meta.color }}
+          >
+            {meta.label}
           </span>
+          <div 
+            className="px-2 py-[2px] rounded-md border"
+            style={{ 
+              background: `color-mix(in srgb, ${meta.color} 10%, transparent)`,
+              borderColor: `color-mix(in srgb, ${meta.color} 25%, transparent)`
+            }}
+          >
+            <span 
+              className="text-[9px] font-bold tracking-widest"
+              style={{ color: meta.color }}
+            >
+              {meta.badge}
+            </span>
+          </div>
         </div>
 
         {/* Notification */}
-        <button
-          style={{
-            width: 36,
-            height: 36,
-            borderRadius: 10,
-            background: 'rgba(255,255,255,0.04)',
-            border: '1px solid rgba(255,255,255,0.07)',
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            cursor: 'pointer',
-            color: 'rgba(255,255,255,0.4)',
-            position: 'relative',
-            transition: 'all 0.2s',
-          }}
-          onMouseEnter={e => {
-            e.currentTarget.style.background = 'rgba(255,255,255,0.08)'
-            e.currentTarget.style.color = '#fff'
-          }}
-          onMouseLeave={e => {
-            e.currentTarget.style.background = 'rgba(255,255,255,0.04)'
-            e.currentTarget.style.color = 'rgba(255,255,255,0.4)'
-          }}
-        >
-          <Bell size={15} />
-          <span
-            style={{
-              position: 'absolute',
-              top: 6,
-              right: 6,
-              width: 7,
-              height: 7,
-              borderRadius: '50%',
-              background: '#06b6d4',
-              border: '1.5px solid #000',
-            }}
-          />
+        <button className="w-9 h-9 rounded-[10px] bg-[var(--color-surface)] border border-[var(--color-outline-variant)] flex items-center justify-center text-[var(--color-on-surface-variant)] hover:bg-[var(--color-surface-high)] hover:text-white transition-colors relative group">
+          <Bell size={15} className="group-hover:scale-110 transition-transform" />
+          <span className="absolute top-[7px] right-[7px] w-2 h-2 rounded-full bg-[var(--color-primary)] border-[1.5px] border-[var(--color-surface-lowest)]" />
         </button>
 
         {/* Avatar */}
         <div
+          className="w-8 h-8 rounded-full border flex items-center justify-center text-[10px] font-bold cursor-pointer"
           style={{
-            width: 32,
-            height: 32,
-            borderRadius: 999,
-            background: `linear-gradient(135deg, ${meta.color}35, ${meta.color}15)`,
-            border: `1px solid ${meta.color}40`,
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            fontSize: 11,
-            fontWeight: 700,
+            background: `linear-gradient(135deg, color-mix(in srgb, ${meta.color} 30%, transparent), color-mix(in srgb, ${meta.color} 10%, transparent))`,
+            borderColor: `color-mix(in srgb, ${meta.color} 40%, transparent)`,
             color: meta.color,
-            cursor: 'pointer',
           }}
         >
-          {meta.label.slice(0,2).toUpperCase()}
+          {meta.label.slice(0, 2).toUpperCase()}
         </div>
 
         {/* Logout */}
         <button
           onClick={logout}
-          style={{
-            width: 36,
-            height: 36,
-            borderRadius: 10,
-            background: 'rgba(255,255,255,0.04)',
-            border: '1px solid rgba(255,255,255,0.07)',
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            cursor: 'pointer',
-            color: 'rgba(255,255,255,0.4)',
-            transition: 'all 0.2s',
-          }}
-          onMouseEnter={e => {
-            e.currentTarget.style.background = 'rgba(239,68,68,0.15)'
-            e.currentTarget.style.color = '#f87171'
-          }}
-          onMouseLeave={e => {
-            e.currentTarget.style.background = 'rgba(255,255,255,0.04)'
-            e.currentTarget.style.color = 'rgba(255,255,255,0.4)'
-          }}
+          className="w-9 h-9 rounded-[10px] bg-[var(--color-surface)] border border-[var(--color-outline-variant)] flex items-center justify-center text-[var(--color-on-surface-variant)] hover:bg-[#ffb4ab]/10 hover:text-[#ffb4ab] hover:border-[#ffb4ab]/30 transition-colors"
           aria-label="Logout"
         >
           <LogOut size={15} />
@@ -180,3 +88,4 @@ export default function TopNav() {
     </div>
   )
 }
+

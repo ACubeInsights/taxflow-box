@@ -15,7 +15,7 @@ const containerVariants = {
 }
 
 const itemVariants = {
-  hidden: { opacity: 0, y: 20 },
+  hidden: { opacity: 0, y: 15 },
   visible: { opacity: 1, y: 0, transition: { duration: 0.5, ease: 'easeOut' } },
 }
 
@@ -82,70 +82,64 @@ export default function ClientDashboard() {
       variants={containerVariants}
       initial="hidden"
       animate="visible"
+      className="max-w-[1200px] mx-auto"
     >
       <motion.div
         variants={itemVariants}
+        className="mb-8 p-7 rounded-[24px] flex items-center gap-6 relative overflow-hidden"
         style={{
-          marginBottom: 28,
-          padding: '24px 28px',
-          borderRadius: 20,
-          background: 'linear-gradient(135deg, rgba(6,182,212,0.08), rgba(99,102,241,0.06))',
-          border: '1px solid rgba(6,182,212,0.15)',
-          display: 'flex',
-          alignItems: 'center',
-          gap: 20,
+          background: 'linear-gradient(135deg, color-mix(in srgb, var(--color-primary) 10%, transparent), color-mix(in srgb, var(--color-primary-container) 8%, transparent))',
+          border: '1px solid color-mix(in srgb, var(--color-primary) 15%, transparent)',
         }}
       >
-        <div>
-          <h1 style={{ margin: 0, fontSize: 24, fontWeight: 700, color: '#fff', letterSpacing: '-0.03em', lineHeight: 1.2 }}>
+        <div className="absolute top-0 right-0 w-[400px] h-[400px] -translate-y-1/2 translate-x-1/3 rounded-full opacity-10 pointer-events-none" style={{ background: 'var(--color-primary)', filter: 'blur(80px)' }} />
+        
+        <div className="relative z-10">
+          <h1 className="m-0 text-[28px] font-bold text-[var(--color-on-surface)] tracking-[-0.03em] leading-tight font-display mb-1.5">
             Welcome back, Jordan.
           </h1>
-          <p style={{ margin: '6px 0 0', fontSize: 14, color: 'rgba(255,255,255,0.45)' }}>
+          <p className="m-0 text-[14px] text-[var(--color-on-surface-variant)] tracking-wide">
             Your 2024 tax return is in progress. Your preparer is reviewing your documents.
           </p>
         </div>
-        <div style={{ marginLeft: 'auto', textAlign: 'right', flexShrink: 0 }}>
-          <div style={{ fontSize: 12, color: 'rgba(255,255,255,0.35)', marginBottom: 4 }}>Filing Status</div>
-          <Badge color="#fbbf24">In Review</Badge>
+        <div className="ml-auto text-right shrink-0 relative z-10">
+          <div className="text-[11px] font-bold text-[var(--color-on-surface-variant)] uppercase tracking-widest mb-1.5 opacity-70">Filing Status</div>
+          <Badge color="var(--color-tertiary)">In Review</Badge>
         </div>
       </motion.div>
 
-      <motion.div variants={itemVariants} className="grid grid-cols-1 lg:grid-cols-[1.2fr_1fr] gap-4 mb-6">
+      <motion.div variants={itemVariants} className="grid grid-cols-1 lg:grid-cols-[1.2fr_1fr] gap-5 mb-8">
         {/* Progress tracker */}
         <GlassPanel delay={100}>
           <PanelTitle>Tax Year 2024 — Your Progress</PanelTitle>
-          <div style={{ padding: '8px 0' }}>
+          <div className="py-2">
             {TAX_STEPS.map((step, i) => (
-              <div key={step.label} style={{ display: 'flex', alignItems: 'flex-start', gap: 14, marginBottom: i < TAX_STEPS.length - 1 ? 0 : 0 }}>
-                <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
+              <div key={step.label} className="flex items-start gap-4" style={{ marginBottom: i < TAX_STEPS.length - 1 ? 0 : 0 }}>
+                <div className="flex flex-col items-center">
                   <div
+                    className="w-8 h-8 rounded-full flex items-center justify-center shrink-0 transition-all duration-300 relative z-10"
                     style={{
-                      width: 28, height: 28, borderRadius: '50%',
-                      background: step.done ? '#34d399' : 'rgba(255,255,255,0.07)',
-                      border: `2px solid ${step.done ? '#34d399' : 'rgba(255,255,255,0.12)'}`,
-                      display: 'flex', alignItems: 'center', justifyContent: 'center',
-                      flexShrink: 0,
-                      boxShadow: step.done ? '0 0 12px rgba(52,211,153,0.4)' : 'none',
-                      transition: 'all 0.3s',
+                      background: step.done ? 'var(--color-secondary)' : 'var(--color-surface-high)',
+                      border: `2px solid ${step.done ? 'var(--color-secondary)' : 'var(--color-outline-variant)'}`,
+                      boxShadow: step.done ? '0 0 16px color-mix(in srgb, var(--color-secondary) 40%, transparent)' : 'none',
                     }}
                   >
                     {step.done
-                      ? <CheckCircle size={14} color="#000" strokeWidth={2.5} />
-                      : <span style={{ width: 8, height: 8, borderRadius: '50%', background: 'rgba(255,255,255,0.15)', display: 'block' }} />
+                      ? <CheckCircle size={16} color="var(--color-surface-lowest)" strokeWidth={3} />
+                      : <span className="w-2.5 h-2.5 rounded-full bg-[var(--color-outline)] block" />
                     }
                   </div>
                   {i < TAX_STEPS.length - 1 && (
                     <div
+                      className="w-0.5 h-7 my-1 transition-colors duration-300"
                       style={{
-                        width: 2, height: 28, margin: '3px 0',
-                        background: step.done ? 'rgba(52,211,153,0.4)' : 'rgba(255,255,255,0.07)',
-                        transition: 'background 0.3s',
+                        background: step.done ? 'color-mix(in srgb, var(--color-secondary) 50%, transparent)' : 'var(--color-outline-variant)',
                       }}
                     />
                   )}
                 </div>
-                <div style={{ paddingTop: 5, paddingBottom: i < TAX_STEPS.length - 1 ? 0 : 0 }}>
-                  <p style={{ margin: 0, fontSize: 13, fontWeight: step.done ? 600 : 400, color: step.done ? '#fff' : 'rgba(255,255,255,0.35)' }}>
+                <div className="pt-1.5">
+                  <p className="m-0 text-[14px]" style={{ fontWeight: step.done ? 700 : 500, color: step.done ? 'var(--color-on-surface)' : 'var(--color-on-surface-variant)' }}>
                     {step.label}
                   </p>
                 </div>
@@ -153,51 +147,63 @@ export default function ClientDashboard() {
             ))}
           </div>
 
-          <div style={{ marginTop: 20 }}>
-            <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 8 }}>
-              <span style={{ fontSize: 12, color: 'rgba(255,255,255,0.4)', fontWeight: 500 }}>Overall completion</span>
-              <span style={{ fontSize: 12, fontWeight: 700, color: '#34d399' }}>40%</span>
+          <div className="mt-8 pt-6 border-t border-[var(--color-outline-variant)]">
+            <div className="flex justify-between mb-3">
+              <span className="text-[12px] font-bold text-[var(--color-on-surface-variant)] uppercase tracking-widest">Overall completion</span>
+              <span className="text-[13px] font-extrabold text-[var(--color-secondary)]">40%</span>
             </div>
-            <ProgressBar value={40} color="#34d399" />
+            <ProgressBar value={40} color="var(--color-secondary)" />
           </div>
         </GlassPanel>
 
         {/* Preparer requests */}
         <GlassPanel delay={150}>
           <PanelTitle>Requests from Your Preparer</PanelTitle>
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+          <div className="flex flex-col gap-3">
             {PREPARER_REQUESTS.map((r) => (
               <div
                 key={r.title}
+                className="p-3.5 rounded-[16px] cursor-pointer transition-all duration-300 group"
                 style={{
-                  padding: '12px 14px',
-                  borderRadius: 12,
-                  background: r.done ? 'rgba(52,211,153,0.04)' : 'rgba(255,255,255,0.025)',
-                  border: `1px solid ${r.done ? 'rgba(52,211,153,0.12)' : r.priority === 'urgent' ? 'rgba(248,113,113,0.15)' : 'rgba(255,255,255,0.05)'}`,
-                  opacity: r.done ? 0.5 : 1,
-                  cursor: 'pointer',
-                  transition: 'all 0.2s',
+                  background: r.done ? 'color-mix(in srgb, var(--color-secondary) 8%, transparent)' : 'var(--color-surface-high)',
+                  border: `1px solid ${r.done ? 'color-mix(in srgb, var(--color-secondary) 25%, transparent)' : r.priority === 'urgent' ? 'color-mix(in srgb, #ffb4ab 25%, transparent)' : 'var(--color-outline-variant)'}`,
+                  opacity: r.done ? 0.6 : 1,
                 }}
-                onMouseEnter={e => { if (!r.done) e.currentTarget.style.background = 'rgba(255,255,255,0.05)' }}
-                onMouseLeave={e => { if (!r.done) e.currentTarget.style.background = 'rgba(255,255,255,0.025)' }}
+                onMouseEnter={e => {
+                  if (!r.done) {
+                    e.currentTarget.style.background = 'var(--color-surface-highest)'
+                    e.currentTarget.style.transform = 'translateY(-2px)'
+                    e.currentTarget.style.boxShadow = '0 8px 24px rgba(0,0,0,0.3)'
+                  }
+                }}
+                onMouseLeave={e => {
+                  if (!r.done) {
+                    e.currentTarget.style.background = 'var(--color-surface-high)'
+                    e.currentTarget.style.transform = 'none'
+                    e.currentTarget.style.boxShadow = 'none'
+                  }
+                }}
               >
-                <div style={{ display: 'flex', alignItems: 'flex-start', gap: 10 }}>
-                  <div style={{ paddingTop: 1 }}>
+                <div className="flex items-start gap-3">
+                  <div className="pt-0.5 shrink-0">
                     {r.done
-                      ? <CheckCircle size={14} color="#34d399" />
-                      : <Clock size={14} color={r.priority === 'urgent' ? '#f87171' : '#fbbf24'} />
+                      ? <CheckCircle size={16} className="text-[var(--color-secondary)]" />
+                      : <Clock size={16} color={r.priority === 'urgent' ? '#ffb4ab' : 'var(--color-tertiary)'} />
                     }
                   </div>
-                  <div style={{ flex: 1, minWidth: 0 }}>
-                    <p style={{ margin: 0, fontSize: 12, fontWeight: 500, color: r.done ? 'rgba(255,255,255,0.4)' : '#fff', lineHeight: 1.4, textDecoration: r.done ? 'line-through' : 'none' }}>
+                  <div className="flex-1 min-w-0">
+                    <p className="m-0 text-[13px] font-semibold leading-snug" style={{ color: r.done ? 'var(--color-on-surface-variant)' : 'var(--color-on-surface)', textDecoration: r.done ? 'line-through' : 'none' }}>
                       {r.title}
                     </p>
-                    <div style={{ display: 'flex', gap: 8, marginTop: 5, alignItems: 'center' }}>
-                      {!r.done && <Badge color={r.priority === 'urgent' ? '#f87171' : '#fbbf24'}>{r.priority}</Badge>}
-                      <span style={{ fontSize: 10, color: 'rgba(255,255,255,0.25)' }}>Due {r.due}</span>
+                    <div className="flex gap-2.5 mt-2 items-center">
+                      {!r.done && <Badge color={r.priority === 'urgent' ? '#ffb4ab' : 'var(--color-tertiary)'}>{r.priority}</Badge>}
+                      <span className="text-[11px] font-medium text-[var(--color-on-surface-variant)] flex items-center gap-1.5">
+                        <Calendar size={10} />
+                        Due {r.due}
+                      </span>
                     </div>
                   </div>
-                  {!r.done && <ChevronRight size={13} color="rgba(255,255,255,0.25)" style={{ flexShrink: 0, marginTop: 2 }} />}
+                  {!r.done && <ChevronRight size={14} className="text-[var(--color-on-surface-variant)] shrink-0 mt-1 origin-left transition-transform duration-300 group-hover:translate-x-1" />}
                 </div>
               </div>
             ))}
@@ -218,48 +224,33 @@ export default function ClientDashboard() {
 
       {/* Document Requests */}
       {clientRequests.length > 0 && (
-        <motion.div variants={itemVariants} style={{ marginTop: 24 }}>
+        <motion.div variants={itemVariants} className="mt-8">
           <GlassPanel delay={200}>
             <PanelTitle>Document Requests</PanelTitle>
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+            <div className="flex flex-col gap-3">
               {clientRequests.map((req) => (
                 <div
                   key={req.id}
                   onClick={() => setSelectedRequest(req.id)}
-                  style={{
-                    padding: '12px 14px',
-                    borderRadius: 12,
-                    background: 'rgba(255,255,255,0.025)',
-                    border: '1px solid rgba(255,255,255,0.05)',
-                    cursor: 'pointer',
-                    transition: 'all 0.2s',
-                    display: 'flex',
-                    alignItems: 'center',
-                    gap: 12,
-                  }}
-                  onMouseEnter={e => {
-                    e.currentTarget.style.background = 'rgba(255,255,255,0.05)'
-                    e.currentTarget.style.transform = 'translateX(2px)'
-                  }}
-                  onMouseLeave={e => {
-                    e.currentTarget.style.background = 'rgba(255,255,255,0.025)'
-                    e.currentTarget.style.transform = 'translateX(0)'
-                  }}
+                  className="p-4 rounded-[16px] bg-[var(--color-surface-high)] ring-1 ring-[var(--color-outline-variant)] cursor-pointer flex items-center gap-4 transition-all duration-300 group hover:bg-[var(--color-surface-highest)] hover:-translate-y-[2px] hover:shadow-[0_12px_24px_rgba(0,0,0,0.3)] hover:ring-[var(--color-outline)]"
                 >
-                  <FileText size={16} color="rgba(255,255,255,0.35)" style={{ flexShrink: 0 }} />
-                  <div style={{ flex: 1, minWidth: 0 }}>
-                    <p style={{ margin: 0, fontSize: 13, fontWeight: 500, color: '#fff', lineHeight: 1.4 }}>
+                  <div className="w-10 h-10 rounded-[12px] bg-[var(--color-surface-container)] flex items-center justify-center border border-[var(--color-outline-variant)] group-hover:bg-[var(--color-primary)]/10 group-hover:border-[var(--color-primary)]/30 transition-colors">
+                    <FileText size={18} className="text-[var(--color-on-surface-variant)] group-hover:text-[var(--color-primary)] transition-colors" />
+                  </div>
+                  
+                  <div className="flex-1 min-w-0">
+                    <p className="m-0 text-[14px] font-bold text-[var(--color-on-surface)] leading-snug">
                       {req.name}
                     </p>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginTop: 4 }}>
-                      <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4, fontSize: 11, color: 'rgba(255,255,255,0.3)' }}>
+                    <div className="flex items-center gap-2 mt-1.5">
+                      <span className="inline-flex items-center gap-1.5 text-[11px] font-medium text-[var(--color-on-surface-variant)] bg-[var(--color-surface-container)] px-2 py-0.5 rounded-md">
                         <Calendar size={10} />
                         Due {req.dueDate}
                       </span>
                     </div>
                   </div>
                   <StatusBadge status={req.status} />
-                  <ChevronRight size={13} color="rgba(255,255,255,0.25)" style={{ flexShrink: 0 }} />
+                  <ChevronRight size={16} className="text-[var(--color-on-surface-variant)] shrink-0 group-hover:text-[var(--color-primary)] transition-colors origin-left group-hover:translate-x-1" />
                 </div>
               ))}
             </div>

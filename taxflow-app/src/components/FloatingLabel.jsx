@@ -8,15 +8,15 @@ export default function FloatingLabel({ label, type, value, onChange, autoComple
   const lifted = focused || value.length > 0
 
   const borderColor = focused
-    ? 'rgba(6,182,212,0.5)'
+    ? 'color-mix(in srgb, var(--color-primary) 50%, transparent)'
     : hovered
-      ? 'rgba(6,182,212,0.28)'
-      : 'rgba(255,255,255,0.09)'
+      ? 'color-mix(in srgb, var(--color-primary) 28%, transparent)'
+      : 'var(--color-outline-variant)'
 
   const boxShadow = focused
-    ? '0 0 0 3px rgba(6,182,212,0.12), inset 0 1px 0 rgba(255,255,255,0.05)'
+    ? '0 0 0 3px color-mix(in srgb, var(--color-primary) 12%, transparent), inset 0 1px 0 rgba(255,255,255,0.05)'
     : hovered
-      ? '0 0 0 2px rgba(6,182,212,0.08), inset 0 1px 0 rgba(255,255,255,0.04)'
+      ? '0 0 0 2px color-mix(in srgb, var(--color-primary) 8%, transparent), inset 0 1px 0 rgba(255,255,255,0.04)'
       : 'inset 0 1px 0 rgba(255,255,255,0.03)'
 
   return (
@@ -32,7 +32,7 @@ export default function FloatingLabel({ label, type, value, onChange, autoComple
           top: lifted ? 9 : '50%',
           transform: lifted ? 'translateY(0) scale(0.75)' : 'translateY(-50%) scale(1)',
           transformOrigin: 'left top',
-          color: focused ? 'rgba(6,182,212,0.85)' : 'rgba(255,255,255,0.32)',
+          color: focused ? 'color-mix(in srgb, var(--color-primary) 85%, transparent)' : 'var(--color-on-surface-variant)',
           fontSize: 14,
           fontWeight: 500,
           letterSpacing: '0.01em',
@@ -52,11 +52,11 @@ export default function FloatingLabel({ label, type, value, onChange, autoComple
         autoComplete={autoComplete}
         style={{
           width: '100%',
-          background: focused ? 'rgba(255,255,255,0.06)' : 'rgba(255,255,255,0.04)',
+          background: focused ? 'var(--color-surface-highest)' : 'var(--color-surface-high)',
           border: `1px solid ${borderColor}`,
           borderRadius: 14,
           outline: 'none',
-          color: '#fff',
+          color: 'var(--color-on-surface)',
           fontSize: 15,
           fontWeight: 400,
           padding: lifted ? '24px 44px 10px 16px' : '18px 44px 18px 16px',
@@ -76,7 +76,7 @@ export default function FloatingLabel({ label, type, value, onChange, autoComple
             transform: 'translateY(-50%)',
             background: 'none',
             border: 'none',
-            color: 'rgba(255,255,255,0.28)',
+            color: 'var(--color-on-surface-variant)',
             cursor: 'pointer',
             padding: 4,
             display: 'flex',
@@ -84,8 +84,8 @@ export default function FloatingLabel({ label, type, value, onChange, autoComple
             transition: 'color 0.18s',
             zIndex: 2,
           }}
-          onMouseEnter={e => (e.currentTarget.style.color = 'rgba(255,255,255,0.65)')}
-          onMouseLeave={e => (e.currentTarget.style.color = 'rgba(255,255,255,0.28)')}
+          onMouseEnter={e => (e.currentTarget.style.color = 'var(--color-on-surface)')}
+          onMouseLeave={e => (e.currentTarget.style.color = 'var(--color-on-surface-variant)')}
         >
           {showPass ? <EyeOff size={15} /> : <Eye size={15} />}
         </button>

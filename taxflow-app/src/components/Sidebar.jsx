@@ -38,10 +38,10 @@ const NAV_ITEMS = {
 }
 
 const ROLE_META = {
-  superadmin: { label: 'Super Admin', color: '#a78bfa', initials: 'SA' },
-  cxo: { label: 'CXO / Partner', color: '#06b6d4', initials: 'CX' },
-  employee: { label: 'Tax Preparer', color: '#34d399', initials: 'TP' },
-  client: { label: 'Client', color: '#fbbf24', initials: 'CL' },
+  superadmin: { label: 'Super Admin', color: 'var(--color-primary)', initials: 'SA' },
+  cxo: { label: 'CXO / Partner', color: 'var(--color-tertiary)', initials: 'CX' },
+  employee: { label: 'Tax Preparer', color: 'var(--color-secondary)', initials: 'TP' },
+  client: { label: 'Client', color: 'var(--color-on-surface-variant)', initials: 'CL' },
 }
 
 export default function Sidebar({ collapsed, onToggle }) {
@@ -51,123 +51,51 @@ export default function Sidebar({ collapsed, onToggle }) {
 
   return (
     <div
-      style={{
-        position: 'fixed',
-        top: 0,
-        left: 0,
-        bottom: 0,
-        width: collapsed ? 72 : 240,
-        background: 'rgba(255,255,255,0.03)',
-        borderRight: '1px solid rgba(255,255,255,0.06)',
-        backdropFilter: 'blur(20px)',
-        WebkitBackdropFilter: 'blur(20px)',
-        display: 'flex',
-        flexDirection: 'column',
-        transition: 'width 0.3s cubic-bezier(0.4,0,0.2,1)',
-        zIndex: 100,
-        overflow: 'hidden',
-      }}
+      className="fixed top-0 left-0 bottom-0 z-[100] flex flex-col overflow-hidden glass-panel border-r border-[var(--color-outline-variant)] transition-[width] duration-300 ease-[cubic-bezier(0.4,0,0.2,1)]"
+      style={{ width: collapsed ? 72 : 240 }}
     >
       {/* Logo */}
       <div
-        style={{
-          padding: collapsed ? '20px 0' : '20px 20px',
-          borderBottom: '1px solid rgba(255,255,255,0.05)',
-          display: 'flex',
-          alignItems: 'center',
-          gap: 10,
-          justifyContent: collapsed ? 'center' : 'flex-start',
-          minHeight: 65,
-        }}
+        className={`flex items-center gap-3 border-b border-[var(--color-outline-variant)] min-h-[65px] transition-all ${collapsed ? 'justify-center p-5' : 'justify-start px-5 py-5'}`}
       >
         <div
-          style={{
-            width: 34,
-            height: 34,
-            borderRadius: 10,
-            background: 'linear-gradient(135deg, rgba(6,182,212,0.3), rgba(99,102,241,0.25))',
-            border: '1px solid rgba(6,182,212,0.3)',
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            flexShrink: 0,
-            boxShadow: '0 0 16px rgba(6,182,212,0.15)',
-          }}
+          className="w-[34px] h-[34px] rounded-[10px] flex items-center justify-center shrink-0 border border-[var(--color-primary)]/30 shadow-[0_0_16px_var(--color-primary)] shadow-[var(--color-primary)]/20"
+          style={{ background: 'linear-gradient(135deg, rgba(173,198,255,0.2), rgba(75,142,255,0.1))' }}
         >
-          <Zap size={16} color="#06b6d4" />
+          <Zap size={16} className="text-[var(--color-primary)]" strokeWidth={2.5}/>
         </div>
         {!collapsed && (
-          <div style={{ overflow: 'hidden' }}>
-            <div style={{ fontSize: 14, fontWeight: 700, color: '#fff', letterSpacing: '-0.02em', whiteSpace: 'nowrap' }}>
+          <div className="overflow-hidden flex flex-col">
+            <span className="text-[15px] font-bold text-white tracking-tight whitespace-nowrap font-display">
               TaxFlow Pro
-            </div>
-            <div style={{ fontSize: 10, color: 'rgba(255,255,255,0.3)', letterSpacing: '0.05em', fontWeight: 500 }}>
-              BOX AI PLATFORM
-            </div>
+            </span>
+            <span className="text-[9px] text-[var(--color-on-surface-variant)] tracking-widest font-bold uppercase mt-[1px]">
+              Box AI Platform
+            </span>
           </div>
         )}
       </div>
 
       {/* Navigation */}
-      <nav style={{ flex: 1, padding: '12px 10px', overflowY: 'auto', overflowX: 'hidden' }}>
+      <nav className="flex-1 px-3 py-4 overflow-y-auto overflow-x-hidden flex flex-col gap-1">
         {items.map((item) => {
           const Icon = item.icon
           return (
             <button
               key={item.label}
-              style={{
-                width: '100%',
-                display: 'flex',
-                alignItems: 'center',
-                gap: 10,
-                padding: collapsed ? '10px 0' : '10px 12px',
-                justifyContent: collapsed ? 'center' : 'flex-start',
-                borderRadius: 10,
-                border: 'none',
-                background: item.active
-                  ? 'rgba(6,182,212,0.1)'
-                  : 'transparent',
-                cursor: 'pointer',
-                marginBottom: 2,
-                transition: 'all 0.18s',
-                position: 'relative',
-                overflow: 'hidden',
-              }}
-              onMouseEnter={e => {
-                if (!item.active) e.currentTarget.style.background = 'rgba(255,255,255,0.05)'
-              }}
-              onMouseLeave={e => {
-                if (!item.active) e.currentTarget.style.background = 'transparent'
-              }}
+              className={`w-full flex items-center gap-3 rounded-[10px] border-none transition-all duration-200 relative overflow-hidden group ${collapsed ? 'justify-center p-3' : 'justify-start px-[14px] py-[10px]'} ${item.active ? 'bg-[var(--color-surface-high)] shadow-sm' : 'bg-transparent hover:bg-[var(--color-surface)]'}`}
             >
               {item.active && (
-                <div
-                  style={{
-                    position: 'absolute',
-                    left: 0,
-                    top: '20%',
-                    bottom: '20%',
-                    width: 3,
-                    borderRadius: '0 3px 3px 0',
-                    background: '#06b6d4',
-                    boxShadow: '0 0 8px rgba(6,182,212,0.6)',
-                  }}
-                />
+                <div className="absolute left-0 top-[20%] bottom-[20%] w-[3px] rounded-r-md bg-[var(--color-primary)] shadow-[0_0_8px_var(--color-primary)]" />
               )}
               <Icon
-                size={17}
-                color={item.active ? '#06b6d4' : 'rgba(255,255,255,0.4)'}
-                style={{ flexShrink: 0 }}
+                size={18}
+                className={`shrink-0 transition-colors duration-200 ${item.active ? 'text-[var(--color-primary)]' : 'text-[var(--color-on-surface-variant)] group-hover:text-white'}`}
+                strokeWidth={item.active ? 2.5 : 2}
               />
               {!collapsed && (
                 <span
-                  style={{
-                    fontSize: 13,
-                    fontWeight: item.active ? 600 : 400,
-                    color: item.active ? '#fff' : 'rgba(255,255,255,0.45)',
-                    letterSpacing: '-0.01em',
-                    whiteSpace: 'nowrap',
-                  }}
+                  className={`text-[13px] tracking-tight whitespace-nowrap transition-colors duration-200 ${item.active ? 'font-semibold text-white' : 'font-medium text-[var(--color-on-surface-variant)] group-hover:text-white'}`}
                 >
                   {item.label}
                 </span>
@@ -179,60 +107,34 @@ export default function Sidebar({ collapsed, onToggle }) {
 
       {/* User profile */}
       <div
-        style={{
-          borderTop: '1px solid rgba(255,255,255,0.05)',
-          padding: collapsed ? '12px 0' : '12px 14px',
-          display: 'flex',
-          alignItems: 'center',
-          gap: 10,
-          justifyContent: collapsed ? 'center' : 'flex-start',
-        }}
+        className={`border-t border-[var(--color-outline-variant)] flex items-center gap-3 transition-all ${collapsed ? 'justify-center py-4 px-0' : 'justify-start py-4 px-4'}`}
       >
         <div
+          className="w-8 h-8 rounded-full flex items-center justify-center text-[11px] font-bold shrink-0 border"
           style={{
-            width: 32,
-            height: 32,
-            borderRadius: 999,
-            background: `linear-gradient(135deg, ${meta.color}40, ${meta.color}20)`,
-            border: `1px solid ${meta.color}50`,
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            fontSize: 11,
-            fontWeight: 700,
+            background: `linear-gradient(135deg, ${meta.color}30, ${meta.color}10)`,
+            borderColor: `${meta.color}50`,
             color: meta.color,
-            flexShrink: 0,
           }}
         >
           {meta.initials}
         </div>
         {!collapsed && (
           <>
-            <div style={{ flex: 1, minWidth: 0 }}>
-              <div style={{ fontSize: 12, fontWeight: 600, color: '#fff', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+            <div className="flex-1 min-w-0 flex flex-col">
+              <span className="text-[12px] font-semibold text-white whitespace-nowrap overflow-hidden text-ellipsis">
                 {meta.label}
-              </div>
-              <div style={{ fontSize: 10, color: 'rgba(255,255,255,0.3)', fontWeight: 400 }}>
+              </span>
+              <span className="text-[10px] text-[var(--color-on-surface-variant)] font-medium">
                 demo@taxflow.pro
-              </div>
+              </span>
             </div>
             <button
               onClick={logout}
               title="Sign out"
-              style={{
-                background: 'none',
-                border: 'none',
-                color: 'rgba(255,255,255,0.25)',
-                cursor: 'pointer',
-                padding: 4,
-                borderRadius: 6,
-                display: 'flex',
-                transition: 'color 0.2s',
-              }}
-              onMouseEnter={e => e.currentTarget.style.color = 'rgba(255,255,255,0.6)'}
-              onMouseLeave={e => e.currentTarget.style.color = 'rgba(255,255,255,0.25)'}
+              className="p-[6px] rounded-md text-[var(--color-on-surface-variant)] hover:text-[#ffb4ab] hover:bg-[#ffb4ab]/10 transition-colors"
             >
-              <LogOut size={14} />
+              <LogOut size={15} />
             </button>
           </>
         )}
@@ -241,37 +143,11 @@ export default function Sidebar({ collapsed, onToggle }) {
       {/* Collapse toggle */}
       <button
         onClick={onToggle}
-        style={{
-          position: 'absolute',
-          top: '50%',
-          right: -12,
-          transform: 'translateY(-50%)',
-          width: 24,
-          height: 24,
-          borderRadius: 999,
-          background: 'rgba(30,30,35,1)',
-          border: '1px solid rgba(255,255,255,0.1)',
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'center',
-          cursor: 'pointer',
-          color: 'rgba(255,255,255,0.4)',
-          transition: 'all 0.2s',
-          zIndex: 10,
-        }}
-        onMouseEnter={e => {
-          e.currentTarget.style.background = 'rgba(6,182,212,0.2)'
-          e.currentTarget.style.borderColor = 'rgba(6,182,212,0.4)'
-          e.currentTarget.style.color = '#06b6d4'
-        }}
-        onMouseLeave={e => {
-          e.currentTarget.style.background = 'rgba(30,30,35,1)'
-          e.currentTarget.style.borderColor = 'rgba(255,255,255,0.1)'
-          e.currentTarget.style.color = 'rgba(255,255,255,0.4)'
-        }}
+        className="absolute top-1/2 -right-3 transform -translate-y-1/2 w-6 h-6 rounded-full bg-[var(--color-surface-high)] border border-[var(--color-outline-variant)] flex items-center justify-center text-[var(--color-on-surface-variant)] hover:text-[var(--color-primary)] hover:border-[var(--color-primary)]/50 hover:bg-[var(--color-surface)] transition-all z-10 shadow-lg"
       >
-        {collapsed ? <ChevronRight size={12} /> : <ChevronLeft size={12} />}
+        {collapsed ? <ChevronRight size={12} strokeWidth={3} /> : <ChevronLeft size={12} strokeWidth={3} />}
       </button>
     </div>
   )
 }
+

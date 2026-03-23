@@ -1,53 +1,42 @@
 import { motion } from 'framer-motion'
 
 // Shared stat card component
-export function StatCard({ label, value, change, changeType, color = '#06b6d4', icon: Icon, delay = 0 }) {
+export function StatCard({ label, value, change, changeType, color = 'var(--color-primary)', icon: Icon, delay = 0 }) {
   return (
     <motion.div
-      initial={{ opacity: 0, y: 20 }}
-      animate={{ opacity: 1, y: 0 }}
+      initial={{ opacity: 0, scale: 0.98, y: 10 }}
+      animate={{ opacity: 1, scale: 1, y: 0 }}
       transition={{ delay: delay / 1000, duration: 0.5, ease: 'easeOut' }}
-      className="relative overflow-hidden rounded-[18px] border border-white/[0.07] bg-white/[0.03] px-6 py-[22px] cursor-default transition-[transform,box-shadow,border-color] duration-200"
-      onMouseEnter={e => {
-        e.currentTarget.style.transform = 'translateY(-2px)'
-        e.currentTarget.style.boxShadow = `0 12px 40px ${color}15`
-        e.currentTarget.style.borderColor = `${color}25`
-      }}
-      onMouseLeave={e => {
-        e.currentTarget.style.transform = 'translateY(0)'
-        e.currentTarget.style.boxShadow = 'none'
-        e.currentTarget.style.borderColor = 'rgba(255,255,255,0.07)'
-      }}
+      className="relative overflow-hidden rounded-[20px] bg-[var(--color-surface-container)] p-6 cursor-default transition-all duration-300 group ring-1 ring-[var(--color-outline-variant)] hover:ring-[var(--color-outline)]"
+      style={{ boxShadow: '0 10px 30px rgba(0,0,0,0.5)' }}
     >
       <div
-        className="pointer-events-none absolute top-0 right-0 h-[100px] w-[100px]"
-        style={{
-          background: `radial-gradient(circle at 100% 0%, ${color}10, transparent 70%)`,
-        }}
+        className="pointer-events-none absolute -top-10 -right-10 h-[150px] w-[150px] rounded-full blur-[40px] opacity-20 transition-opacity duration-300 group-hover:opacity-40"
+        style={{ background: color }}
       />
-      <div className="flex items-start justify-between">
+      <div className="flex items-start justify-between relative z-10">
         <div>
-          <p className="mb-3 text-xs font-medium tracking-wide text-white/40">
+          <p className="mb-2 text-[12px] font-semibold tracking-wider text-[var(--color-on-surface-variant)] uppercase">
             {label}
           </p>
-          <p className="text-[30px] font-bold leading-none tracking-tight text-white">
+          <p className="text-[36px] font-bold leading-none tracking-tight text-[var(--color-on-surface)] font-display mb-1">
             {value}
           </p>
           {change && (
-            <p className={`mt-2 text-xs font-medium ${changeType === 'up' ? 'text-emerald-400' : changeType === 'down' ? 'text-red-400' : 'text-white/35'}`}>
-              {changeType === 'up' ? '↑' : changeType === 'down' ? '↓' : ''} {change}
+            <p className={`mt-2 text-[12px] font-medium ${changeType === 'up' ? 'text-emerald-400' : changeType === 'down' ? 'text-[#ffb4ab]' : 'text-[var(--color-on-surface-variant)]'}`}>
+              {changeType === 'up' ? '↗' : changeType === 'down' ? '↘' : ''} {change}
             </p>
           )}
         </div>
         {Icon && (
           <div
-            className="flex h-10 w-10 items-center justify-center rounded-xl"
+            className="flex h-11 w-11 items-center justify-center rounded-[12px] transition-transform duration-300 group-hover:scale-110"
             style={{
-              background: `${color}15`,
-              border: `1px solid ${color}25`,
+              background: `color-mix(in srgb, ${color} 15%, transparent)`,
+              border: `1px solid color-mix(in srgb, ${color} 30%, transparent)`,
             }}
           >
-            <Icon size={18} color={color} />
+            <Icon size={20} color={color} strokeWidth={2.5} />
           </div>
         )}
       </div>
@@ -58,13 +47,13 @@ export function StatCard({ label, value, change, changeType, color = '#06b6d4', 
 export function SectionHeader({ title, subtitle, delay = 0 }) {
   return (
     <motion.div
-      initial={{ opacity: 0, y: 20 }}
+      initial={{ opacity: 0, y: 15 }}
       animate={{ opacity: 1, y: 0 }}
       transition={{ delay: delay / 1000, duration: 0.5, ease: 'easeOut' }}
-      className="mb-5"
+      className="mb-6"
     >
-      <h2 className="m-0 text-[22px] font-bold tracking-tight text-white">{title}</h2>
-      {subtitle && <p className="mt-1 text-[13px] font-normal text-white/35">{subtitle}</p>}
+      <h2 className="m-0 text-[32px] font-bold tracking-tight text-[var(--color-on-surface)] font-display leading-tight">{title}</h2>
+      {subtitle && <p className="mt-2 text-[14px] font-medium text-[var(--color-on-surface-variant)] max-w-2xl">{subtitle}</p>}
     </motion.div>
   )
 }
@@ -72,11 +61,14 @@ export function SectionHeader({ title, subtitle, delay = 0 }) {
 export function GlassPanel({ children, style = {}, delay = 0, className = '' }) {
   return (
     <motion.div
-      initial={{ opacity: 0, y: 20 }}
+      initial={{ opacity: 0, y: 15 }}
       animate={{ opacity: 1, y: 0 }}
       transition={{ delay: delay / 1000, duration: 0.5, ease: 'easeOut' }}
-      className={`rounded-[18px] border border-white/[0.07] bg-white/[0.03] backdrop-blur-xl p-6 ${className}`}
-      style={style}
+      className={`rounded-[24px] bg-[var(--color-surface-container)]/40 backdrop-blur-2xl p-7 ring-1 ring-[var(--color-outline-variant)] shadow-[0_20px_40px_rgba(0,0,0,0.4)] relative overflow-hidden ${className}`}
+      style={{
+        ...style,
+        boxShadow: 'inset 0 1px 0 rgba(255,255,255,0.05), 0 20px 40px rgba(0,0,0,0.4)'
+      }}
     >
       {children}
     </motion.div>
@@ -85,46 +77,46 @@ export function GlassPanel({ children, style = {}, delay = 0, className = '' }) 
 
 export function PanelTitle({ children }) {
   return (
-    <h3 className="mb-4 text-[13px] font-semibold uppercase tracking-widest text-white/50">
+    <h3 className="mb-5 text-[12px] font-bold uppercase tracking-[0.1em] text-[var(--color-on-surface-variant)]">
       {children}
     </h3>
   )
 }
 
-export function StatusDot({ color = '#34d399', pulse = false }) {
+export function StatusDot({ color = 'var(--color-primary)', pulse = false }) {
   return (
     <span
-      className={`inline-block h-[7px] w-[7px] shrink-0 rounded-full ${pulse ? 'animate-pulse' : ''}`}
+      className={`inline-block h-2 w-2 shrink-0 rounded-full ${pulse ? 'animate-pulse' : ''}`}
       style={{
         background: color,
-        boxShadow: `0 0 6px ${color}80`,
+        boxShadow: `0 0 8px ${color}`,
       }}
     />
   )
 }
 
-export function ProgressBar({ value, color = '#06b6d4', bg = 'rgba(255,255,255,0.06)' }) {
+export function ProgressBar({ value, color = 'var(--color-primary)', bg = 'var(--color-surface-highest)' }) {
   return (
-    <div className="h-[5px] overflow-hidden rounded-full" style={{ background: bg }}>
+    <div className="h-1.5 overflow-hidden rounded-full" style={{ background: bg }}>
       <div
-        className="h-full rounded-full transition-[width] duration-1000 ease-[cubic-bezier(0.4,0,0.2,1)]"
+        className="h-full rounded-full transition-all duration-1000 ease-[cubic-bezier(0.4,0,0.2,1)]"
         style={{
           width: `${value}%`,
           background: color,
-          boxShadow: `0 0 8px ${color}60`,
+          boxShadow: `0 0 10px ${color}`,
         }}
       />
     </div>
   )
 }
 
-export function Badge({ children, color = '#06b6d4' }) {
+export function Badge({ children, color = 'var(--color-primary)' }) {
   return (
     <span
-      className="inline-block rounded-full px-2 py-0.5 text-[11px] font-semibold tracking-wide"
+      className="inline-flex items-center rounded-md px-2 py-1 text-[10px] font-bold tracking-widest uppercase transition-colors"
       style={{
-        background: `${color}15`,
-        border: `1px solid ${color}25`,
+        background: `color-mix(in srgb, ${color} 15%, transparent)`,
+        border: `1px solid color-mix(in srgb, ${color} 25%, transparent)`,
         color: color,
       }}
     >
@@ -134,10 +126,10 @@ export function Badge({ children, color = '#06b6d4' }) {
 }
 
 const STATUS_COLORS = {
-  Pending: '#6b7280',
-  Under_Review: '#eab308',
-  Revision_Requested: '#ef4444',
-  Approved: '#22c55e',
+  Pending: 'var(--color-on-surface-variant)',
+  Under_Review: 'var(--color-tertiary)',
+  Revision_Requested: '#ffb4ab',
+  Approved: 'var(--color-secondary)',
 }
 
 const STATUS_LABELS = {
@@ -153,10 +145,10 @@ export function StatusBadge({ status }) {
 
   return (
     <motion.span
-      className="inline-block rounded-full px-2 py-0.5 text-[11px] font-semibold tracking-wide"
+      className="inline-flex items-center rounded-md px-2 py-1 text-[10px] font-bold tracking-widest uppercase"
       animate={{
-        backgroundColor: `${color}15`,
-        borderColor: `${color}25`,
+        backgroundColor: `color-mix(in srgb, ${color} 15%, transparent)`,
+        borderColor: `color-mix(in srgb, ${color} 25%, transparent)`,
         color: color,
       }}
       transition={{ duration: 0.3, ease: 'easeOut' }}
@@ -168,4 +160,5 @@ export function StatusBadge({ status }) {
     </motion.span>
   )
 }
+
 

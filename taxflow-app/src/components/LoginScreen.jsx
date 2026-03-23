@@ -11,32 +11,28 @@ const ROLES = [
     label: 'Super Admin',
     description: 'System management',
     icon: Shield,
-    accentColor: '#a78bfa',
-    glowRgb: '167,139,250',
+    accentColor: 'var(--color-primary)',
   },
   {
     id: 'cxo',
     label: 'CXO/Partner',
     description: 'Executive overview',
     icon: TrendingUp,
-    accentColor: '#06b6d4',
-    glowRgb: '6,182,212',
+    accentColor: 'var(--color-tertiary)',
   },
   {
     id: 'employee',
     label: 'Employee/Tax Preparer',
     description: 'Client & AI workflow',
     icon: FileText,
-    accentColor: '#34d399',
-    glowRgb: '52,211,153',
+    accentColor: 'var(--color-secondary)',
   },
   {
     id: 'client',
     label: 'Client',
     description: 'Your tax portal',
     icon: Users,
-    accentColor: '#fbbf24',
-    glowRgb: '251,191,36',
+    accentColor: 'var(--color-on-surface-variant)',
   },
 ]
 
@@ -46,7 +42,6 @@ export default function LoginScreen() {
   const [password, setPassword] = useState('')
   const [hoveredRole, setHoveredRole] = useState(null)
 
-  // Responsive: detect viewport below 768px for mobile layout
   const [isMobile, setIsMobile] = useState(false)
   useEffect(() => {
     const mql = window.matchMedia('(max-width: 767px)')
@@ -66,109 +61,36 @@ export default function LoginScreen() {
   }
 
   return (
-    <div
-      style={{
-        position: 'relative',
-        width: '100vw',
-        height: '100vh',
-        display: 'flex',
-        alignItems: 'center',
-        justifyContent: 'center',
-        padding: '20px',
-        overflowY: 'auto',
-      }}
-    >
+    <div className="relative w-screen h-screen flex items-center justify-center p-5 overflow-y-auto bg-[var(--color-surface-lowest)] font-sans">
       <AnimatedBackground />
 
       {/* Card */}
       <motion.div
-        initial={{ opacity: 0, y: 24, scale: 0.97 }}
-        animate={{ opacity: 1, y: 0, scale: 1 }}
-        transition={{ type: 'spring', stiffness: 120, damping: 20, mass: 1 }}
-        style={{
-          position: 'relative',
-          zIndex: 10,
-          width: '100%',
-          maxWidth: 448,
-        }}
+        initial={{ opacity: 0, scale: 0.98, y: 15 }}
+        animate={{ opacity: 1, scale: 1, y: 0 }}
+        transition={{ type: 'spring', stiffness: 100, damping: 20, mass: 1 }}
+        className="relative z-10 w-full max-w-[460px]"
       >
-        <div
-          style={{
-            background: 'rgba(255,255,255,0.045)',
-            border: '1px solid rgba(255,255,255,0.1)',
-            borderRadius: 28,
-            backdropFilter: 'blur(48px) saturate(200%)',
-            WebkitBackdropFilter: 'blur(48px) saturate(200%)',
-            boxShadow: `
-              0 0 0 1px rgba(255,255,255,0.05) inset,
-              0 40px 100px rgba(0,0,0,0.7),
-              0 0 80px rgba(6,182,212,0.08)
-            `,
-            padding: isMobile ? '24px 20px 20px' : '36px 40px 32px',
-            position: 'relative',
-            overflow: 'hidden',
-          }}
-        >
+        <div className="rounded-[32px] bg-[var(--color-surface-container)]/40 backdrop-blur-[40px] border border-[var(--color-outline-variant)] relative overflow-hidden shadow-[0_40px_100px_rgba(0,0,0,0.8)]" style={{ padding: isMobile ? '32px 24px 24px' : '44px 44px 36px', boxShadow: 'inset 0 1px 0 rgba(255,255,255,0.06), 0 40px 100px rgba(0,0,0,0.8)' }}>
           {/* Top highlight line */}
-          <div
-            style={{
-              position: 'absolute',
-              top: 0,
-              left: '10%',
-              right: '10%',
-              height: 1,
-              background:
-                'linear-gradient(90deg, transparent, rgba(6,182,212,0.6), rgba(255,255,255,0.3), rgba(6,182,212,0.6), transparent)',
-              borderRadius: 999,
-            }}
-          />
+          <div className="absolute top-0 left-[15%] right-[15%] h-[1px] bg-gradient-to-r from-transparent via-[var(--color-outline)] to-transparent opacity-50 rounded-full" />
 
           {/* Brand */}
-          <div style={{ textAlign: 'center', marginBottom: 28 }}>
-            <div
-              style={{
-                display: 'inline-flex',
-                alignItems: 'center',
-                justifyContent: 'center',
-                width: 48,
-                height: 48,
-                borderRadius: 16,
-                background: 'linear-gradient(135deg, rgba(6,182,212,0.22), rgba(99,102,241,0.18))',
-                border: '1px solid rgba(6,182,212,0.35)',
-                marginBottom: 14,
-                boxShadow: '0 0 32px rgba(6,182,212,0.22)',
-              }}
-            >
-              <Zap size={24} color="#06b6d4" strokeWidth={2.5} />
+          <div className="text-center mb-9">
+            <div className="inline-flex items-center justify-center w-14 h-14 rounded-[18px] border border-[var(--color-primary)]/40 mb-5 shadow-[0_0_32px_var(--color-primary)]/30" style={{ background: 'linear-gradient(135deg, rgba(173,198,255,0.2), rgba(75,142,255,0.1))' }}>
+              <Zap size={28} className="text-[var(--color-primary)]" strokeWidth={2.5} />
             </div>
-            <h1
-              style={{
-                margin: 0,
-                fontSize: 24,
-                fontWeight: 800,
-                letterSpacing: '-0.04em',
-                color: '#fff',
-                lineHeight: 1.1,
-              }}
-            >
+            <h1 className="m-0 text-[32px] font-bold text-[var(--color-on-surface)] leading-tight tracking-[-0.04em] font-display">
               TaxFlow Pro
             </h1>
-            <p
-              style={{
-                margin: '7px 0 0',
-                fontSize: 11,
-                color: 'rgba(255,255,255,0.32)',
-                letterSpacing: '0.12em',
-                fontWeight: 600,
-              }}
-            >
-              POWERED BY BOX AI &nbsp;·&nbsp; US TAX PLATFORM
+            <p className="mt-2 text-[10px] text-[var(--color-on-surface-variant)] tracking-[0.16em] font-bold uppercase">
+              Powered by Box AI
             </p>
           </div>
 
           {/* Form */}
           <form onSubmit={handleSubmit}>
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 10, marginBottom: 10 }}>
+            <div className="flex flex-col gap-4 mb-4">
               <FloatingLabel
                 label="Email address"
                 type="email"
@@ -185,22 +107,13 @@ export default function LoginScreen() {
               />
             </div>
 
-            <div style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: 22 }}>
+            <div className="flex justify-end mb-7">
               <button
                 type="button"
-                style={{
-                  background: 'none',
-                  border: 'none',
-                  color: 'rgba(6,182,212,0.75)',
-                  fontSize: 12,
-                  fontWeight: 600,
-                  cursor: 'pointer',
-                  padding: 0,
-                  letterSpacing: '0.01em',
-                  transition: 'color 0.18s',
-                }}
-                onMouseEnter={e => (e.currentTarget.style.color = '#06b6d4')}
-                onMouseLeave={e => (e.currentTarget.style.color = 'rgba(6,182,212,0.75)')}
+                className="bg-transparent border-none text-[12px] font-semibold text-[var(--color-primary)] cursor-pointer p-0 tracking-wide hover:text-white transition-colors"
+                style={{ color: 'color-mix(in srgb, var(--color-primary) 80%, transparent)' }}
+                onMouseEnter={e => e.currentTarget.style.color = 'white'}
+                onMouseLeave={e => e.currentTarget.style.color = 'color-mix(in srgb, var(--color-primary) 80%, transparent)'}
               >
                 Forgot password?
               </button>
@@ -209,67 +122,32 @@ export default function LoginScreen() {
             <button
               type="submit"
               disabled={isFormEmpty}
+              className={`relative w-full py-4 rounded-xl text-[15px] font-bold tracking-tight text-[var(--color-surface-lowest)] transition-all duration-300 overflow-hidden group ${isFormEmpty ? 'opacity-50 cursor-not-allowed bg-[var(--color-surface-high)] text-[var(--color-on-surface-variant)]' : 'cursor-pointer hover:-translate-y-[1px] hover:shadow-[0_16px_40px_var(--color-primary)]/40'}`}
               style={{
-                width: '100%',
-                padding: '15px',
-                borderRadius: 14,
-                background: isFormEmpty
-                  ? 'linear-gradient(135deg, rgba(6,182,212,0.4), rgba(99,102,241,0.4))'
-                  : 'linear-gradient(135deg, #06b6d4, #6366f1)',
-                border: '1px solid rgba(6,182,212,0.4)',
-                color: '#fff',
-                fontSize: 15,
-                fontWeight: 700,
-                letterSpacing: '-0.01em',
-                cursor: isFormEmpty ? 'not-allowed' : 'pointer',
-                opacity: isFormEmpty ? 0.5 : 1,
-                boxShadow: '0 8px 28px rgba(6,182,212,0.3), 0 1px 0 rgba(255,255,255,0.1) inset',
-                transition: 'transform 0.15s, box-shadow 0.15s, opacity 0.2s',
-              }}
-              onMouseEnter={e => {
-                e.currentTarget.style.transform = 'translateY(-1px)'
-                e.currentTarget.style.boxShadow = '0 14px 36px rgba(6,182,212,0.4), 0 1px 0 rgba(255,255,255,0.12) inset'
-              }}
-              onMouseLeave={e => {
-                e.currentTarget.style.transform = 'translateY(0)'
-                e.currentTarget.style.boxShadow = '0 8px 28px rgba(6,182,212,0.3), 0 1px 0 rgba(255,255,255,0.1) inset'
+                background: isFormEmpty ? 'var(--color-surface-highest)' : 'linear-gradient(180deg, var(--color-primary), var(--color-primary-container))',
+                boxShadow: isFormEmpty ? 'none' : 'inset 0 1px 0 rgba(255,255,255,0.4), 0 8px 30px rgba(173,198,255,0.25)',
               }}
             >
-              Sign In
+              <span className="relative z-10 flex items-center justify-center gap-2">
+                Sign In
+              </span>
+              {!isFormEmpty && (
+                <div className="absolute inset-0 block h-full w-full animate-[primary-shimmer_3s_infinite_linear]" style={{ background: 'linear-gradient(90deg, transparent 0%, rgba(255,255,255,0.3) 50%, transparent 100%)' }} />
+              )}
             </button>
           </form>
 
           {/* Divider */}
-          <div
-            style={{
-              display: 'flex',
-              alignItems: 'center',
-              gap: 14,
-              margin: '24px 0 20px',
-            }}
-          >
-            <div style={{ flex: 1, height: 1, background: 'rgba(255,255,255,0.07)' }} />
-            <span
-              style={{
-                fontSize: 10,
-                color: 'rgba(255,255,255,0.22)',
-                fontWeight: 700,
-                letterSpacing: '0.1em',
-              }}
-            >
-              DEMO ACCESS
+          <div className="flex items-center gap-4 my-7">
+            <div className="flex-1 h-[1px] bg-gradient-to-r from-transparent to-[var(--color-outline-variant)]" />
+            <span className="text-[10px] text-[var(--color-on-surface-variant)] font-bold tracking-[0.14em] uppercase">
+              Demo Access
             </span>
-            <div style={{ flex: 1, height: 1, background: 'rgba(255,255,255,0.07)' }} />
+            <div className="flex-1 h-[1px] bg-gradient-to-l from-transparent to-[var(--color-outline-variant)]" />
           </div>
 
           {/* Role buttons */}
-          <div
-            style={{
-              display: 'grid',
-              gridTemplateColumns: isMobile ? '1fr' : '1fr 1fr',
-              gap: 10,
-            }}
-          >
+          <div className={`grid gap-3 ${isMobile ? 'grid-cols-1' : 'grid-cols-2'}`}>
             {ROLES.map((role) => {
               const Icon = role.icon
               const isHovered = hoveredRole === role.id
@@ -280,70 +158,33 @@ export default function LoginScreen() {
                   onClick={() => login(role.id)}
                   onMouseEnter={() => setHoveredRole(role.id)}
                   onMouseLeave={() => setHoveredRole(null)}
+                  className="group text-left p-3.5 rounded-2xl cursor-pointer transition-all duration-300 relative overflow-hidden"
                   style={{
-                    background: isHovered
-                      ? `rgba(${role.glowRgb},0.12)`
-                      : 'rgba(255,255,255,0.03)',
-                    border: `1px solid ${isHovered ? `rgba(${role.glowRgb},0.35)` : 'rgba(255,255,255,0.08)'}`,
-                    borderRadius: 14,
-                    padding: '13px 14px',
-                    cursor: 'pointer',
-                    textAlign: 'left',
-                    transition: 'all 0.2s cubic-bezier(0.4,0,0.2,1)',
+                    background: isHovered ? `color-mix(in srgb, ${role.accentColor} 12%, transparent)` : 'var(--color-surface-high)',
+                    border: `1px solid ${isHovered ? `color-mix(in srgb, ${role.accentColor} 40%, transparent)` : 'var(--color-outline-variant)'}`,
                     transform: isHovered ? 'translateY(-2px)' : 'translateY(0)',
-                    boxShadow: isHovered
-                      ? `0 8px 28px rgba(${role.glowRgb},0.18)`
-                      : 'none',
+                    boxShadow: isHovered ? `0 12px 30px color-mix(in srgb, ${role.accentColor} 20%, transparent)` : 'none',
                   }}
                 >
-                  <div
-                    style={{
-                      display: 'flex',
-                      alignItems: 'center',
-                      gap: 8,
-                      marginBottom: 5,
-                    }}
-                  >
+                  <div className="flex items-center gap-3 mb-1.5">
                     <div
+                      className="w-8 h-8 rounded-[10px] flex flex-shrink-0 items-center justify-center border transition-shadow duration-300"
                       style={{
-                        width: 28,
-                        height: 28,
-                        borderRadius: 8,
-                        background: `rgba(${role.glowRgb},0.18)`,
-                        border: `1px solid rgba(${role.glowRgb},0.28)`,
-                        display: 'flex',
-                        alignItems: 'center',
-                        justifyContent: 'center',
-                        flexShrink: 0,
-                        boxShadow: isHovered ? `0 0 12px rgba(${role.glowRgb},0.3)` : 'none',
-                        transition: 'box-shadow 0.2s',
+                        background: `color-mix(in srgb, ${role.accentColor} 15%, transparent)`,
+                        borderColor: `color-mix(in srgb, ${role.accentColor} 30%, transparent)`,
+                        boxShadow: isHovered ? `0 0 16px ${role.accentColor}` : 'none',
                       }}
                     >
-                      <Icon size={13} color={role.accentColor} />
+                      <Icon size={16} color={role.accentColor} strokeWidth={2.5} />
                     </div>
                     <span
-                      style={{
-                        fontSize: 12,
-                        fontWeight: 700,
-                        color: isHovered ? '#fff' : 'rgba(255,255,255,0.8)',
-                        letterSpacing: '-0.01em',
-                        lineHeight: 1.2,
-                        transition: 'color 0.18s',
-                      }}
+                      className="text-[13px] font-bold tracking-tight transition-colors duration-200"
+                      style={{ color: isHovered ? 'white' : 'var(--color-on-surface)' }}
                     >
                       {role.label}
                     </span>
                   </div>
-                  <p
-                    style={{
-                      margin: 0,
-                      fontSize: 11,
-                      color: 'rgba(255,255,255,0.3)',
-                      fontWeight: 400,
-                      paddingLeft: 36,
-                      lineHeight: 1.3,
-                    }}
-                  >
+                  <p className="m-0 pl-11 text-[11px] font-medium text-[var(--color-on-surface-variant)] leading-relaxed">
                     {role.description}
                   </p>
                 </button>
@@ -352,26 +193,10 @@ export default function LoginScreen() {
           </div>
 
           {/* Footer */}
-          <div
-            style={{
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-              gap: 6,
-              marginTop: 20,
-            }}
-          >
-            <Lock size={10} color="rgba(255,255,255,0.18)" />
-            <p
-              style={{
-                margin: 0,
-                fontSize: 10,
-                color: 'rgba(255,255,255,0.18)',
-                letterSpacing: '0.04em',
-                fontWeight: 500,
-              }}
-            >
-              AES-256 ENCRYPTION &nbsp;·&nbsp; SOC 2 TYPE II &nbsp;·&nbsp; ZERO-KNOWLEDGE
+          <div className="flex items-center justify-center gap-2 mt-8 opacity-60">
+            <Lock size={12} className="text-[var(--color-on-surface-variant)]" />
+            <p className="m-0 text-[9px] text-[var(--color-on-surface-variant)] tracking-[0.06em] font-semibold uppercase">
+              AES-256 Encryption &nbsp;·&nbsp; SOC 2 Type II
             </p>
           </div>
         </div>
@@ -379,3 +204,4 @@ export default function LoginScreen() {
     </div>
   )
 }
+

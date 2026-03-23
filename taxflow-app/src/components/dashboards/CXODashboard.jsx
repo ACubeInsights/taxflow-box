@@ -11,7 +11,7 @@ const containerVariants = {
 }
 
 const itemVariants = {
-  hidden: { opacity: 0, y: 20 },
+  hidden: { opacity: 0, y: 15 },
   visible: { opacity: 1, y: 0, transition: { duration: 0.5, ease: 'easeOut' } },
 }
 
@@ -29,7 +29,7 @@ const ALERTS = [
   { client: 'Summit Partners', issue: 'K-1 Distribution Unreviewed', severity: 'low', due: 'Apr 1' },
 ]
 
-const SEV_COLOR = { high: '#f87171', medium: '#fbbf24', low: '#94a3b8' }
+const SEV_COLOR = { high: '#ffb4ab', medium: 'var(--color-tertiary)', low: 'var(--color-on-surface-variant)' }
 
 export default function CXODashboard() {
   return (
@@ -37,6 +37,7 @@ export default function CXODashboard() {
       variants={containerVariants}
       initial="hidden"
       animate="visible"
+      className="max-w-[1400px] mx-auto"
     >
       <motion.div variants={itemVariants}>
         <SectionHeader
@@ -46,66 +47,66 @@ export default function CXODashboard() {
         />
       </motion.div>
 
-      <motion.div variants={itemVariants} className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
-        <StatCard label="Total Clients" value="5,939" change="142 new this quarter" changeType="up" color="#06b6d4" icon={Users} delay={50} />
-        <StatCard label="Docs Pending" value="2,418" change="↓ 12% from last week" changeType="up" color="#a78bfa" icon={FileText} delay={100} />
-        <StatCard label="Avg. Compliance" value="87.4%" change="+1.8% this month" changeType="up" color="#34d399" icon={TrendingUp} delay={150} />
-        <StatCard label="Overdue Filings" value="31" change="7 critical" changeType="down" color="#f87171" icon={AlertTriangle} delay={200} />
+      <motion.div variants={itemVariants} className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-5 mb-8">
+        <StatCard label="Total Clients" value="5,939" change="142 new this quarter" changeType="up" color="var(--color-tertiary)" icon={Users} delay={50} />
+        <StatCard label="Docs Pending" value="2,418" change="↓ 12% from last week" changeType="up" color="var(--color-primary)" icon={FileText} delay={100} />
+        <StatCard label="Avg. Compliance" value="87.4%" change="+1.8% this month" changeType="up" color="var(--color-secondary)" icon={TrendingUp} delay={150} />
+        <StatCard label="Overdue Filings" value="31" change="7 critical" changeType="down" color="#ffb4ab" icon={AlertTriangle} delay={200} />
       </motion.div>
 
-      <motion.div variants={itemVariants} className="grid grid-cols-1 lg:grid-cols-2 gap-4 mb-6">
+      <motion.div variants={itemVariants} className="grid grid-cols-1 lg:grid-cols-2 gap-5 mb-8">
         {/* Portfolio compliance */}
         <GlassPanel delay={250}>
           <PanelTitle>Portfolio Compliance Rates</PanelTitle>
-          {FIRMS.map((firm) => (
-            <div key={firm.name} style={{ marginBottom: 18 }}>
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
-                <div>
-                  <span style={{ fontSize: 13, fontWeight: 500, color: '#fff' }}>{firm.name}</span>
-                  <span style={{ fontSize: 11, color: 'rgba(255,255,255,0.3)', marginLeft: 8 }}>
-                    {firm.docs.toLocaleString()} docs
-                  </span>
+          <div className="flex flex-col gap-6">
+            {FIRMS.map((firm) => (
+              <div key={firm.name}>
+                <div className="flex justify-between items-center mb-2.5">
+                  <div className="flex items-center gap-2">
+                    <span className="text-[14px] font-bold text-[var(--color-on-surface)]">{firm.name}</span>
+                    <span className="text-[12px] font-medium text-[var(--color-on-surface-variant)] px-2 py-0.5 rounded-md bg-[var(--color-surface-high)]">
+                      {firm.docs.toLocaleString()} docs
+                    </span>
+                  </div>
+                  <div className="flex items-center gap-3">
+                    <span className={`text-[12px] font-bold ${firm.trend.startsWith('+') ? 'text-[var(--color-secondary)]' : 'text-[#ffb4ab]'}`}>
+                      {firm.trend}
+                    </span>
+                    <span
+                      className="text-[14px] font-extrabold"
+                      style={{ color: firm.compliance >= 90 ? 'var(--color-secondary)' : firm.compliance >= 80 ? 'var(--color-tertiary)' : '#ffb4ab' }}
+                    >
+                      {firm.compliance}%
+                    </span>
+                  </div>
                 </div>
-                <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                  <span style={{ fontSize: 11, fontWeight: 600, color: firm.trend.startsWith('+') ? '#34d399' : '#f87171' }}>
-                    {firm.trend}
-                  </span>
-                  <span
-                    style={{
-                      fontSize: 12, fontWeight: 700,
-                      color: firm.compliance >= 90 ? '#34d399' : firm.compliance >= 80 ? '#fbbf24' : '#f87171',
-                    }}
-                  >
-                    {firm.compliance}%
-                  </span>
-                </div>
+                <ProgressBar
+                  value={firm.compliance}
+                  color={firm.compliance >= 90 ? 'var(--color-secondary)' : firm.compliance >= 80 ? 'var(--color-tertiary)' : '#ffb4ab'}
+                />
               </div>
-              <ProgressBar
-                value={firm.compliance}
-                color={firm.compliance >= 90 ? '#34d399' : firm.compliance >= 80 ? '#fbbf24' : '#f87171'}
-              />
-            </div>
-          ))}
+            ))}
+          </div>
         </GlassPanel>
 
         {/* Tax year progress */}
         <GlassPanel delay={300}>
           <PanelTitle>Tax Year 2024 — Filing Progress</PanelTitle>
 
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
+          <div className="flex flex-col gap-5 mt-2">
             {[
-              { label: 'Returns Filed', val: 3812, total: 5939, color: '#34d399' },
-              { label: 'Under Review', val: 1241, total: 5939, color: '#06b6d4' },
-              { label: 'Awaiting Docs', val: 748, total: 5939, color: '#fbbf24' },
-              { label: 'Not Started', val: 138, total: 5939, color: '#f87171' },
-            ].map(item => {
+              { label: 'Returns Filed', val: 3812, total: 5939, color: 'var(--color-secondary)' },
+              { label: 'Under Review', val: 1241, total: 5939, color: 'var(--color-tertiary)' },
+              { label: 'Awaiting Docs', val: 748, total: 5939, color: 'var(--color-primary)' },
+              { label: 'Not Started', val: 138, total: 5939, color: '#ffb4ab' },
+            ].map((item, idx) => {
               const pct = Math.round((item.val / item.total) * 100)
               return (
                 <div key={item.label}>
-                  <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 6 }}>
-                    <span style={{ fontSize: 12, color: 'rgba(255,255,255,0.5)', fontWeight: 500 }}>{item.label}</span>
-                    <span style={{ fontSize: 12, fontWeight: 600, color: item.color }}>
-                      {item.val.toLocaleString()} &nbsp;<span style={{ color: 'rgba(255,255,255,0.25)', fontWeight: 400 }}>({pct}%)</span>
+                  <div className="flex justify-between mb-2">
+                    <span className="text-[13px] font-semibold text-[var(--color-on-surface-variant)]">{item.label}</span>
+                    <span className="text-[13px] font-bold" style={{ color: item.color }}>
+                      {item.val.toLocaleString()} &nbsp;<span className="text-[var(--color-on-surface-variant)] font-medium">({pct}%)</span>
                     </span>
                   </div>
                   <ProgressBar value={pct} color={item.color} />
@@ -114,18 +115,11 @@ export default function CXODashboard() {
             })}
           </div>
 
-          <div
-            style={{
-              marginTop: 20, padding: '12px 16px', borderRadius: 12,
-              background: 'rgba(6,182,212,0.07)', border: '1px solid rgba(6,182,212,0.15)',
-            }}
-          >
-            <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-              <Clock size={13} color="#06b6d4" />
-              <span style={{ fontSize: 12, fontWeight: 600, color: '#06b6d4' }}>
-                38 days until April 15 filing deadline
-              </span>
-            </div>
+          <div className="mt-8 p-4 rounded-xl flex items-center gap-3 bg-[var(--color-tertiary)]/10 border border-[var(--color-tertiary)]/20 shadow-[0_4px_20px_color-mix(in_srgb,var(--color-tertiary)_10%,transparent)]">
+            <Clock size={16} className="text-[var(--color-tertiary)] shrink-0" strokeWidth={2.5} />
+            <span className="text-[13px] font-bold text-[var(--color-tertiary)] tracking-wide">
+              38 days until April 15 filing deadline
+            </span>
           </div>
         </GlassPanel>
       </motion.div>
@@ -133,42 +127,31 @@ export default function CXODashboard() {
       {/* Overdue alerts */}
       <motion.div variants={itemVariants}>
         <GlassPanel delay={350}>
-          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 18 }}>
+          <div className="flex items-center justify-between mb-6">
             <PanelTitle>Critical Alerts & Overdue Filings</PanelTitle>
-            <Badge color="#f87171">31 Overdue</Badge>
+            <Badge color="#ffb4ab">31 Overdue</Badge>
           </div>
 
-          <div style={{ display: 'grid', gap: 8 }}>
+          <div className="flex flex-col gap-3">
             {ALERTS.map((a) => (
               <div
                 key={a.client + a.issue}
-                style={{
-                  display: 'flex',
-                  alignItems: 'center',
-                  gap: 14,
-                  padding: '13px 16px',
-                  borderRadius: 12,
-                  background: 'rgba(255,255,255,0.025)',
-                  border: `1px solid ${SEV_COLOR[a.severity]}20`,
-                  transition: 'background 0.2s',
-                }}
-                onMouseEnter={e => e.currentTarget.style.background = 'rgba(255,255,255,0.045)'}
-                onMouseLeave={e => e.currentTarget.style.background = 'rgba(255,255,255,0.025)'}
+                className="flex items-center gap-4 px-4 py-3.5 rounded-2xl bg-[var(--color-surface-high)] border transition-all duration-300 group hover:bg-[var(--color-surface-highest)] hover:-translate-y-[2px] hover:shadow-[0_8px_20px_rgba(0,0,0,0.3)]"
+                style={{ borderColor: `color-mix(in srgb, ${SEV_COLOR[a.severity]} 25%, transparent)` }}
               >
                 <div
+                  className="w-2.5 h-2.5 rounded-full shrink-0"
                   style={{
-                    width: 8, height: 8, borderRadius: '50%',
                     background: SEV_COLOR[a.severity],
-                    boxShadow: `0 0 6px ${SEV_COLOR[a.severity]}80`,
-                    flexShrink: 0,
+                    boxShadow: `0 0 10px ${SEV_COLOR[a.severity]}`,
                   }}
                 />
-                <div style={{ flex: 1, minWidth: 0 }}>
-                  <p style={{ margin: 0, fontSize: 13, fontWeight: 600, color: '#fff' }}>{a.client}</p>
-                  <p style={{ margin: 0, fontSize: 11, color: 'rgba(255,255,255,0.4)' }}>{a.issue}</p>
+                <div className="flex-1 min-w-0">
+                  <p className="m-0 text-[14px] font-bold text-[var(--color-on-surface)] truncate">{a.client}</p>
+                  <p className="m-0 text-[12px] font-medium text-[var(--color-on-surface-variant)] truncate mt-0.5">{a.issue}</p>
                 </div>
                 <Badge color={SEV_COLOR[a.severity]}>{a.severity}</Badge>
-                <span style={{ fontSize: 11, color: 'rgba(255,255,255,0.3)', flexShrink: 0 }}>Due {a.due}</span>
+                <span className="text-[11px] font-medium text-[var(--color-on-surface-variant)] shrink-0 w-[60px] text-right">Due {a.due}</span>
               </div>
             ))}
           </div>

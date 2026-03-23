@@ -6,10 +6,10 @@ export default function AnimatedBackground() {
         inset: 0,
         overflow: 'hidden',
         zIndex: 0,
-        background: '#050508',
+        background: 'var(--color-surface-lowest)',
       }}
     >
-      {/* Orb 1 — cyan, top-left */}
+      {/* Orb 1 — primary, top-left */}
       <div
         className="animate-float"
         style={{
@@ -18,13 +18,13 @@ export default function AnimatedBackground() {
           height: 900,
           borderRadius: '50%',
           background:
-            'radial-gradient(circle, rgba(6,182,212,0.18) 0%, rgba(6,182,212,0.06) 35%, transparent 70%)',
+            'radial-gradient(circle, color-mix(in srgb, var(--color-primary) 18%, transparent) 0%, color-mix(in srgb, var(--color-primary) 6%, transparent) 35%, transparent 70%)',
           top: '-300px',
           left: '-250px',
           filter: 'blur(60px)',
         }}
       />
-      {/* Orb 2 — indigo, bottom-right */}
+      {/* Orb 2 — secondary, bottom-right */}
       <div
         className="animate-float-d2"
         style={{
@@ -33,13 +33,13 @@ export default function AnimatedBackground() {
           height: 800,
           borderRadius: '50%',
           background:
-            'radial-gradient(circle, rgba(99,102,241,0.18) 0%, rgba(99,102,241,0.06) 35%, transparent 70%)',
+            'radial-gradient(circle, color-mix(in srgb, var(--color-secondary) 18%, transparent) 0%, color-mix(in srgb, var(--color-secondary) 6%, transparent) 35%, transparent 70%)',
           bottom: '-250px',
           right: '-200px',
           filter: 'blur(60px)',
         }}
       />
-      {/* Orb 3 — violet, center */}
+      {/* Orb 3 — tertiary, center */}
       <div
         className="animate-float-d4"
         style={{
@@ -48,7 +48,7 @@ export default function AnimatedBackground() {
           height: 600,
           borderRadius: '50%',
           background:
-            'radial-gradient(circle, rgba(168,85,247,0.12) 0%, transparent 65%)',
+            'radial-gradient(circle, color-mix(in srgb, var(--color-tertiary) 12%, transparent) 0%, transparent 65%)',
           top: '30%',
           left: '55%',
           filter: 'blur(50px)',
@@ -76,7 +76,7 @@ export default function AnimatedBackground() {
           width: 800,
           height: 400,
           background:
-            'radial-gradient(ellipse at 50% 0%, rgba(6,182,212,0.09) 0%, transparent 65%)',
+            'radial-gradient(ellipse at 50% 0%, color-mix(in srgb, var(--color-primary) 9%, transparent) 0%, transparent 65%)',
         }}
       />
       {/* Noise vignette */}

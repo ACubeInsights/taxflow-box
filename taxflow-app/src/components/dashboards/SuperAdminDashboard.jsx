@@ -1,5 +1,5 @@
 import { motion } from 'framer-motion'
-import { Shield, Users, Activity, Server, Bot, CheckCircle, AlertTriangle, Cpu, Globe, Database } from 'lucide-react'
+import { Shield, Users, Activity, Server, Bot, CheckCircle, AlertTriangle, Cpu, Globe, Database, ArrowUpRight } from 'lucide-react'
 import { StatCard, SectionHeader, GlassPanel, PanelTitle, StatusDot, ProgressBar, Badge } from '../ui'
 
 const containerVariants = {
@@ -11,16 +11,16 @@ const containerVariants = {
 }
 
 const itemVariants = {
-  hidden: { opacity: 0, y: 20 },
+  hidden: { opacity: 0, y: 15 },
   visible: { opacity: 1, y: 0, transition: { duration: 0.5, ease: 'easeOut' } },
 }
 
 const API_SERVICES = [
-  { name: 'Box AI Document Intelligence', status: 'operational', latency: '42ms', uptime: '99.98%', color: '#34d399' },
-  { name: 'Metadata Extraction Engine', status: 'operational', latency: '78ms', uptime: '99.95%', color: '#34d399' },
-  { name: 'OCR Processing Pipeline', status: 'degraded', latency: '210ms', uptime: '98.2%', color: '#fbbf24' },
-  { name: 'Authentication Service', status: 'operational', latency: '18ms', uptime: '100%', color: '#34d399' },
-  { name: 'Storage API (Box)', status: 'operational', latency: '54ms', uptime: '99.99%', color: '#34d399' },
+  { name: 'Box AI Document Intelligence', status: 'operational', latency: '42ms', uptime: '99.98%', color: 'var(--color-secondary)' },
+  { name: 'Metadata Extraction Engine', status: 'operational', latency: '78ms', uptime: '99.95%', color: 'var(--color-secondary)' },
+  { name: 'OCR Processing Pipeline', status: 'degraded', latency: '210ms', uptime: '98.2%', color: 'var(--color-tertiary)' },
+  { name: 'Authentication Service', status: 'operational', latency: '18ms', uptime: '100%', color: 'var(--color-secondary)' },
+  { name: 'Storage API (Box)', status: 'operational', latency: '54ms', uptime: '99.99%', color: 'var(--color-secondary)' },
 ]
 
 const RECENT_USERS = [
@@ -36,6 +36,7 @@ export default function SuperAdminDashboard() {
       variants={containerVariants}
       initial="hidden"
       animate="visible"
+      className="max-w-[1400px] mx-auto"
     >
       <motion.div variants={itemVariants}>
         <SectionHeader
@@ -46,63 +47,46 @@ export default function SuperAdminDashboard() {
       </motion.div>
 
       {/* Stats row */}
-      <motion.div variants={itemVariants} className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
-        <StatCard label="Total Users" value="1,284" change="24 this month" changeType="up" color="#a78bfa" icon={Users} delay={50} />
-        <StatCard label="Active Sessions" value="47" change="Live now" changeType="neutral" color="#06b6d4" icon={Activity} delay={100} />
-        <StatCard label="Docs Processed" value="98,341" change="12% this week" changeType="up" color="#34d399" icon={Database} delay={150} />
-        <StatCard label="System Uptime" value="99.97%" change="30-day average" changeType="neutral" color="#fbbf24" icon={Server} delay={200} />
+      <motion.div variants={itemVariants} className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-5 mb-8">
+        <StatCard label="Total Users" value="1,284" change="24 this month" changeType="up" color="var(--color-primary)" icon={Users} delay={50} />
+        <StatCard label="Active Sessions" value="47" change="Live now" changeType="neutral" color="var(--color-tertiary)" icon={Activity} delay={100} />
+        <StatCard label="Docs Processed" value="98,341" change="12% this week" changeType="up" color="var(--color-secondary)" icon={Database} delay={150} />
+        <StatCard label="System Uptime" value="99.97%" change="30-day average" changeType="neutral" color="var(--color-on-surface-variant)" icon={Server} delay={200} />
       </motion.div>
 
-      <motion.div variants={itemVariants} className="grid grid-cols-1 lg:grid-cols-[1.4fr_1fr] gap-4 mb-6">
+      <motion.div variants={itemVariants} className="grid grid-cols-1 lg:grid-cols-[1.4fr_1fr] gap-5 mb-8">
         {/* Box AI Integration Status */}
         <GlassPanel delay={250}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 20 }}>
-            <div
-              style={{
-                width: 36, height: 36, borderRadius: 10,
-                background: 'rgba(6,182,212,0.12)',
-                border: '1px solid rgba(6,182,212,0.25)',
-                display: 'flex', alignItems: 'center', justifyContent: 'center',
-              }}
-            >
-              <Bot size={17} color="#06b6d4" />
+          <div className="flex items-center gap-4 mb-6">
+            <div className="w-11 h-11 rounded-[12px] bg-[var(--color-primary)]/15 border border-[var(--color-primary)]/30 flex items-center justify-center shadow-[0_0_20px_var(--color-primary)]/20 animate-pulse-glow shrink-0">
+              <Bot size={22} className="text-[var(--color-primary)]" />
             </div>
             <div>
-              <h3 style={{ margin: 0, fontSize: 14, fontWeight: 600, color: '#fff', letterSpacing: '-0.01em' }}>
+              <h3 className="m-0 text-[16px] font-bold text-[var(--color-on-surface)] tracking-tight">
                 Box AI Integration Status
               </h3>
-              <p style={{ margin: 0, fontSize: 11, color: 'rgba(255,255,255,0.35)' }}>Real-time API health monitor</p>
+              <p className="m-0 text-[12px] font-medium text-[var(--color-on-surface-variant)] mt-0.5">Real-time API health monitor</p>
             </div>
-            <div style={{ marginLeft: 'auto', display: 'flex', alignItems: 'center', gap: 6 }}>
-              <StatusDot color="#34d399" pulse />
-              <span style={{ fontSize: 11, fontWeight: 600, color: '#34d399' }}>All Systems Go</span>
+            <div className="ml-auto">
+              <span className="flex items-center gap-2 px-3 py-1.5 rounded-lg bg-[var(--color-secondary)]/10 border border-[var(--color-secondary)]/20 text-[11px] font-bold tracking-widest text-[var(--color-secondary)] uppercase">
+                <StatusDot color="var(--color-secondary)" pulse />
+                All Systems Go
+              </span>
             </div>
           </div>
 
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+          <div className="flex flex-col gap-3">
             {API_SERVICES.map((svc) => (
               <div
                 key={svc.name}
-                style={{
-                  display: 'flex',
-                  alignItems: 'center',
-                  gap: 12,
-                  padding: '11px 14px',
-                  borderRadius: 12,
-                  background: 'rgba(255,255,255,0.03)',
-                  border: '1px solid rgba(255,255,255,0.05)',
-                }}
+                className="flex items-center gap-4 px-4 py-3.5 rounded-xl bg-[var(--color-surface-high)] ring-1 ring-[var(--color-outline-variant)] hover:bg-[var(--color-surface-highest)] transition-colors duration-300 group"
               >
                 <StatusDot color={svc.color} />
-                <span style={{ flex: 1, fontSize: 13, color: 'rgba(255,255,255,0.75)', fontWeight: 400 }}>
+                <span className="flex-1 text-[13px] font-semibold text-[var(--color-on-surface)] leading-snug">
                   {svc.name}
                 </span>
-                <span style={{ fontSize: 11, color: 'rgba(255,255,255,0.3)', fontWeight: 500 }}>{svc.latency}</span>
-                <Badge
-                  color={svc.color}
-                >
-                  {svc.uptime}
-                </Badge>
+                <span className="text-[12px] font-medium text-[var(--color-on-surface-variant)] w-14 text-right tabular-nums">{svc.latency}</span>
+                <Badge color={svc.color}>{svc.uptime}</Badge>
               </div>
             ))}
           </div>
@@ -111,82 +95,57 @@ export default function SuperAdminDashboard() {
         {/* System resource usage */}
         <GlassPanel delay={300}>
           <PanelTitle>Resource Usage</PanelTitle>
-          {[
-            { label: 'CPU Load', val: 34, color: '#06b6d4' },
-            { label: 'Memory', val: 61, color: '#a78bfa' },
-            { label: 'Storage (Box)', val: 48, color: '#34d399' },
-            { label: 'API Rate Limit', val: 22, color: '#fbbf24' },
-            { label: 'Bandwidth', val: 77, color: '#f87171' },
-          ].map((item) => (
-            <div key={item.label} style={{ marginBottom: 16 }}>
-              <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 6 }}>
-                <span style={{ fontSize: 12, color: 'rgba(255,255,255,0.5)', fontWeight: 500 }}>{item.label}</span>
-                <span style={{ fontSize: 12, fontWeight: 600, color: item.val > 70 ? item.color : 'rgba(255,255,255,0.6)' }}>
-                  {item.val}%
-                </span>
+          <div className="flex flex-col gap-5 mt-2">
+            {[
+              { label: 'CPU Load', val: 34, color: 'var(--color-tertiary)' },
+              { label: 'Memory', val: 61, color: 'var(--color-primary)' },
+              { label: 'Storage (Box)', val: 48, color: 'var(--color-secondary)' },
+              { label: 'API Rate Limit', val: 22, color: 'var(--color-on-surface-variant)' },
+              { label: 'Bandwidth', val: 77, color: '#ffb4ab' },
+            ].map((item) => (
+              <div key={item.label}>
+                <div className="flex justify-between mb-2">
+                  <span className="text-[13px] font-semibold text-[var(--color-on-surface-variant)]">{item.label}</span>
+                  <span className="text-[12px] font-bold tracking-wide tabular-nums" style={{ color: item.val > 70 ? item.color : 'var(--color-on-surface)' }}>
+                    {item.val}%
+                  </span>
+                </div>
+                <ProgressBar value={item.val} color={item.color} />
               </div>
-              <ProgressBar value={item.val} color={item.color} />
-            </div>
-          ))}
+            ))}
+          </div>
         </GlassPanel>
       </motion.div>
 
       {/* User management */}
       <motion.div variants={itemVariants}>
         <GlassPanel delay={350}>
-          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 18 }}>
+          <div className="flex items-center justify-between mb-6">
             <PanelTitle>Recent Users</PanelTitle>
-            <button
-              style={{
-                fontSize: 12, fontWeight: 600, color: '#06b6d4',
-                background: 'rgba(6,182,212,0.1)',
-                border: '1px solid rgba(6,182,212,0.2)',
-                borderRadius: 8, padding: '5px 12px', cursor: 'pointer',
-                transition: 'all 0.2s',
-              }}
-              onMouseEnter={e => e.currentTarget.style.background = 'rgba(6,182,212,0.18)'}
-              onMouseLeave={e => e.currentTarget.style.background = 'rgba(6,182,212,0.1)'}
-            >
-              Manage All Users
+            <button className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-[var(--color-primary)]/10 text-[var(--color-primary)] text-[11px] font-bold tracking-widest uppercase border border-[var(--color-primary)]/20 hover:bg-[var(--color-primary)]/20 transition-colors duration-300">
+              Manage All
+              <ArrowUpRight size={12} strokeWidth={3} />
             </button>
           </div>
 
-          <div style={{ display: 'grid', gap: 8 }}>
+          <div className="grid gap-3">
             {RECENT_USERS.map((u) => (
               <div
                 key={u.email}
-                style={{
-                  display: 'flex',
-                  alignItems: 'center',
-                  gap: 14,
-                  padding: '12px 16px',
-                  borderRadius: 12,
-                  background: 'rgba(255,255,255,0.025)',
-                  border: '1px solid rgba(255,255,255,0.05)',
-                  transition: 'background 0.2s',
-                  cursor: 'default',
-                }}
-                onMouseEnter={e => e.currentTarget.style.background = 'rgba(255,255,255,0.05)'}
-                onMouseLeave={e => e.currentTarget.style.background = 'rgba(255,255,255,0.025)'}
+                className="flex items-center gap-4 px-4 py-3.5 rounded-2xl bg-[var(--color-surface-high)] border border-[var(--color-outline-variant)] transition-all duration-300 hover:bg-[var(--color-surface-highest)] hover:-translate-y-[2px] hover:shadow-[0_8px_20px_rgba(0,0,0,0.3)] cursor-pointer"
               >
-                <div
-                  style={{
-                    width: 34, height: 34, borderRadius: 999,
-                    background: 'rgba(255,255,255,0.06)',
-                    display: 'flex', alignItems: 'center', justifyContent: 'center',
-                    fontSize: 12, fontWeight: 700, color: 'rgba(255,255,255,0.6)',
-                    flexShrink: 0,
-                  }}
-                >
+                <div className="w-10 h-10 rounded-full flex items-center justify-center text-[12px] font-bold shrink-0 bg-[var(--color-surface-container)] ring-1 ring-[var(--color-outline-variant)] text-[var(--color-on-surface-variant)]">
                   {u.name.split(' ').map(n => n[0]).join('')}
                 </div>
-                <div style={{ flex: 1, minWidth: 0 }}>
-                  <p style={{ margin: 0, fontSize: 13, fontWeight: 600, color: '#fff' }}>{u.name}</p>
-                  <p style={{ margin: 0, fontSize: 11, color: 'rgba(255,255,255,0.35)' }}>{u.email}</p>
+                <div className="flex-1 min-w-0">
+                  <p className="m-0 text-[14px] font-bold text-[var(--color-on-surface)] truncate">{u.name}</p>
+                  <p className="m-0 text-[12px] font-medium text-[var(--color-on-surface-variant)] truncate mt-0.5">{u.email}</p>
                 </div>
-                <Badge color="#a78bfa">{u.role}</Badge>
-                <StatusDot color={u.status === 'active' ? '#34d399' : 'rgba(255,255,255,0.2)'} />
-                <span style={{ fontSize: 11, color: 'rgba(255,255,255,0.25)', width: 48, textAlign: 'right', flexShrink: 0 }}>
+                <Badge color="var(--color-primary)">{u.role}</Badge>
+                <div className="flex items-center justify-center w-6">
+                  <StatusDot color={u.status === 'active' ? 'var(--color-secondary)' : 'var(--color-on-surface-variant)'} />
+                </div>
+                <span className="text-[11px] font-medium text-[var(--color-on-surface-variant)] w-12 text-right shrink-0">
                   {u.joined}
                 </span>
               </div>

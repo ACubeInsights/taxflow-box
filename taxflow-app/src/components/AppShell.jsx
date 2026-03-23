@@ -37,15 +37,15 @@ export default function AppShell() {
   const Dashboard = DASHBOARDS[user] || EmployeeDashboard
 
   return (
-    <div className="flex min-h-screen bg-black relative">
-      {/* Ambient background */}
+    <div className="flex min-h-screen bg-[var(--color-surface-lowest)] relative overflow-hidden font-sans">
+      {/* Ambient Deep Void Background Glows */}
       <div
-        className="fixed inset-0 pointer-events-none z-0"
+        className="fixed inset-0 pointer-events-none z-0 opacity-40"
         style={{
           background: `
-            radial-gradient(ellipse at 0% 0%, rgba(6,182,212,0.05) 0%, transparent 50%),
-            radial-gradient(ellipse at 100% 100%, rgba(99,102,241,0.05) 0%, transparent 50%),
-            #000
+            radial-gradient(ellipse at 0% 0%, rgba(173, 198, 255, 0.08) 0%, transparent 40%),
+            radial-gradient(ellipse at 100% 100%, rgba(232, 179, 255, 0.08) 0%, transparent 40%),
+            var(--color-surface-lowest)
           `,
         }}
       />
@@ -53,17 +53,17 @@ export default function AppShell() {
       <Sidebar collapsed={sidebarCollapsed} onToggle={() => setSidebarCollapsed(p => !p)} />
 
       <div
-        className="flex-1 flex flex-col relative z-[1] min-w-0 transition-[margin-left] duration-300 ease-[cubic-bezier(0.4,0,0.2,1)]"
+        className="flex-1 flex flex-col relative z-[1] min-w-0 transition-all duration-300 ease-[cubic-bezier(0.4,0,0.2,1)]"
         style={{ marginLeft: sidebarCollapsed ? 72 : 240 }}
       >
         <TopNav />
         <AnimatePresence mode="wait">
           <motion.main
             key={user}
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            exit={{ opacity: 0 }}
-            transition={{ duration: 0.3, ease: 'easeInOut' }}
+            initial={{ opacity: 0, scale: 0.99, y: 10 }}
+            animate={{ opacity: 1, scale: 1, y: 0 }}
+            exit={{ opacity: 0, scale: 0.99, y: -10 }}
+            transition={{ duration: 0.3, ease: 'easeOut' }}
             className="flex-1 p-8 overflow-y-auto"
           >
             <Dashboard />
@@ -73,3 +73,4 @@ export default function AppShell() {
     </div>
   )
 }
+
