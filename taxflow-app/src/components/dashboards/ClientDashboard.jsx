@@ -1,8 +1,10 @@
 import { useState, useEffect } from 'react'
 import { motion } from 'framer-motion'
-import { Upload, FileText, CheckCircle, Clock, MessageSquare, Shield, ChevronRight, Calendar } from 'lucide-react'
+import { Upload, FileText, CheckCircle, Clock, MessageSquare, Shield, ChevronRight, Calendar, AlertTriangle, RefreshCw } from 'lucide-react'
 import { SectionHeader, GlassPanel, PanelTitle, ProgressBar, Badge, StatusBadge } from '../ui'
 import { useDocumentWorkflow } from '../../context/DocumentWorkflowContext'
+import { useAuth } from '../../context/AuthContext'
+import { portalApi } from '../../services/api'
 import ClientUploadView from '../ClientUploadView'
 import UploadDropzone from '../UploadDropzone'
 
@@ -19,14 +21,14 @@ const itemVariants = {
   visible: { opacity: 1, y: 0, transition: { duration: 0.5, ease: 'easeOut' } },
 }
 
-const PREPARER_REQUESTS = [
+const PREPARER_REQUESTS_FALLBACK = [
   { title: 'Please upload your W-2 from Employer', priority: 'urgent', due: 'Mar 12', done: false },
   { title: 'Confirm home office square footage for Sch. C', priority: 'normal', due: 'Mar 18', done: false },
   { title: 'Upload 1099-INT from Chase Bank', priority: 'normal', due: 'Mar 18', done: true },
   { title: 'Review and sign Form 8879 (e-file authorization)', priority: 'urgent', due: 'Apr 1', done: false },
 ]
 
-const TAX_STEPS = [
+const TAX_STEPS_FALLBACK = [
   { label: 'Documents Submitted', done: true },
   { label: 'Preparer Review', done: true },
   { label: 'Quality Check', done: false },
@@ -34,17 +36,73 @@ const TAX_STEPS = [
   { label: 'Filed with IRS', done: false },
 ]
 
+function deriveSteps(statusCounts) {
+  if (!statusCounts) return TAX_STEPS_FALLBACK
+  const { pending = 0, underReview = 0, approved = 0, revisionRequested = 0 } = statusCounts
+  const total = pending + underReview + approved + revisionRequested
+  if (total === 0) return TAX_STEPS_FALLBACK
+  return [
+    { label: 'Documents Submitted', done: pending === 0 },
+    { label: 'Preparer Review', done: underReview === 0 && approved > 0 },
+    { label: 'Quality Check', done: revisionRequested === 0 && approved > 0 && underReview === 0 },
+    { label: 'Client Signature', done: approved === total },
+    { label: 'Filed with IRS', done: false },
+  ]
+}
+
+function computeCompletion(statusCounts) {
+  if (!statusCounts) return 40
+  const { pending = 0, underReview = 0, approved = 0, revisionRequested = 0 } = statusCounts
+  const total = pending + underReview + approved + revisionRequested
+  return total === 0 ? 0 : Math.round((approved / total) * 100)
+}
+
+// Skeleton loader component
+function SkeletonBlock({ width = '100%', height = 16, style = {} }) {
+  return (
+    <div style={{
+      width, height, borderRadius: 8,
+      background: 'rgba(255,255,255,0.06)',
+      animation: 'pulse 1.5s ease-in-out infinite',
+      ...style,
+    }} />
+  )
+}
+
 export default function ClientDashboard() {
   const [dragging, setDragging] = useState(false)
   const [uploaded, setUploaded] = useState([])
   const [selectedRequest, setSelectedRequest] = useState(null)
   const { requests, vault, vaultLoading, initializeVault } = useDocumentWorkflow()
 
+  // API data state
+  const [apiData, setApiData] = useState(null)
+  const [apiLoading, setApiLoading] = useState(true)
+  const [apiError, setApiError] = useState(null)
+
+  // Fetch client progress from API
+  const fetchProgress = async () => {
+    setApiLoading(true)
+    setApiError(null)
+    try {
+      const data = await portalApi.getClientProgress('client-1')
+      setApiData(data)
+    } catch (err) {
+      console.warn('Client progress API failed, using fallback data:', err.message)
+      setApiError(err.message)
+    } finally {
+      setApiLoading(false)
+    }
+  }
+
+  useEffect(() => {
+    fetchProgress()
+  }, [])
+
   // Initialize vault on mount (simulating logged-in client)
   useEffect(() => {
     const initVault = async () => {
       try {
-        // In a real app, these would come from the auth context
         await initializeVault('John Doe', 'client-1', 'john.doe@example.com')
       } catch (error) {
         console.error('Failed to initialize vault:', error)
@@ -55,6 +113,18 @@ export default function ClientDashboard() {
       initVault()
     }
   }, [vault, vaultLoading, initializeVault])
+
+  // Derive display data from API or fallback
+  const TAX_STEPS = apiData ? deriveSteps(apiData.statusCounts) : TAX_STEPS_FALLBACK
+  const completionPct = apiData ? computeCompletion(apiData.statusCounts) : 40
+  const PREPARER_REQUESTS = apiData?.documents
+    ? apiData.documents.map(d => ({
+        title: d.name || d.description,
+        priority: (d.priority || 'normal').toLowerCase(),
+        due: d.dueDate ? new Date(d.dueDate).toLocaleDateString('en-US', { month: 'short', day: 'numeric' }) : '',
+        done: d.status === 'Approved',
+      }))
+    : PREPARER_REQUESTS_FALLBACK
 
   const clientRequests = requests.filter(r => r.clientId === 'client-1')
   const activeRequest = selectedRequest
@@ -77,6 +147,50 @@ export default function ClientDashboard() {
     )
   }
 
+  // Loading skeleton
+  if (apiLoading) {
+    return (
+      <motion.div variants={containerVariants} initial="hidden" animate="visible">
+        <motion.div variants={itemVariants} style={{ marginBottom: 28, padding: '24px 28px', borderRadius: 20, background: 'rgba(255,255,255,0.03)', border: '1px solid rgba(255,255,255,0.05)' }}>
+          <SkeletonBlock width="60%" height={24} />
+          <SkeletonBlock width="80%" height={14} style={{ marginTop: 8 }} />
+        </motion.div>
+        <div className="grid grid-cols-1 lg:grid-cols-[1.2fr_1fr] gap-4 mb-6">
+          <GlassPanel><SkeletonBlock height={200} /></GlassPanel>
+          <GlassPanel><SkeletonBlock height={200} /></GlassPanel>
+        </div>
+      </motion.div>
+    )
+  }
+
+  // Error panel with retry
+  if (apiError && !apiData) {
+    return (
+      <motion.div variants={containerVariants} initial="hidden" animate="visible">
+        <motion.div variants={itemVariants}>
+          <GlassPanel>
+            <div style={{ padding: 24, textAlign: 'center', background: 'rgba(248,113,113,0.05)', borderRadius: 16, border: '1px solid rgba(248,113,113,0.15)' }}>
+              <AlertTriangle size={32} color="#f87171" style={{ margin: '0 auto 12px' }} />
+              <p style={{ color: '#f87171', fontSize: 14, fontWeight: 600, margin: '0 0 8px' }}>Failed to load dashboard data</p>
+              <p style={{ color: 'rgba(255,255,255,0.4)', fontSize: 12, margin: '0 0 16px' }}>{apiError}</p>
+              <button
+                onClick={fetchProgress}
+                style={{
+                  display: 'inline-flex', alignItems: 'center', gap: 6,
+                  padding: '8px 20px', borderRadius: 10,
+                  background: 'rgba(248,113,113,0.15)', border: '1px solid rgba(248,113,113,0.25)',
+                  color: '#f87171', fontSize: 13, fontWeight: 600, cursor: 'pointer',
+                }}
+              >
+                <RefreshCw size={14} /> Retry
+              </button>
+            </div>
+          </GlassPanel>
+        </motion.div>
+      </motion.div>
+    )
+  }
+
   return (
     <motion.div
       variants={containerVariants}
@@ -93,7 +207,7 @@ export default function ClientDashboard() {
         }}
       >
         <div className="absolute top-0 right-0 w-[400px] h-[400px] -translate-y-1/2 translate-x-1/3 rounded-full opacity-10 pointer-events-none" style={{ background: 'var(--color-primary)', filter: 'blur(80px)' }} />
-        
+
         <div className="relative z-10">
           <h1 className="m-0 text-[28px] font-bold text-[var(--color-on-surface)] tracking-[-0.03em] leading-tight font-display mb-1.5">
             Welcome back, Jordan.
@@ -147,12 +261,12 @@ export default function ClientDashboard() {
             ))}
           </div>
 
-          <div className="mt-8 pt-6 border-t border-[var(--color-outline-variant)]">
-            <div className="flex justify-between mb-3">
-              <span className="text-[12px] font-bold text-[var(--color-on-surface-variant)] uppercase tracking-widest">Overall completion</span>
-              <span className="text-[13px] font-extrabold text-[var(--color-secondary)]">40%</span>
+          <div style={{ marginTop: 20 }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 8 }}>
+              <span style={{ fontSize: 12, color: 'rgba(255,255,255,0.4)', fontWeight: 500 }}>Overall completion</span>
+              <span style={{ fontSize: 12, fontWeight: 700, color: '#34d399' }}>{completionPct}%</span>
             </div>
-            <ProgressBar value={40} color="var(--color-secondary)" />
+            <ProgressBar value={completionPct} color="#34d399" />
           </div>
         </GlassPanel>
 
@@ -237,7 +351,7 @@ export default function ClientDashboard() {
                   <div className="w-10 h-10 rounded-[12px] bg-[var(--color-surface-container)] flex items-center justify-center border border-[var(--color-outline-variant)] group-hover:bg-[var(--color-primary)]/10 group-hover:border-[var(--color-primary)]/30 transition-colors">
                     <FileText size={18} className="text-[var(--color-on-surface-variant)] group-hover:text-[var(--color-primary)] transition-colors" />
                   </div>
-                  
+
                   <div className="flex-1 min-w-0">
                     <p className="m-0 text-[14px] font-bold text-[var(--color-on-surface)] leading-snug">
                       {req.name}

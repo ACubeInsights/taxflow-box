@@ -7,33 +7,33 @@ import {
 
 const NAV_ITEMS = {
   superadmin: [
-    { icon: LayoutDashboard, label: 'Dashboard', active: true },
-    { icon: Users, label: 'User Management' },
-    { icon: Shield, label: 'Security & Audit' },
-    { icon: Bot, label: 'Box AI Status' },
-    { icon: Settings, label: 'System Config' },
+    { id: 'dashboard', icon: LayoutDashboard, label: 'Dashboard' },
+    { id: 'users', icon: Users, label: 'User Management' },
+    { id: 'security', icon: Shield, label: 'Security & Audit' },
+    { id: 'ai-status', icon: Bot, label: 'Box AI Status' },
+    { id: 'config', icon: Settings, label: 'System Config' },
   ],
   cxo: [
-    { icon: LayoutDashboard, label: 'Overview', active: true },
-    { icon: BarChart2, label: 'Portfolio Analytics' },
-    { icon: FileText, label: 'Compliance Reports' },
-    { icon: Bell, label: 'Alerts & Deadlines' },
-    { icon: Settings, label: 'Settings' },
+    { id: 'overview', icon: LayoutDashboard, label: 'Overview' },
+    { id: 'analytics', icon: BarChart2, label: 'Portfolio Analytics' },
+    { id: 'compliance', icon: FileText, label: 'Compliance Reports' },
+    { id: 'alerts', icon: Bell, label: 'Alerts & Deadlines' },
+    { id: 'settings', icon: Settings, label: 'Settings' },
   ],
   employee: [
-    { icon: LayoutDashboard, label: 'My Workspace', active: true },
-    { icon: Users, label: 'Clients' },
-    { icon: FolderOpen, label: 'Documents' },
-    { icon: Bot, label: 'AI Insights' },
-    { icon: Bell, label: 'Notifications' },
-    { icon: Settings, label: 'Settings' },
+    { id: 'workspace', icon: LayoutDashboard, label: 'My Workspace' },
+    { id: 'clients', icon: Users, label: 'Clients' },
+    { id: 'documents', icon: FolderOpen, label: 'Documents' },
+    { id: 'ai-insights', icon: Bot, label: 'AI Insights' },
+    { id: 'notifications', icon: Bell, label: 'Notifications' },
+    { id: 'settings', icon: Settings, label: 'Settings' },
   ],
   client: [
-    { icon: LayoutDashboard, label: 'My Portal', active: true },
-    { icon: FileText, label: 'My Documents' },
-    { icon: Upload, label: 'Upload Files' },
-    { icon: Bell, label: 'Messages' },
-    { icon: HelpCircle, label: 'Help' },
+    { id: 'portal', icon: LayoutDashboard, label: 'My Portal' },
+    { id: 'my-documents', icon: FileText, label: 'My Documents' },
+    { id: 'upload', icon: Upload, label: 'Upload Files' },
+    { id: 'messages', icon: Bell, label: 'Messages' },
+    { id: 'help', icon: HelpCircle, label: 'Help' },
   ],
 }
 
@@ -44,7 +44,7 @@ const ROLE_META = {
   client: { label: 'Client', color: 'var(--color-on-surface-variant)', initials: 'CL' },
 }
 
-export default function Sidebar({ collapsed, onToggle }) {
+export default function Sidebar({ collapsed, onToggle, activeView, onNavigate }) {
   const { user, logout } = useAuth()
   const items = NAV_ITEMS[user] || NAV_ITEMS.employee
   const meta = ROLE_META[user] || ROLE_META.employee
@@ -80,22 +80,64 @@ export default function Sidebar({ collapsed, onToggle }) {
       <nav className="flex-1 px-3 py-4 overflow-y-auto overflow-x-hidden flex flex-col gap-1">
         {items.map((item) => {
           const Icon = item.icon
+          const isActive = activeView === item.id || (activeView === 'default' && item === items[0])
           return (
             <button
-              key={item.label}
-              className={`w-full flex items-center gap-3 rounded-[10px] border-none transition-all duration-200 relative overflow-hidden group ${collapsed ? 'justify-center p-3' : 'justify-start px-[14px] py-[10px]'} ${item.active ? 'bg-[var(--color-surface-high)] shadow-sm' : 'bg-transparent hover:bg-[var(--color-surface)]'}`}
+              key={item.id}
+              onClick={() => onNavigate?.(item.id)}
+              style={{
+                width: '100%',
+                display: 'flex',
+                alignItems: 'center',
+                gap: 10,
+                padding: collapsed ? '10px 0' : '10px 12px',
+                justifyContent: collapsed ? 'center' : 'flex-start',
+                borderRadius: 10,
+                border: 'none',
+                background: isActive
+                  ? 'rgba(6,182,212,0.1)'
+                  : 'transparent',
+                cursor: 'pointer',
+                marginBottom: 2,
+                transition: 'all 0.18s',
+                position: 'relative',
+                overflow: 'hidden',
+              }}
+              onMouseEnter={e => {
+                if (!isActive) e.currentTarget.style.background = 'rgba(255,255,255,0.05)'
+              }}
+              onMouseLeave={e => {
+                if (!isActive) e.currentTarget.style.background = 'transparent'
+              }}
             >
-              {item.active && (
-                <div className="absolute left-0 top-[20%] bottom-[20%] w-[3px] rounded-r-md bg-[var(--color-primary)] shadow-[0_0_8px_var(--color-primary)]" />
+              {isActive && (
+                <div
+                  style={{
+                    position: 'absolute',
+                    left: 0,
+                    top: '20%',
+                    bottom: '20%',
+                    width: 3,
+                    borderRadius: '0 3px 3px 0',
+                    background: '#06b6d4',
+                    boxShadow: '0 0 8px rgba(6,182,212,0.6)',
+                  }}
+                />
               )}
               <Icon
-                size={18}
-                className={`shrink-0 transition-colors duration-200 ${item.active ? 'text-[var(--color-primary)]' : 'text-[var(--color-on-surface-variant)] group-hover:text-white'}`}
-                strokeWidth={item.active ? 2.5 : 2}
+                size={17}
+                color={isActive ? '#06b6d4' : 'rgba(255,255,255,0.4)'}
+                style={{ flexShrink: 0 }}
               />
               {!collapsed && (
                 <span
-                  className={`text-[13px] tracking-tight whitespace-nowrap transition-colors duration-200 ${item.active ? 'font-semibold text-white' : 'font-medium text-[var(--color-on-surface-variant)] group-hover:text-white'}`}
+                  style={{
+                    fontSize: 13,
+                    fontWeight: isActive ? 600 : 400,
+                    color: isActive ? '#fff' : 'rgba(255,255,255,0.45)',
+                    letterSpacing: '-0.01em',
+                    whiteSpace: 'nowrap',
+                  }}
                 >
                   {item.label}
                 </span>

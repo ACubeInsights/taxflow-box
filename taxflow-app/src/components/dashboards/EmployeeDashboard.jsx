@@ -1,8 +1,9 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { motion } from 'framer-motion'
-import { Bot, Users, Clock, CheckCircle, Sparkles, Plus } from 'lucide-react'
+import { Bot, Users, Clock, CheckCircle, Sparkles, Plus, AlertTriangle, RefreshCw } from 'lucide-react'
 import { StatCard, SectionHeader, GlassPanel, PanelTitle, Badge } from '../ui'
 import { useDocumentWorkflow } from '../../context/DocumentWorkflowContext'
+import { portalApi } from '../../services/api'
 import DocumentRequestList from '../DocumentRequestList'
 import RequestCreatorDrawer from '../RequestCreatorDrawer'
 import ReviewMode from '../ReviewMode'
@@ -20,7 +21,7 @@ const itemVariants = {
   visible: { opacity: 1, y: 0, transition: { duration: 0.5, ease: 'easeOut' } },
 }
 
-const CLIENTS = [
+const CLIENTS_FALLBACK = [
   { name: 'Acme Industries LLC', type: 'Business', docs: 14, status: 'review', aiScore: 92 },
   { name: 'Jennifer & Mark Torres', type: 'Individual', docs: 8, status: 'pending', aiScore: 78 },
   { name: 'Blue Horizon Trust', type: 'Trust', docs: 22, status: 'complete', aiScore: 97 },
@@ -65,6 +66,33 @@ export default function EmployeeDashboard() {
   const [selectedRequest, setSelectedRequest] = useState(null)
   const [drawerOpen, setDrawerOpen] = useState(false)
 
+  // API data state
+  const [apiData, setApiData] = useState(null)
+  const [apiLoading, setApiLoading] = useState(true)
+  const [apiError, setApiError] = useState(null)
+
+  const fetchDashboard = async () => {
+    setApiLoading(true)
+    setApiError(null)
+    try {
+      const data = await portalApi.getEmployeeDashboard('employee-1')
+      setApiData(data)
+    } catch (err) {
+      console.warn('Employee dashboard API failed, using fallback:', err.message)
+      setApiError(err.message)
+    } finally {
+      setApiLoading(false)
+    }
+  }
+
+  useEffect(() => {
+    fetchDashboard()
+  }, [])
+
+  // Derive display data from API or fallback
+  const CLIENTS = apiData?.clientChecklists || CLIENTS_FALLBACK
+  const stats = apiData?.stats || { assignedClients: 18, pendingReview: 7, completed: 11, aiExtractions: 284 }
+
   // Filter requests for client-1 (demo)
   const clientRequests = requests.filter((r) => r.clientId === 'client-1')
 
@@ -102,6 +130,59 @@ export default function EmployeeDashboard() {
   }
 
   // List mode (default)
+  // Loading skeleton
+  if (apiLoading) {
+    return (
+      <motion.div variants={containerVariants} initial="hidden" animate="visible">
+        <motion.div variants={itemVariants}>
+          <SectionHeader title="My Workspace" subtitle="Loading your dashboard..." delay={0} />
+        </motion.div>
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
+          {[1,2,3,4].map(i => (
+            <motion.div key={i} variants={itemVariants}>
+              <GlassPanel><div style={{ height: 80, borderRadius: 12, background: 'rgba(255,255,255,0.04)', animation: 'pulse 1.5s ease-in-out infinite' }} /></GlassPanel>
+            </motion.div>
+          ))}
+        </div>
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 mb-6">
+          <GlassPanel><div style={{ height: 200, borderRadius: 12, background: 'rgba(255,255,255,0.04)', animation: 'pulse 1.5s ease-in-out infinite' }} /></GlassPanel>
+          <GlassPanel><div style={{ height: 200, borderRadius: 12, background: 'rgba(255,255,255,0.04)', animation: 'pulse 1.5s ease-in-out infinite' }} /></GlassPanel>
+        </div>
+      </motion.div>
+    )
+  }
+
+  // Error panel with retry
+  if (apiError && !apiData) {
+    return (
+      <motion.div variants={containerVariants} initial="hidden" animate="visible">
+        <motion.div variants={itemVariants}>
+          <SectionHeader title="My Workspace" subtitle="" delay={0} />
+        </motion.div>
+        <motion.div variants={itemVariants}>
+          <GlassPanel>
+            <div style={{ padding: 24, textAlign: 'center', background: 'rgba(248,113,113,0.05)', borderRadius: 16, border: '1px solid rgba(248,113,113,0.15)' }}>
+              <AlertTriangle size={32} color="#f87171" style={{ margin: '0 auto 12px' }} />
+              <p style={{ color: '#f87171', fontSize: 14, fontWeight: 600, margin: '0 0 8px' }}>Failed to load dashboard data</p>
+              <p style={{ color: 'rgba(255,255,255,0.4)', fontSize: 12, margin: '0 0 16px' }}>{apiError}</p>
+              <button
+                onClick={fetchDashboard}
+                style={{
+                  display: 'inline-flex', alignItems: 'center', gap: 6,
+                  padding: '8px 20px', borderRadius: 10,
+                  background: 'rgba(248,113,113,0.15)', border: '1px solid rgba(248,113,113,0.25)',
+                  color: '#f87171', fontSize: 13, fontWeight: 600, cursor: 'pointer',
+                }}
+              >
+                <RefreshCw size={14} /> Retry
+              </button>
+            </div>
+          </GlassPanel>
+        </motion.div>
+      </motion.div>
+    )
+  }
+
   return (
     <motion.div
       variants={containerVariants}
@@ -117,11 +198,11 @@ export default function EmployeeDashboard() {
         />
       </motion.div>
 
-      <motion.div variants={itemVariants} className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-5 mb-8">
-        <StatCard label="Assigned Clients" value="18" change="3 new this week" changeType="up" color="var(--color-tertiary)" icon={Users} delay={50} />
-        <StatCard label="Pending Review" value="7" change="2 urgent" changeType="down" color="var(--color-on-surface-variant)" icon={Clock} delay={100} />
-        <StatCard label="Completed" value="11" change="61% of total" changeType="up" color="var(--color-secondary)" icon={CheckCircle} delay={150} />
-        <StatCard label="AI Extractions" value="284" change="Today" changeType="neutral" color="var(--color-primary)" icon={Bot} delay={200} />
+      <motion.div variants={itemVariants} className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
+        <StatCard label="Assigned Clients" value={String(stats.assignedClients)} change="3 new this week" changeType="up" color="#06b6d4" icon={Users} delay={50} />
+        <StatCard label="Pending Review" value={String(stats.pendingReview)} change="2 urgent" changeType="down" color="#fbbf24" icon={Clock} delay={100} />
+        <StatCard label="Completed" value={String(stats.completed)} change={`${stats.assignedClients ? Math.round((stats.completed / stats.assignedClients) * 100) : 0}% of total`} changeType="up" color="#34d399" icon={CheckCircle} delay={150} />
+        <StatCard label="AI Extractions" value={String(stats.aiExtractions)} change="Today" changeType="neutral" color="#a78bfa" icon={Bot} delay={200} />
       </motion.div>
 
       <motion.div variants={itemVariants} className="grid grid-cols-1 lg:grid-cols-2 gap-5 mb-8">

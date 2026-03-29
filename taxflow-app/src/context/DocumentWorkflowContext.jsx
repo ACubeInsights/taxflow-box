@@ -1,5 +1,5 @@
-import { useReducer, createContext, useContext, useState } from 'react'
-import { clientApi, vaultApi } from '../services/api.js'
+import { useReducer, createContext, useContext, useState, useCallback } from 'react'
+import { clientApi, vaultApi, onboardingApi, portalApi, reviewApi } from '../services/api.js'
 
 // --- Document Status values ---
 export const DocumentStatus = {
@@ -106,6 +106,10 @@ export function documentReducer(state, action) {
       })
     }
 
+    case 'SET_REQUESTS': {
+      return action.payload.requests
+    }
+
     default:
       return state
   }
@@ -119,35 +123,59 @@ export function DocumentWorkflowProvider({ children }) {
   const [vault, setVault] = useState(null)
   const [vaultLoading, setVaultLoading] = useState(false)
   const [vaultError, setVaultError] = useState(null)
+  const [loading, setLoading] = useState(false)
+  const [error, setError] = useState(null)
 
   /**
-   * Initialize or get client vault
-   * Call this when a client logs in
+   * Initialize or get client vault via onboarding API, then fetch progress
    */
-  const initializeVault = async (clientName, externalId, email) => {
+  const initializeVault = useCallback(async (clientName, externalId, email, employeeEmail, financialYear) => {
     setVaultLoading(true)
     setVaultError(null)
+    setError(null)
     
     try {
-      // Try to get existing vault
-      let vaultData = await clientApi.getVault(externalId).catch(() => null)
-      
-      // If no vault exists, create one
-      if (!vaultData) {
-        const result = await clientApi.createVault(clientName, externalId, email)
-        vaultData = { vault: result.vault }
+      // Try onboarding API first
+      let onboardingResult = null
+      try {
+        onboardingResult = await onboardingApi.onboardClient(
+          clientName, externalId, email,
+          employeeEmail || 'preparer@taxflow.com',
+          financialYear || new Date().getFullYear()
+        )
+        setVault(onboardingResult.folders || onboardingResult)
+      } catch (apiErr) {
+        console.warn('Onboarding API failed, falling back to clientApi:', apiErr.message)
+        // Fallback to existing clientApi
+        let vaultData = await clientApi.getVault(externalId).catch(() => null)
+        if (!vaultData) {
+          const result = await clientApi.createVault(clientName, externalId, email)
+          vaultData = { vault: result.vault }
+        }
+        setVault(vaultData.vault)
       }
-      
-      setVault(vaultData.vault)
-      return vaultData.vault
-    } catch (error) {
-      console.error('Failed to initialize vault:', error)
-      setVaultError(error.message)
-      throw error
+
+      // Fetch client progress to populate requests
+      try {
+        const progress = await portalApi.getClientProgress(externalId)
+        if (progress && progress.documents && progress.documents.length > 0) {
+          dispatch({ type: 'SET_REQUESTS', payload: { requests: progress.documents } })
+        }
+        // If no documents from API, keep mock data as fallback
+      } catch (progressErr) {
+        console.warn('Client progress API failed, keeping mock data:', progressErr.message)
+      }
+
+      return vault
+    } catch (err) {
+      console.error('Failed to initialize vault:', err)
+      setVaultError(err.message)
+      setError(err.message)
+      throw err
     } finally {
       setVaultLoading(false)
     }
-  }
+  }, [vault])
 
   /**
    * Load files from Box vault
@@ -160,19 +188,60 @@ export function DocumentWorkflowProvider({ children }) {
     try {
       const result = await vaultApi.listFiles(vault.id)
       return result.files
-    } catch (error) {
-      console.error('Failed to load vault files:', error)
-      throw error
+    } catch (err) {
+      console.error('Failed to load vault files:', err)
+      throw err
     }
   }
+
+  /**
+   * Wrapper dispatch that wires APPROVE and REQUEST_REVISION to review API
+   */
+  const wrappedDispatch = useCallback(async (action) => {
+    if (action.type === 'APPROVE') {
+      const { requestId } = action.payload
+      const req = requests.find(r => r.id === requestId)
+      if (req?.fileId) {
+        // Fire-and-forget API call — don't block UI
+        reviewApi.approve(req.fileId, action.payload.employeeId || 'current-employee').catch(err => {
+          console.warn('reviewApi.approve failed (fire-and-forget):', err.message)
+          setError(err.message)
+        })
+      }
+      dispatch(action)
+    } else if (action.type === 'REQUEST_REVISION') {
+      const { requestId, comments } = action.payload
+      const req = requests.find(r => r.id === requestId)
+      if (req?.fileId) {
+        // Fire-and-forget API call — don't block UI
+        reviewApi.reject(req.fileId, action.payload.employeeId || 'current-employee', comments).catch(err => {
+          console.warn('reviewApi.reject failed (fire-and-forget):', err.message)
+          setError(err.message)
+        })
+      }
+      dispatch(action)
+    } else if (action.type === 'ADD_REQUEST') {
+      // Try to send to backend, use server-generated ID if available
+      try {
+        // For now, dispatch locally — backend request creation endpoint TBD
+        dispatch(action)
+      } catch (err) {
+        setError(err.message)
+      }
+    } else {
+      dispatch(action)
+    }
+  }, [requests])
 
   return (
     <DocumentWorkflowContext.Provider value={{ 
       requests, 
-      dispatch,
+      dispatch: wrappedDispatch,
       vault,
       vaultLoading,
       vaultError,
+      loading,
+      error,
       initializeVault,
       loadVaultFiles,
     }}>

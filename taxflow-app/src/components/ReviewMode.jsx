@@ -1,8 +1,11 @@
+import { useState, useEffect, useRef } from 'react'
 import { motion } from 'framer-motion'
-import { ArrowLeft, FileText, Bot } from 'lucide-react'
+import { ArrowLeft, FileText, Loader2 } from 'lucide-react'
 import { StatusBadge, GlassPanel } from './ui'
 import AIExtractionCard from './AIExtractionCard'
 import ApprovalActions from './ApprovalActions'
+import { tokenApi, reviewApi } from '../services/api'
+import { useAuth } from '../context/AuthContext'
 
 const leftPaneVariants = {
   hidden: { opacity: 0, y: 24 },
@@ -31,6 +34,73 @@ function SkeletonLines() {
 }
 
 export default function ReviewMode({ request, onApprove, onRequestRevision, onBack }) {
+  const { user } = useAuth()
+  const [previewToken, setPreviewToken] = useState(null)
+  const [previewError, setPreviewError] = useState(null)
+  const [actionLoading, setActionLoading] = useState(false)
+  const [actionError, setActionError] = useState(null)
+  const refreshTimerRef = useRef(null)
+
+  // Fetch preview token on mount
+  useEffect(() => {
+    if (!request.fileId) return
+
+    const fetchToken = async () => {
+      try {
+        const result = await tokenApi.getPreviewToken(request.fileId, user || 'employee-1')
+        setPreviewToken(result)
+        setPreviewError(null)
+
+        // Schedule refresh 5 min before expiry
+        if (result.expiresAt) {
+          const expiresMs = new Date(result.expiresAt).getTime()
+          const refreshIn = expiresMs - Date.now() - 5 * 60 * 1000
+          if (refreshIn > 0) {
+            refreshTimerRef.current = setTimeout(fetchToken, refreshIn)
+          }
+        }
+      } catch (err) {
+        console.warn('Preview token fetch failed:', err.message)
+        setPreviewError(err.message)
+      }
+    }
+
+    fetchToken()
+    return () => {
+      if (refreshTimerRef.current) clearTimeout(refreshTimerRef.current)
+    }
+  }, [request.fileId, user])
+
+  const handleApprove = async () => {
+    setActionLoading(true)
+    setActionError(null)
+    try {
+      if (request.fileId) {
+        await reviewApi.approve(request.fileId, user || 'employee-1')
+      }
+      onApprove()
+    } catch (err) {
+      setActionError(err.message)
+    } finally {
+      setActionLoading(false)
+    }
+  }
+
+  const handleRequestRevision = async (comments) => {
+    setActionLoading(true)
+    setActionError(null)
+    try {
+      if (request.fileId) {
+        await reviewApi.reject(request.fileId, user || 'employee-1', comments)
+      }
+      onRequestRevision(comments)
+    } catch (err) {
+      setActionError(err.message)
+    } finally {
+      setActionLoading(false)
+    }
+  }
+
   return (
     <div className="max-w-[1400px] mx-auto pb-10">
       {/* Back button */}
@@ -63,31 +133,36 @@ export default function ReviewMode({ request, onApprove, onRequestRevision, onBa
             <h3 className="mb-6 m-0 text-[12px] font-bold uppercase tracking-[0.15em] text-[var(--color-on-surface-variant)]/70 flex items-center gap-2">
               <FileText size={14} /> Document Preview
             </h3>
-            
-            <div className="flex-1 min-h-[500px] flex flex-col items-center justify-center rounded-[20px] border border-[var(--color-outline-variant)] bg-[var(--color-surface-high)]/30 p-10 relative overflow-hidden">
-              <div className="absolute top-0 inset-x-0 h-[300px] bg-gradient-to-b from-[var(--color-surface-container)]/20 to-transparent pointer-events-none" />
-              
-              <div className="mb-6 flex h-20 w-20 items-center justify-center rounded-[24px] bg-[var(--color-surface-container)] border border-[var(--color-outline-variant)] shadow-sm relative z-10 rotating-border-container">
-                <FileText size={32} className="text-[var(--color-on-surface-variant)]" />
-              </div>
-              
-              <p className="m-0 mb-2 text-[16px] font-bold text-[var(--color-on-surface)] relative z-10 text-center">
-                {request.name}
-              </p>
-              
-              <p className="m-0 mb-8 text-[13px] text-[var(--color-on-surface-variant)] relative z-10 text-center">
-                {request.uploadedFileName || 'document.pdf'}
-              </p>
-              
-              <div className="relative z-10 w-full flex justify-center opacity-60 filter blur-[0.5px]">
-                <SkeletonLines />
-              </div>
-
-              <div className="absolute bottom-6 inset-x-0 flex justify-center">
-                   <div className="px-4 py-2 rounded-full bg-[var(--color-surface-container)] text-[var(--color-on-surface-variant)] text-[12px] font-medium border border-[var(--color-outline-variant)] backdrop-blur-md flex items-center gap-2">
-			<FileText size={14}/> Mock PDF Preview
-		   </div>
-              </div>
+            <div className="flex flex-col items-center justify-center rounded-2xl border border-white/[0.05] bg-white/[0.02] p-10">
+              {previewToken && request.fileId ? (
+                <iframe
+                  src={`https://app.box.com/embed/preview/${request.fileId}?token=${previewToken.token}`}
+                  style={{ width: '100%', height: 400, border: 'none', borderRadius: 12 }}
+                  title="Document Preview"
+                  sandbox="allow-scripts allow-same-origin allow-popups"
+                />
+              ) : previewError ? (
+                <>
+                  <div className="mb-4 flex h-16 w-16 items-center justify-center rounded-2xl bg-red-500/[0.05] border border-red-500/[0.07]">
+                    <FileText size={28} className="text-red-400/50" />
+                  </div>
+                  <p className="mb-1 text-sm font-semibold text-red-400/70">Preview unavailable</p>
+                  <p className="text-xs text-white/30">{previewError}</p>
+                </>
+              ) : (
+                <>
+                  <div className="mb-4 flex h-16 w-16 items-center justify-center rounded-2xl bg-white/[0.05] border border-white/[0.07]">
+                    <FileText size={28} className="text-white/25" />
+                  </div>
+                  <p className="mb-1 text-sm font-semibold text-white/50">
+                    {request.name}
+                  </p>
+                  <p className="mb-6 text-xs text-white/30">
+                    {request.uploadedFileName || 'document.pdf'}
+                  </p>
+                  <SkeletonLines />
+                </>
+              )}
             </div>
           </GlassPanel>
         </motion.div>
@@ -111,9 +186,20 @@ export default function ReviewMode({ request, onApprove, onRequestRevision, onBa
               Review Actions
             </h3>
             <ApprovalActions
-              onApprove={onApprove}
-              onRequestRevision={onRequestRevision}
+              onApprove={handleApprove}
+              onRequestRevision={handleRequestRevision}
+              disabled={actionLoading}
             />
+            {actionLoading && (
+              <div className="flex items-center gap-2 text-white/40 text-xs mt-2">
+                <Loader2 size={14} className="animate-spin" /> Processing...
+              </div>
+            )}
+            {actionError && (
+              <div className="mt-2 rounded-lg border border-red-500/20 bg-red-500/10 px-3 py-2 text-xs text-red-400">
+                {actionError}
+              </div>
+            )}
           </GlassPanel>
         </motion.div>
       </div>

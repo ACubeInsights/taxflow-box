@@ -1,0 +1,320 @@
+import boxService from './boxService.js';
+import { config } from '../config.js';
+
+// webhookService will be created in Task 5.2 — import it when available
+let webhookService = null;
+try {
+  const mod = await import('./webhookService.js');
+  webhookService = mod.default;
+} catch {
+  // webhookService not yet created — onboardClient will skip webhook registration
+}
+
+const DEFAULT_SPACE_AMOUNT = 10737418240; // 10 GB in bytes
+
+const SUBFOLDER_NAMES = ['Tax', 'Uploads', 'SupportingDocs', 'SignedDocuments', 'InternalNotes'];
+
+export class OnboardingService {
+  /**
+   * Creates a Box App User with is_platform_access_only: true.
+   * Handles 409 conflict by retrieving the existing user.
+   * @param {string} name - Display name for the App User
+   * @param {string} email - Login email for the App User
+   * @param {number} [spaceAmount] - Storage quota in bytes (default 10 GB)
+   * @returns {Promise<{userId: string, login: string, name: string, isNew: boolean}>}
+   */
+  async createAppUser(name, email, spaceAmount = DEFAULT_SPACE_AMOUNT) {
+    const client = boxService.getBoxClient();
+    try {
+      const user = await client.users.createUser({
+        name,
+        login: email,
+        isPlatformAccessOnly: true,
+        spaceAmount,
+      });
+      return {
+        userId: user.id,
+        login: user.login || email,
+        name: user.name,
+        isNew: true,
+      };
+    } catch (error) {
+      if (error.statusCode === 409) {
+        // Retrieve existing user by email
+        const existing = await client.users.getUsers({ filterTerm: email });
+        const entries = existing.entries || [];
+        if (entries.length > 0) {
+          const user = entries[0];
+          return {
+            userId: user.id,
+            login: user.login || email,
+            name: user.name,
+            isNew: false,
+          };
+        }
+        throw new Error(`409 conflict creating App User but no existing user found for ${email}`);
+      }
+      throw new Error(
+        `Failed to create App User: HTTP ${error.statusCode || 'unknown'} — ${error.message}`
+      );
+    }
+  }
+
+  /**
+   * Creates the standard folder hierarchy: root → year → 5 subfolders.
+   * @param {string} clientName
+   * @param {string} externalId
+   * @param {string} parentFolderId - The configured root folder for all clients
+   * @param {string} financialYear
+   * @returns {Promise<{root: string, year: string, tax: string, uploads: string, supportingDocs: string, signedDocuments: string, internalNotes: string}>}
+   */
+  async createFolderHierarchy(clientName, externalId, parentFolderId, financialYear) {
+    const client = boxService.getBoxClient();
+    const createdIds = {};
+
+    try {
+      // 1. Create root folder: "{clientName} ({externalId})"
+      const rootFolder = await client.folders.createFolder({
+        name: `${clientName} (${externalId})`,
+        parent: { id: parentFolderId },
+      });
+      createdIds.root = rootFolder.id;
+
+      // 2. Create year folder under root
+      const yearFolder = await client.folders.createFolder({
+        name: financialYear,
+        parent: { id: rootFolder.id },
+      });
+      createdIds.year = yearFolder.id;
+
+      // 3. Create 5 subfolders under year folder sequentially
+      const folderKeyMap = {
+        Tax: 'tax',
+        Uploads: 'uploads',
+        SupportingDocs: 'supportingDocs',
+        SignedDocuments: 'signedDocuments',
+        InternalNotes: 'internalNotes',
+      };
+
+      for (const folderName of SUBFOLDER_NAMES) {
+        const subfolder = await client.folders.createFolder({
+          name: folderName,
+          parent: { id: yearFolder.id },
+        });
+        createdIds[folderKeyMap[folderName]] = subfolder.id;
+      }
+
+      return createdIds;
+    } catch (error) {
+      throw new Error(
+        `Failed to create folder hierarchy: ${error.message}. Created folders: ${JSON.stringify(createdIds)}`
+      );
+    }
+  }
+
+  /**
+   * Applies folder locks to root, SignedDocuments, and InternalNotes.
+   * Continues on individual failure.
+   * @param {{root: string, signedDocuments: string, internalNotes: string}} manifest
+   * @returns {Promise<Array<{folderId: string, lockId: string, success: boolean, error?: string}>>}
+   */
+  async applyFolderLocks(manifest) {
+    const client = boxService.getBoxClient();
+    const foldersToLock = [
+      manifest.root,
+      manifest.signedDocuments,
+      manifest.internalNotes,
+    ];
+
+    const results = [];
+    for (const folderId of foldersToLock) {
+      try {
+        const lock = await client.folderLocks.createFolderLock({
+          folder: { id: folderId, type: 'folder' },
+          lockedOperations: { move: true, delete: true },
+        });
+        results.push({ folderId, lockId: lock.id, success: true });
+      } catch (error) {
+        console.error(`Failed to lock folder ${folderId}: ${error.message}`);
+        results.push({ folderId, lockId: null, success: false, error: error.message });
+      }
+    }
+    return results;
+  }
+
+  /**
+   * Sets up collaborations per the permission matrix.
+   * Client App User: Uploads→viewer_uploader, Tax→viewer, SignedDocuments→viewer
+   * Employee: root→editor
+   * NO client access to InternalNotes.
+   * Handles 409 conflicts gracefully.
+   * @param {{root: string, tax: string, uploads: string, signedDocuments: string}} manifest
+   * @param {string} appUserId - Box App User ID for the client
+   * @param {string} employeeEmail - Assigned employee email
+   * @returns {Promise<Array<{folderId: string, role: string, success: boolean, error?: string}>>}
+   */
+  async setupCollaborations(manifest, appUserId, employeeEmail) {
+    const client = boxService.getBoxClient();
+
+    // Client App User collaborations (by user ID)
+    const clientCollabs = [
+      { folderId: manifest.uploads, role: 'viewer_uploader' },
+      { folderId: manifest.tax, role: 'viewer' },
+      { folderId: manifest.signedDocuments, role: 'viewer' },
+    ];
+
+    // Employee collaboration (by email)
+    const employeeCollabs = [
+      { folderId: manifest.root, role: 'editor' },
+    ];
+
+    const results = [];
+
+    // Set up client App User collaborations
+    for (const { folderId, role } of clientCollabs) {
+      try {
+        await client.userCollaborations.createCollaboration({
+          item: { type: 'folder', id: folderId },
+          accessibleBy: { type: 'user', id: appUserId },
+          role,
+        });
+        results.push({ folderId, role, success: true });
+      } catch (error) {
+        if (error.statusCode === 409) {
+          // Already exists — treat as success
+          results.push({ folderId, role, success: true });
+        } else {
+          results.push({ folderId, role, success: false, error: error.message });
+        }
+      }
+    }
+
+    // Set up employee collaborations
+    for (const { folderId, role } of employeeCollabs) {
+      try {
+        await client.userCollaborations.createCollaboration({
+          item: { type: 'folder', id: folderId },
+          accessibleBy: { type: 'user', login: employeeEmail },
+          role,
+        });
+        results.push({ folderId, role, success: true });
+      } catch (error) {
+        if (error.statusCode === 409) {
+          results.push({ folderId, role, success: true });
+        } else {
+          results.push({ folderId, role, success: false, error: error.message });
+        }
+      }
+    }
+
+    return results;
+  }
+
+  /**
+   * Creates a file request by copying from a template.
+   * @param {string} uploadsFolderId - Target folder for uploads
+   * @param {string} title - Descriptive title for the file request
+   * @param {string} expiresAt - ISO 8601 expiry date
+   * @returns {Promise<{url: string, fileRequestId: string}>}
+   */
+  async createFileRequest(uploadsFolderId, title, expiresAt) {
+    const client = boxService.getBoxClient();
+    const templateId = config.fileRequestTemplateId;
+
+    if (!templateId) {
+      throw new Error('FILE_REQUEST_TEMPLATE_ID is not configured');
+    }
+
+    try {
+      const fileRequest = await client.fileRequests.copyFileRequest(templateId, {
+        title,
+        folder: { id: uploadsFolderId, type: 'folder' },
+        expires_at: expiresAt,
+        is_email_required: true,
+        is_description_required: false,
+      });
+      return {
+        url: fileRequest.url,
+        fileRequestId: fileRequest.id,
+      };
+    } catch (error) {
+      throw new Error(
+        `Failed to create file request: template=${templateId}, folder=${uploadsFolderId} — ${error.message}`
+      );
+    }
+  }
+
+  /**
+   * Full client onboarding orchestrator.
+   * Chains: App User → folder hierarchy → folder locks → collaborations → webhook → file request.
+   * @param {string} clientName
+   * @param {string} externalId
+   * @param {string} email - Client email
+   * @param {string} employeeEmail - Assigned employee email
+   * @param {string} [financialYear] - Tax year (defaults to current year)
+   * @returns {Promise<{appUser: object, folders: object, locks: Array, collaborations: Array, webhookId: string|null, fileRequestUrl: string|null}>}
+   */
+  async onboardClient(clientName, externalId, email, employeeEmail, financialYear) {
+    const year = financialYear || new Date().getFullYear().toString();
+
+    // Phase 1: Create App User
+    const appUser = await this.createAppUser(clientName, email);
+
+    // Phase 2: Create folder hierarchy
+    const folders = await this.createFolderHierarchy(
+      clientName,
+      externalId,
+      config.boxRootFolderId,
+      year
+    );
+
+    // Phase 3: Apply folder locks
+    const locks = await this.applyFolderLocks(folders);
+
+    // Phase 4: Setup collaborations
+    const collaborations = await this.setupCollaborations(
+      folders,
+      appUser.userId,
+      employeeEmail
+    );
+
+    // Phase 5: Register webhook (if webhookService is available)
+    let webhookId = null;
+    if (webhookService) {
+      try {
+        const registration = await webhookService.registerWebhook(folders.root);
+        webhookId = registration.webhookId;
+      } catch (error) {
+        console.error(`Webhook registration failed for folder ${folders.root}: ${error.message}`);
+      }
+    }
+
+    // Phase 6: Create file request (if template is configured)
+    let fileRequestUrl = null;
+    if (config.fileRequestTemplateId) {
+      try {
+        // Expiry: 7 days from now as default grace period
+        const expiresAt = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString();
+        const fileRequest = await this.createFileRequest(
+          folders.uploads,
+          `Upload documents for ${clientName} — ${year}`,
+          expiresAt
+        );
+        fileRequestUrl = fileRequest.url;
+      } catch (error) {
+        console.error(`File request creation failed: ${error.message}`);
+      }
+    }
+
+    return {
+      appUser,
+      folders,
+      locks,
+      collaborations,
+      webhookId,
+      fileRequestUrl,
+    };
+  }
+}
+
+export default new OnboardingService();

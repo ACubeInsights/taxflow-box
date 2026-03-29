@@ -1,6 +1,8 @@
+import { useState, useEffect } from 'react'
 import { motion } from 'framer-motion'
-import { TrendingUp, FileText, AlertTriangle, CheckCircle, DollarSign, Users, Clock } from 'lucide-react'
+import { TrendingUp, FileText, AlertTriangle, CheckCircle, DollarSign, Users, Clock, RefreshCw } from 'lucide-react'
 import { StatCard, SectionHeader, GlassPanel, PanelTitle, StatusDot, ProgressBar, Badge } from '../ui'
+import { portalApi } from '../../services/api'
 
 const containerVariants = {
   hidden: { opacity: 0 },
@@ -15,14 +17,14 @@ const itemVariants = {
   visible: { opacity: 1, y: 0, transition: { duration: 0.5, ease: 'easeOut' } },
 }
 
-const FIRMS = [
+const FIRMS_FALLBACK = [
   { name: 'Enterprises Division', docs: 1842, compliance: 94, status: 'good', trend: '+2.1%' },
   { name: 'SMB Portfolio', docs: 3201, compliance: 87, status: 'warn', trend: '-0.5%' },
   { name: 'Private Wealth', docs: 612, compliance: 98, status: 'good', trend: '+0.8%' },
   { name: 'Startups & VC', docs: 284, compliance: 72, status: 'alert', trend: '-3.2%' },
 ]
 
-const ALERTS = [
+const ALERTS_FALLBACK = [
   { client: 'Nexus Corp', issue: 'W-2 Forms Missing (3)', severity: 'high', due: 'Mar 15' },
   { client: 'Blueprint LLC', issue: 'Amendment Required — Sch. C', severity: 'medium', due: 'Mar 20' },
   { client: 'Aura Wellness', issue: 'Estimated Tax Payment Overdue', severity: 'high', due: 'Mar 10' },
@@ -32,6 +34,109 @@ const ALERTS = [
 const SEV_COLOR = { high: '#ffb4ab', medium: 'var(--color-tertiary)', low: 'var(--color-on-surface-variant)' }
 
 export default function CXODashboard() {
+  const [apiData, setApiData] = useState(null)
+  const [apiLoading, setApiLoading] = useState(true)
+  const [apiError, setApiError] = useState(null)
+  const [nextCursor, setNextCursor] = useState(null)
+  const [loadingMore, setLoadingMore] = useState(false)
+
+  const fetchPortfolio = async (cursor = null) => {
+    if (cursor) {
+      setLoadingMore(true)
+    } else {
+      setApiLoading(true)
+    }
+    setApiError(null)
+    try {
+      const data = await portalApi.getCXOPortfolio(cursor, 20)
+      if (cursor && apiData) {
+        // Append to existing data
+        setApiData(prev => ({
+          ...data,
+          clients: [...(prev?.clients || []), ...(data.clients || [])],
+        }))
+      } else {
+        setApiData(data)
+      }
+      setNextCursor(data.nextCursor || null)
+    } catch (err) {
+      console.warn('CXO portfolio API failed, using fallback:', err.message)
+      setApiError(err.message)
+    } finally {
+      setApiLoading(false)
+      setLoadingMore(false)
+    }
+  }
+
+  useEffect(() => {
+    fetchPortfolio()
+  }, [])
+
+  // Derive display data from API or fallback
+  const FIRMS = apiData?.clients
+    ? apiData.clients.map(c => ({
+        name: c.name,
+        docs: c.docs || 0,
+        compliance: c.completionPercentage || 0,
+        status: c.completionPercentage >= 90 ? 'good' : c.completionPercentage >= 80 ? 'warn' : 'alert',
+        trend: c.trend || '+0%',
+      }))
+    : FIRMS_FALLBACK
+  const firmTotals = apiData?.firmTotals || { totalClients: 5939, docsPending: 2418, avgCompliance: 87.4, overdueFilings: 31 }
+  const ALERTS = ALERTS_FALLBACK
+
+  // Loading skeleton
+  if (apiLoading) {
+    return (
+      <motion.div variants={containerVariants} initial="hidden" animate="visible">
+        <motion.div variants={itemVariants}>
+          <SectionHeader title="Executive Overview" subtitle="Loading portfolio data..." delay={0} />
+        </motion.div>
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
+          {[1,2,3,4].map(i => (
+            <motion.div key={i} variants={itemVariants}>
+              <GlassPanel><div style={{ height: 80, borderRadius: 12, background: 'rgba(255,255,255,0.04)', animation: 'pulse 1.5s ease-in-out infinite' }} /></GlassPanel>
+            </motion.div>
+          ))}
+        </div>
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 mb-6">
+          <GlassPanel><div style={{ height: 200, borderRadius: 12, background: 'rgba(255,255,255,0.04)', animation: 'pulse 1.5s ease-in-out infinite' }} /></GlassPanel>
+          <GlassPanel><div style={{ height: 200, borderRadius: 12, background: 'rgba(255,255,255,0.04)', animation: 'pulse 1.5s ease-in-out infinite' }} /></GlassPanel>
+        </div>
+      </motion.div>
+    )
+  }
+
+  // Error panel with retry
+  if (apiError && !apiData) {
+    return (
+      <motion.div variants={containerVariants} initial="hidden" animate="visible">
+        <motion.div variants={itemVariants}>
+          <SectionHeader title="Executive Overview" subtitle="" delay={0} />
+        </motion.div>
+        <motion.div variants={itemVariants}>
+          <GlassPanel>
+            <div style={{ padding: 24, textAlign: 'center', background: 'rgba(248,113,113,0.05)', borderRadius: 16, border: '1px solid rgba(248,113,113,0.15)' }}>
+              <AlertTriangle size={32} color="#f87171" style={{ margin: '0 auto 12px' }} />
+              <p style={{ color: '#f87171', fontSize: 14, fontWeight: 600, margin: '0 0 8px' }}>Failed to load portfolio data</p>
+              <p style={{ color: 'rgba(255,255,255,0.4)', fontSize: 12, margin: '0 0 16px' }}>{apiError}</p>
+              <button
+                onClick={() => fetchPortfolio()}
+                style={{
+                  display: 'inline-flex', alignItems: 'center', gap: 6,
+                  padding: '8px 20px', borderRadius: 10,
+                  background: 'rgba(248,113,113,0.15)', border: '1px solid rgba(248,113,113,0.25)',
+                  color: '#f87171', fontSize: 13, fontWeight: 600, cursor: 'pointer',
+                }}
+              >
+                <RefreshCw size={14} /> Retry
+              </button>
+            </div>
+          </GlassPanel>
+        </motion.div>
+      </motion.div>
+    )
+  }
   return (
     <motion.div
       variants={containerVariants}
@@ -47,11 +152,11 @@ export default function CXODashboard() {
         />
       </motion.div>
 
-      <motion.div variants={itemVariants} className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-5 mb-8">
-        <StatCard label="Total Clients" value="5,939" change="142 new this quarter" changeType="up" color="var(--color-tertiary)" icon={Users} delay={50} />
-        <StatCard label="Docs Pending" value="2,418" change="↓ 12% from last week" changeType="up" color="var(--color-primary)" icon={FileText} delay={100} />
-        <StatCard label="Avg. Compliance" value="87.4%" change="+1.8% this month" changeType="up" color="var(--color-secondary)" icon={TrendingUp} delay={150} />
-        <StatCard label="Overdue Filings" value="31" change="7 critical" changeType="down" color="#ffb4ab" icon={AlertTriangle} delay={200} />
+      <motion.div variants={itemVariants} className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
+        <StatCard label="Total Clients" value={firmTotals.totalClients.toLocaleString()} change="142 new this quarter" changeType="up" color="#06b6d4" icon={Users} delay={50} />
+        <StatCard label="Docs Pending" value={firmTotals.docsPending.toLocaleString()} change="↓ 12% from last week" changeType="up" color="#a78bfa" icon={FileText} delay={100} />
+        <StatCard label="Avg. Compliance" value={`${firmTotals.avgCompliance}%`} change="+1.8% this month" changeType="up" color="#34d399" icon={TrendingUp} delay={150} />
+        <StatCard label="Overdue Filings" value={String(firmTotals.overdueFilings)} change="7 critical" changeType="down" color="#f87171" icon={AlertTriangle} delay={200} />
       </motion.div>
 
       <motion.div variants={itemVariants} className="grid grid-cols-1 lg:grid-cols-2 gap-5 mb-8">
@@ -157,6 +262,25 @@ export default function CXODashboard() {
           </div>
         </GlassPanel>
       </motion.div>
+
+      {/* Load More button for pagination */}
+      {nextCursor && (
+        <motion.div variants={itemVariants} style={{ textAlign: 'center', marginTop: 16 }}>
+          <button
+            onClick={() => fetchPortfolio(nextCursor)}
+            disabled={loadingMore}
+            style={{
+              display: 'inline-flex', alignItems: 'center', gap: 8,
+              padding: '10px 24px', borderRadius: 12,
+              background: 'rgba(6,182,212,0.1)', border: '1px solid rgba(6,182,212,0.2)',
+              color: '#06b6d4', fontSize: 13, fontWeight: 600, cursor: loadingMore ? 'not-allowed' : 'pointer',
+              opacity: loadingMore ? 0.6 : 1,
+            }}
+          >
+            {loadingMore ? 'Loading...' : 'Load More'}
+          </button>
+        </motion.div>
+      )}
     </motion.div>
   )
 }
