@@ -16,6 +16,9 @@ import signRoutes from './routes/sign.js';
 import tokenRoutes from './routes/tokens.js';
 import notificationRoutes, { deepLinkRouter } from './routes/notifications.js';
 import complianceRoutes from './routes/compliance.js';
+import projectRoutes from './routes/projects.js';
+import commentRoutes from './routes/comments.js';
+import documentTypeRoutes from './routes/documentTypes.js';
 import complianceService from './services/complianceService.js';
 import aiExtractionService from './services/aiExtractionService.js';
 import webhookService from './services/webhookService.js';
@@ -45,6 +48,9 @@ app.use('/api/tokens', tokenRoutes);
 app.use('/api/notifications', notificationRoutes);
 app.use('/api', deepLinkRouter);
 app.use('/api/compliance', complianceRoutes);
+app.use('/api', projectRoutes);
+app.use('/api', commentRoutes);
+app.use('/api', documentTypeRoutes);
 
 app.use((err, req, res, next) => {
   console.error('Error:', err.message);

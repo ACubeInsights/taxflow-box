@@ -1,4 +1,5 @@
 import { motion } from 'framer-motion'
+import { STATUS_COLORS as WORKFLOW_STATUS_COLORS } from '../context/DocumentWorkflowContext'
 
 // Shared stat card component
 export function StatCard({ label, value, change, changeType, color = 'var(--color-primary)', icon: Icon, delay = 0 }) {
@@ -125,22 +126,22 @@ export function Badge({ children, color = 'var(--color-primary)' }) {
   )
 }
 
-const STATUS_COLORS = {
+const LEGACY_STATUS_COLORS = {
   Pending: 'var(--color-on-surface-variant)',
-  Under_Review: 'var(--color-tertiary)',
-  Revision_Requested: '#ffb4ab',
-  Approved: 'var(--color-secondary)',
 }
 
 const STATUS_LABELS = {
-  Pending: 'Pending',
+  Not_Requested: 'Not Requested',
+  Uploaded: 'Uploaded',
   Under_Review: 'Under Review',
   Revision_Requested: 'Revision Requested',
   Approved: 'Approved',
+  Waived: 'Waived',
+  Pending: 'Pending',
 }
 
 export function StatusBadge({ status }) {
-  const color = STATUS_COLORS[status] || '#6b7280'
+  const color = WORKFLOW_STATUS_COLORS[status] || LEGACY_STATUS_COLORS[status] || '#6b7280'
   const label = STATUS_LABELS[status] || status
 
   return (

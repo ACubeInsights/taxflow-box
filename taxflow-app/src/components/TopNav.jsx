@@ -1,7 +1,15 @@
 import { useState, useEffect, useRef } from 'react'
 import { useAuth } from '../context/AuthContext'
 import { notificationApi } from '../services/api'
-import { Bell, LogOut } from 'lucide-react'
+import { Bell, LogOut, Upload, AtSign, RotateCcw, FileText, Mail, AlertCircle } from 'lucide-react'
+
+const EVENT_TYPE_ICONS = {
+  document_uploaded: Upload,
+  mention: AtSign,
+  revision_requested: RotateCcw,
+  request_published: FileText,
+  email_failed: AlertCircle,
+}
 
 const ROLE_META = {
   superadmin: { label: 'Super Admin', color: 'var(--color-primary)', badge: 'SYSTEM' },
@@ -19,16 +27,18 @@ export default function TopNav() {
 
   const unreadCount = notifications.filter(n => !n.read).length
 
-  // Poll notifications every 30 seconds when authenticated
+  const isEmployee = user === 'employee'
+
+  // Poll notifications every 30 seconds — only for employee role
   useEffect(() => {
-    if (!user) {
+    if (!user || !isEmployee) {
       setNotifications([])
       return
     }
 
     const fetchNotifications = async () => {
       try {
-        const data = await notificationApi.getNotifications(user)
+        const data = await notificationApi.getNotifications('employee-1')
         if (Array.isArray(data)) {
           setNotifications(data)
         }
@@ -47,7 +57,7 @@ export default function TopNav() {
         pollRef.current = null
       }
     }
-  }, [user])
+  }, [user, isEmployee])
 
   const handleLogout = () => {
     if (pollRef.current) {
@@ -103,7 +113,8 @@ export default function TopNav() {
           </div>
         </div>
 
-        {/* Notification */}
+        {/* Notification — employee role only */}
+        {isEmployee && (
         <div style={{ position: 'relative' }}>
           <button
             onClick={() => setShowNotifications(prev => !prev)}
@@ -129,6 +140,7 @@ export default function TopNav() {
               e.currentTarget.style.background = 'rgba(255,255,255,0.04)'
               e.currentTarget.style.color = 'rgba(255,255,255,0.4)'
             }}
+            aria-label={`Notifications${unreadCount > 0 ? ` (${unreadCount} unread)` : ''}`}
           >
             <Bell size={15} />
             {unreadCount > 0 && (
@@ -154,39 +166,22 @@ export default function TopNav() {
                 {unreadCount}
               </span>
             )}
-            {unreadCount === 0 && (
-              <span
-                style={{
-                  position: 'absolute',
-                  top: 6,
-                  right: 6,
-                  width: 7,
-                  height: 7,
-                  borderRadius: '50%',
-                  background: '#06b6d4',
-                  border: '1.5px solid #000',
-                }}
-              />
-            )}
           </button>
 
-          {/* Notification dropdown */}
+          {/* Notification dropdown — glassmorphism */}
           {showNotifications && (
             <div
+              className="rounded-[14px] bg-[var(--color-surface-container)]/90 backdrop-blur-2xl ring-1 ring-[var(--color-outline-variant)] shadow-[0_20px_40px_rgba(0,0,0,0.5)]"
               style={{
                 position: 'absolute',
                 top: 44,
                 right: 0,
-                width: 320,
-                maxHeight: 360,
+                width: 340,
+                maxHeight: 380,
                 overflowY: 'auto',
-                borderRadius: 14,
-                background: 'rgba(15,15,20,0.95)',
-                border: '1px solid rgba(255,255,255,0.08)',
-                backdropFilter: 'blur(20px)',
-                boxShadow: '0 12px 40px rgba(0,0,0,0.5)',
                 zIndex: 100,
                 padding: 8,
+                boxShadow: 'inset 0 1px 0 rgba(255,255,255,0.05), 0 20px 40px rgba(0,0,0,0.5)',
               }}
             >
               <p style={{ fontSize: 11, fontWeight: 600, color: 'rgba(255,255,255,0.4)', padding: '8px 10px 4px', textTransform: 'uppercase', letterSpacing: '0.06em' }}>
@@ -195,30 +190,46 @@ export default function TopNav() {
               {notifications.length === 0 ? (
                 <p style={{ fontSize: 12, color: 'rgba(255,255,255,0.25)', padding: '16px 10px', textAlign: 'center' }}>No notifications</p>
               ) : (
-                notifications.slice(0, 10).map((n, i) => (
-                  <div
-                    key={n.id || i}
-                    style={{
-                      padding: '10px 12px',
-                      borderRadius: 10,
-                      background: n.read ? 'transparent' : 'rgba(6,182,212,0.05)',
-                      marginBottom: 2,
-                      cursor: 'default',
-                    }}
-                  >
-                    <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 4 }}>
-                      <span style={{ fontSize: 10, fontWeight: 600, color: '#06b6d4', textTransform: 'uppercase' }}>{n.eventType}</span>
-                      <span style={{ fontSize: 10, color: 'rgba(255,255,255,0.2)', marginLeft: 'auto' }}>
-                        {n.timestamp ? new Date(n.timestamp).toLocaleTimeString() : ''}
-                      </span>
+                notifications.slice(0, 10).map((n, i) => {
+                  const EventIcon = EVENT_TYPE_ICONS[n.eventType] || Bell
+                  return (
+                    <div
+                      key={n.id || i}
+                      style={{
+                        padding: '10px 12px',
+                        borderRadius: 10,
+                        background: n.read ? 'transparent' : 'rgba(6,182,212,0.05)',
+                        marginBottom: 2,
+                        cursor: 'default',
+                        display: 'flex',
+                        gap: 10,
+                        alignItems: 'flex-start',
+                      }}
+                    >
+                      <div style={{
+                        width: 28, height: 28, borderRadius: 8, flexShrink: 0,
+                        background: 'rgba(6,182,212,0.08)', border: '1px solid rgba(6,182,212,0.15)',
+                        display: 'flex', alignItems: 'center', justifyContent: 'center',
+                      }}>
+                        <EventIcon size={13} style={{ color: '#06b6d4' }} />
+                      </div>
+                      <div style={{ flex: 1, minWidth: 0 }}>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 4 }}>
+                          <span style={{ fontSize: 10, fontWeight: 600, color: '#06b6d4', textTransform: 'uppercase' }}>{n.eventType?.replace(/_/g, ' ')}</span>
+                          <span style={{ fontSize: 10, color: 'rgba(255,255,255,0.2)', marginLeft: 'auto' }}>
+                            {n.timestamp ? new Date(n.timestamp).toLocaleTimeString() : (n.createdAt ? new Date(n.createdAt).toLocaleTimeString() : '')}
+                          </span>
+                        </div>
+                        <p style={{ margin: 0, fontSize: 12, color: 'rgba(255,255,255,0.6)', lineHeight: 1.4 }}>{n.message}</p>
+                      </div>
                     </div>
-                    <p style={{ margin: 0, fontSize: 12, color: 'rgba(255,255,255,0.6)', lineHeight: 1.4 }}>{n.message}</p>
-                  </div>
-                ))
+                  )
+                })
               )}
             </div>
           )}
         </div>
+        )}
 
         {/* Avatar */}
         <div

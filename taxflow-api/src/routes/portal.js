@@ -7,6 +7,7 @@
 
 import express from 'express';
 import portalService from '../services/portalService.js';
+import projectService from '../services/projectService.js';
 
 const router = express.Router();
 
@@ -104,6 +105,35 @@ router.post('/zip-download', async (req, res, next) => {
     if (error.statusCode === 400) {
       return res.status(400).json({ error: error.message });
     }
+    next(error);
+  }
+});
+
+/**
+ * GET /api/portal/employee/:employeeId/summary
+ * Employee summary metrics via projectService.getEmployeeSummary.
+ */
+router.get('/employee/:employeeId/summary', async (req, res, next) => {
+  try {
+    const { employeeId } = req.params;
+    const summary = projectService.getEmployeeSummary(employeeId);
+    res.json(summary);
+  } catch (error) {
+    next(error);
+  }
+});
+
+/**
+ * GET /api/portal/employee/:employeeId/activity
+ * Activity feed via projectService.getEmployeeActivity with optional ?limit= param.
+ */
+router.get('/employee/:employeeId/activity', async (req, res, next) => {
+  try {
+    const { employeeId } = req.params;
+    const limit = req.query.limit ? parseInt(req.query.limit, 10) : undefined;
+    const activity = projectService.getEmployeeActivity(employeeId, limit);
+    res.json(activity);
+  } catch (error) {
     next(error);
   }
 });

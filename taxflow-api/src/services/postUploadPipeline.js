@@ -12,6 +12,7 @@
 import boxService from './boxService.js';
 import rateLimiter from './rateLimiter.js';
 import aiExtractionService from './aiExtractionService.js';
+import notificationService from './notificationService.js';
 
 const METADATA_SCOPE = 'enterprise';
 const METADATA_TEMPLATE = 'taxflow_document';
@@ -110,13 +111,27 @@ class PostUploadPipeline {
       console.error(`Task creation failed for file ${fileId}:`, err.message);
     }
 
+    // Dispatch upload notification to assigned employee (Req 12.1)
+    let notificationSent = false;
+    try {
+      const clientName = event.source?.parent?.name || 'Client';
+      const documentName = event.source?.name || 'Document';
+      const employeeId = event.created_by?.login || '';
+      if (employeeId) {
+        await notificationService.dispatchUploadNotification(employeeId, clientName, documentName);
+        notificationSent = true;
+      }
+    } catch (err) {
+      console.error(`Upload notification failed for file ${fileId}:`, err.message);
+    }
+
     return {
       fileId,
       metadataApplied,
       taskId,
       taskAssignmentId,
       isRevision: false,
-      notificationSent: false,
+      notificationSent,
     };
   }
 

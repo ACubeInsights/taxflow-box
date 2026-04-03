@@ -1,12 +1,12 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useCallback } from 'react'
+import { useNavigate } from 'react-router-dom'
 import { motion } from 'framer-motion'
-import { Bot, Users, Clock, CheckCircle, Sparkles, Plus, AlertTriangle, RefreshCw } from 'lucide-react'
-import { StatCard, SectionHeader, GlassPanel, PanelTitle, Badge } from '../ui'
-import { useDocumentWorkflow } from '../../context/DocumentWorkflowContext'
-import { portalApi } from '../../services/api'
-import DocumentRequestList from '../DocumentRequestList'
-import RequestCreatorDrawer from '../RequestCreatorDrawer'
-import ReviewMode from '../ReviewMode'
+import { Bot, Sparkles, Plus, FileSearch, Clock, AlertTriangle, RefreshCw } from 'lucide-react'
+import { SectionHeader, GlassPanel, PanelTitle, Badge } from '../ui'
+import { portalApi, projectApi } from '../../services/api'
+import SummaryBar from '../SummaryBar'
+import ClientListPanel from '../ClientListPanel'
+import DocumentRequestCreator from '../DocumentRequestCreator'
 
 const containerVariants = {
   hidden: { opacity: 0 },
@@ -19,21 +19,6 @@ const containerVariants = {
 const itemVariants = {
   hidden: { opacity: 0, y: 15 },
   visible: { opacity: 1, y: 0, transition: { duration: 0.5, ease: 'easeOut' } },
-}
-
-const CLIENTS_FALLBACK = [
-  { name: 'Acme Industries LLC', type: 'Business', docs: 14, status: 'review', aiScore: 92 },
-  { name: 'Jennifer & Mark Torres', type: 'Individual', docs: 8, status: 'pending', aiScore: 78 },
-  { name: 'Blue Horizon Trust', type: 'Trust', docs: 22, status: 'complete', aiScore: 97 },
-  { name: 'Ray Kowalski', type: 'Individual', docs: 5, status: 'missing', aiScore: 45 },
-  { name: 'Stellare Software Inc.', type: 'S-Corp', docs: 31, status: 'review', aiScore: 88 },
-]
-
-const STATUS_META = {
-  review: { label: 'In Review', color: 'var(--color-tertiary)' },
-  pending: { label: 'Pending Docs', color: 'var(--color-on-surface-variant)' },
-  complete: { label: 'Complete', color: 'var(--color-secondary)' },
-  missing: { label: 'Missing Docs', color: '#ffb4ab' },
 }
 
 const AI_INSIGHTS = [
@@ -61,127 +46,53 @@ const AI_INSIGHTS = [
 ]
 
 export default function EmployeeDashboard() {
-  const { requests, dispatch } = useDocumentWorkflow()
-  const [viewMode, setViewMode] = useState('list')
-  const [selectedRequest, setSelectedRequest] = useState(null)
+  const navigate = useNavigate()
   const [drawerOpen, setDrawerOpen] = useState(false)
 
-  // API data state
-  const [apiData, setApiData] = useState(null)
-  const [apiLoading, setApiLoading] = useState(true)
-  const [apiError, setApiError] = useState(null)
+  // Activity feed state
+  const [activity, setActivity] = useState([])
+  const [activityLoading, setActivityLoading] = useState(true)
+  const [activityError, setActivityError] = useState(null)
 
-  const fetchDashboard = async () => {
-    setApiLoading(true)
-    setApiError(null)
+  const fetchActivity = useCallback(async () => {
+    setActivityLoading(true)
+    setActivityError(null)
     try {
-      const data = await portalApi.getEmployeeDashboard('employee-1')
-      setApiData(data)
+      const data = await portalApi.getEmployeeActivity('employee-1', 10)
+      setActivity(data.activities || data || [])
     } catch (err) {
-      console.warn('Employee dashboard API failed, using fallback:', err.message)
-      setApiError(err.message)
+      setActivityError(err.message || 'Failed to load activity')
     } finally {
-      setApiLoading(false)
+      setActivityLoading(false)
     }
-  }
-
-  useEffect(() => {
-    fetchDashboard()
   }, [])
 
-  // Derive display data from API or fallback
-  const CLIENTS = apiData?.clientChecklists || CLIENTS_FALLBACK
-  const stats = apiData?.stats || { assignedClients: 18, pendingReview: 7, completed: 11, aiExtractions: 284 }
+  useEffect(() => {
+    fetchActivity()
+  }, [fetchActivity])
 
-  // Filter requests for client-1 (demo)
-  const clientRequests = requests.filter((r) => r.clientId === 'client-1')
-
-  function handleSelectRequest(id) {
-    setSelectedRequest(id)
-    setViewMode('review')
-  }
-
-  function handleBackToList() {
-    setViewMode('list')
-    setSelectedRequest(null)
-  }
-
-  // Review mode — render ReviewMode with the selected request
-  if (viewMode === 'review' && selectedRequest) {
-    const request = clientRequests.find(r => r.id === selectedRequest)
-    if (!request) {
-      handleBackToList()
-      return null
+  // Navigate to first pending document for "Review Next Document"
+  const handleReviewNext = useCallback(async () => {
+    try {
+      const clientsData = await projectApi.getEmployeeClients('employee-1')
+      const clients = clientsData.clients || clientsData || []
+      for (const client of clients) {
+        const projectsData = await projectApi.getClientProjects(client.id)
+        const projects = projectsData.projects || projectsData || []
+        for (const project of projects) {
+          const docsData = await projectApi.getProjectDocuments(project.id, 'Uploaded')
+          const docs = docsData.documents || docsData || []
+          if (docs.length > 0) {
+            navigate(`/clients/${client.id}/projects/${project.id}/documents/${docs[0].id}`)
+            return
+          }
+        }
+      }
+      // No pending docs found — stay on dashboard
+    } catch {
+      // Silently fail — user stays on dashboard
     }
-    return (
-      <ReviewMode
-        request={request}
-        onApprove={() => {
-          dispatch({ type: 'APPROVE', payload: { requestId: request.id } })
-          handleBackToList()
-        }}
-        onRequestRevision={(comments) => {
-          dispatch({ type: 'REQUEST_REVISION', payload: { requestId: request.id, comments } })
-          handleBackToList()
-        }}
-        onBack={handleBackToList}
-      />
-    )
-  }
-
-  // List mode (default)
-  // Loading skeleton
-  if (apiLoading) {
-    return (
-      <motion.div variants={containerVariants} initial="hidden" animate="visible">
-        <motion.div variants={itemVariants}>
-          <SectionHeader title="My Workspace" subtitle="Loading your dashboard..." delay={0} />
-        </motion.div>
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
-          {[1,2,3,4].map(i => (
-            <motion.div key={i} variants={itemVariants}>
-              <GlassPanel><div style={{ height: 80, borderRadius: 12, background: 'rgba(255,255,255,0.04)', animation: 'pulse 1.5s ease-in-out infinite' }} /></GlassPanel>
-            </motion.div>
-          ))}
-        </div>
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 mb-6">
-          <GlassPanel><div style={{ height: 200, borderRadius: 12, background: 'rgba(255,255,255,0.04)', animation: 'pulse 1.5s ease-in-out infinite' }} /></GlassPanel>
-          <GlassPanel><div style={{ height: 200, borderRadius: 12, background: 'rgba(255,255,255,0.04)', animation: 'pulse 1.5s ease-in-out infinite' }} /></GlassPanel>
-        </div>
-      </motion.div>
-    )
-  }
-
-  // Error panel with retry
-  if (apiError && !apiData) {
-    return (
-      <motion.div variants={containerVariants} initial="hidden" animate="visible">
-        <motion.div variants={itemVariants}>
-          <SectionHeader title="My Workspace" subtitle="" delay={0} />
-        </motion.div>
-        <motion.div variants={itemVariants}>
-          <GlassPanel>
-            <div style={{ padding: 24, textAlign: 'center', background: 'rgba(248,113,113,0.05)', borderRadius: 16, border: '1px solid rgba(248,113,113,0.15)' }}>
-              <AlertTriangle size={32} color="#f87171" style={{ margin: '0 auto 12px' }} />
-              <p style={{ color: '#f87171', fontSize: 14, fontWeight: 600, margin: '0 0 8px' }}>Failed to load dashboard data</p>
-              <p style={{ color: 'rgba(255,255,255,0.4)', fontSize: 12, margin: '0 0 16px' }}>{apiError}</p>
-              <button
-                onClick={fetchDashboard}
-                style={{
-                  display: 'inline-flex', alignItems: 'center', gap: 6,
-                  padding: '8px 20px', borderRadius: 10,
-                  background: 'rgba(248,113,113,0.15)', border: '1px solid rgba(248,113,113,0.25)',
-                  color: '#f87171', fontSize: 13, fontWeight: 600, cursor: 'pointer',
-                }}
-              >
-                <RefreshCw size={14} /> Retry
-              </button>
-            </div>
-          </GlassPanel>
-        </motion.div>
-      </motion.div>
-    )
-  }
+  }, [navigate])
 
   return (
     <motion.div
@@ -198,45 +109,14 @@ export default function EmployeeDashboard() {
         />
       </motion.div>
 
-      <motion.div variants={itemVariants} className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
-        <StatCard label="Assigned Clients" value={String(stats.assignedClients)} change="3 new this week" changeType="up" color="#06b6d4" icon={Users} delay={50} />
-        <StatCard label="Pending Review" value={String(stats.pendingReview)} change="2 urgent" changeType="down" color="#fbbf24" icon={Clock} delay={100} />
-        <StatCard label="Completed" value={String(stats.completed)} change={`${stats.assignedClients ? Math.round((stats.completed / stats.assignedClients) * 100) : 0}% of total`} changeType="up" color="#34d399" icon={CheckCircle} delay={150} />
-        <StatCard label="AI Extractions" value={String(stats.aiExtractions)} change="Today" changeType="neutral" color="#a78bfa" icon={Bot} delay={200} />
+      {/* Summary Bar */}
+      <motion.div variants={itemVariants}>
+        <SummaryBar />
       </motion.div>
 
+      {/* Two-column: ClientListPanel + AI Insights */}
       <motion.div variants={itemVariants} className="grid grid-cols-1 lg:grid-cols-2 gap-5 mb-8">
-        {/* Client list */}
-        <GlassPanel delay={250}>
-          <PanelTitle>Assigned Clients — Pending Review</PanelTitle>
-          <div className="flex flex-col gap-3">
-            {CLIENTS.map((c) => {
-              const meta = STATUS_META[c.status]
-              return (
-                <div
-                  key={c.name}
-                  className="flex items-center gap-4 px-4 py-3 rounded-2xl bg-[var(--color-surface-high)] ring-1 ring-[var(--color-outline-variant)] cursor-pointer transition-all duration-300 hover:bg-[var(--color-surface-highest)] hover:-translate-y-[2px] hover:shadow-[0_8px_20px_rgba(0,0,0,0.3)] group"
-                >
-                  <div
-                    className="w-10 h-10 rounded-[12px] flex items-center justify-center text-[12px] font-bold shrink-0 transition-transform duration-300 group-hover:scale-105"
-                    style={{
-                      background: `color-mix(in srgb, ${meta.color} 15%, transparent)`,
-                      border: `1px solid color-mix(in srgb, ${meta.color} 30%, transparent)`,
-                      color: meta.color,
-                    }}
-                  >
-                    {c.name.split(' ').map(w => w[0]).slice(0, 2).join('')}
-                  </div>
-                  <div className="flex-1 min-w-0">
-                    <p className="m-0 text-[14px] font-bold text-[var(--color-on-surface)] truncate">{c.name}</p>
-                    <p className="m-0 text-[12px] font-medium text-[var(--color-on-surface-variant)]">{c.type} · {c.docs} docs</p>
-                  </div>
-                  <Badge color={meta.color}>{meta.label}</Badge>
-                </div>
-              )
-            })}
-          </div>
-        </GlassPanel>
+        <ClientListPanel />
 
         {/* AI Insights */}
         <GlassPanel delay={300}>
@@ -254,7 +134,6 @@ export default function EmployeeDashboard() {
               </span>
             </div>
           </div>
-
           <div className="flex flex-col gap-3">
             {AI_INSIGHTS.map((item) => (
               <div
@@ -281,29 +160,79 @@ export default function EmployeeDashboard() {
         </GlassPanel>
       </motion.div>
 
-      {/* Document Requests Section */}
+      {/* Recent Activity Feed */}
       <motion.div variants={itemVariants} className="mb-8">
-        <div className="mb-5 flex items-center justify-between">
-          <h3 className="text-[12px] font-bold uppercase tracking-[0.1em] text-[var(--color-on-surface-variant)]">
-            Client Documents
-          </h3>
-          <button
-            onClick={() => setDrawerOpen(true)}
-            className="flex items-center gap-2 rounded-[14px] bg-gradient-to-r from-[var(--color-primary)] to-[var(--color-primary-container)] px-5 py-2.5 text-[13px] font-bold tracking-wide text-[var(--color-surface-lowest)] shadow-[0_8px_20px_rgba(173,198,255,0.25)] transition-all duration-300 hover:shadow-[0_12px_25px_rgba(173,198,255,0.4)] hover:-translate-y-[1px] active:scale-[0.98]"
-            style={{ boxShadow: 'inset 0 1px 0 rgba(255,255,255,0.4), 0 8px 20px rgba(173,198,255,0.25)' }}
-          >
-            <Plus size={16} strokeWidth={2.5} />
-            Request Documents
-          </button>
-        </div>
-        <DocumentRequestList
-          requests={clientRequests}
-          onSelect={handleSelectRequest}
-        />
+        <GlassPanel>
+          <PanelTitle>Recent Activity</PanelTitle>
+          {activityLoading ? (
+            <div className="flex flex-col gap-3">
+              {[0, 1, 2].map((i) => (
+                <div
+                  key={i}
+                  className="h-[40px] rounded-xl"
+                  style={{ background: 'rgba(255,255,255,0.04)', animation: 'pulse 1.5s ease-in-out infinite' }}
+                />
+              ))}
+            </div>
+          ) : activityError ? (
+            <div className="py-6 text-center">
+              <AlertTriangle size={24} color="#f87171" style={{ margin: '0 auto 8px' }} />
+              <p className="text-[#f87171] text-xs font-semibold m-0 mb-2">Failed to load activity</p>
+              <button
+                onClick={fetchActivity}
+                className="inline-flex items-center gap-1.5 px-4 py-1.5 rounded-lg text-[12px] font-semibold cursor-pointer"
+                style={{ background: 'rgba(248,113,113,0.15)', border: '1px solid rgba(248,113,113,0.25)', color: '#f87171' }}
+              >
+                <RefreshCw size={12} /> Retry
+              </button>
+            </div>
+          ) : activity.length === 0 ? (
+            <p className="text-[var(--color-on-surface-variant)] text-sm m-0 py-4 text-center">No recent activity.</p>
+          ) : (
+            <div className="flex flex-col gap-2">
+              {activity.map((entry) => (
+                <div
+                  key={entry.id}
+                  className="flex items-start gap-3 px-4 py-3 rounded-xl bg-[var(--color-surface-high)] ring-1 ring-[var(--color-outline-variant)]"
+                >
+                  <Clock size={14} className="text-[var(--color-on-surface-variant)] mt-0.5 shrink-0" />
+                  <div className="flex-1 min-w-0">
+                    <p className="m-0 text-[13px] text-[var(--color-on-surface)]">
+                      <span className="font-semibold">{entry.actorName}</span>{' '}
+                      {entry.description}
+                    </p>
+                    <p className="m-0 text-[11px] text-[var(--color-on-surface-variant)] mt-0.5">
+                      {entry.clientName} · {entry.documentName} · {new Date(entry.timestamp).toLocaleString()}
+                    </p>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+        </GlassPanel>
       </motion.div>
 
-      {/* Request Creator Drawer */}
-      <RequestCreatorDrawer
+      {/* Quick Action Buttons */}
+      <motion.div variants={itemVariants} className="flex flex-wrap gap-4 mb-8">
+        <button
+          onClick={() => setDrawerOpen(true)}
+          className="flex items-center gap-2 rounded-[14px] bg-gradient-to-r from-[var(--color-primary)] to-[var(--color-primary-container)] px-6 py-3 text-[13px] font-bold tracking-wide text-[var(--color-surface-lowest)] shadow-[0_8px_20px_rgba(173,198,255,0.25)] transition-all duration-300 hover:shadow-[0_12px_25px_rgba(173,198,255,0.4)] hover:-translate-y-[1px] active:scale-[0.98]"
+          style={{ boxShadow: 'inset 0 1px 0 rgba(255,255,255,0.4), 0 8px 20px rgba(173,198,255,0.25)' }}
+        >
+          <Plus size={16} strokeWidth={2.5} />
+          New Document Request
+        </button>
+        <button
+          onClick={handleReviewNext}
+          className="flex items-center gap-2 rounded-[14px] border border-[var(--color-outline-variant)] bg-[var(--color-surface-container)] px-6 py-3 text-[13px] font-bold tracking-wide text-[var(--color-on-surface)] transition-all duration-300 hover:bg-[var(--color-surface-container-high)] hover:-translate-y-[1px] active:scale-[0.98]"
+        >
+          <FileSearch size={16} strokeWidth={2.5} />
+          Review Next Document
+        </button>
+      </motion.div>
+
+      {/* Document Request Creator */}
+      <DocumentRequestCreator
         isOpen={drawerOpen}
         onClose={() => setDrawerOpen(false)}
       />

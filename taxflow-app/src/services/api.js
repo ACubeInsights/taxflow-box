@@ -33,6 +33,10 @@ async function apiRequest(endpoint, options = {}) {
     });
 
     if (!response.ok) {
+      // Dispatch auth-error event on 401 so AuthContext can trigger logout
+      if (response.status === 401) {
+        window.dispatchEvent(new CustomEvent('auth-unauthorized'))
+      }
       const error = await response.json().catch(() => ({ error: 'Request failed' }));
       throw new Error(error.error || `HTTP ${response.status}`);
     }
@@ -48,9 +52,6 @@ async function apiRequest(endpoint, options = {}) {
  * Client API
  */
 export const clientApi = {
-  /**
-   * Create a new client vault
-   */
   async createVault(name, externalId, email) {
     return apiRequest('/clients', {
       method: 'POST',
@@ -58,9 +59,6 @@ export const clientApi = {
     });
   },
 
-  /**
-   * Get client vault by external ID
-   */
   async getVault(externalId) {
     return apiRequest(`/clients/${externalId}/vault`);
   },
@@ -70,9 +68,6 @@ export const clientApi = {
  * Document API
  */
 export const documentApi = {
-  /**
-   * Upload a document to a vault
-   */
   async upload(file, folderId, requestId) {
     const formData = new FormData();
     formData.append('file', file);
@@ -149,6 +144,15 @@ export const portalApi = {
       body: JSON.stringify({ fileIds }),
     });
   },
+  async getEmployeeSummary(employeeId) {
+    return apiRequest(`/portal/employee/${employeeId}/summary`);
+  },
+  async getEmployeeActivity(employeeId, limit) {
+    const params = new URLSearchParams();
+    if (limit !== undefined && limit !== null) params.set('limit', String(limit));
+    const qs = params.toString();
+    return apiRequest(`/portal/employee/${employeeId}/activity${qs ? `?${qs}` : ''}`);
+  },
 };
 
 export const reviewApi = {
@@ -185,6 +189,24 @@ export const reviewApi = {
   async listNotes(clientFolderId) {
     return apiRequest(`/reviews/${clientFolderId}/notes`);
   },
+  async undoApprove(fileId, employeeId, version) {
+    return apiRequest(`/reviews/${fileId}/undo-approve`, {
+      method: 'POST',
+      body: JSON.stringify({ employeeId, version }),
+    });
+  },
+  async transitionStatus(documentId, data) {
+    return apiRequest(`/documents/${documentId}/transition`, {
+      method: 'POST',
+      body: JSON.stringify(data),
+    });
+  },
+  async bulkTransition(documentIds, data) {
+    return apiRequest('/documents/bulk-transition', {
+      method: 'POST',
+      body: JSON.stringify({ documentIds, ...data }),
+    });
+  },
 };
 
 export const tokenApi = {
@@ -217,5 +239,85 @@ export const complianceApi = {
       method: 'POST',
       body: JSON.stringify({ level }),
     });
+  },
+};
+
+/**
+ * Project API — Client → Project → Document hierarchy
+ */
+export const projectApi = {
+  async getEmployeeClients(employeeId, filters = {}) {
+    const params = new URLSearchParams();
+    if (filters.search) params.set('search', filters.search);
+    if (filters.status) params.set('status', filters.status);
+    if (filters.entityType) params.set('entityType', filters.entityType);
+    const qs = params.toString();
+    return apiRequest(`/employee/${employeeId}/clients${qs ? `?${qs}` : ''}`);
+  },
+  async getClientProjects(clientId) {
+    return apiRequest(`/clients/${clientId}/projects`);
+  },
+  async getProjectDetail(projectId) {
+    return apiRequest(`/projects/${projectId}`);
+  },
+  async getProjectDocuments(projectId, statusFilter) {
+    const params = new URLSearchParams();
+    if (statusFilter) params.set('status', statusFilter);
+    const qs = params.toString();
+    return apiRequest(`/projects/${projectId}/documents${qs ? `?${qs}` : ''}`);
+  },
+  async createDocumentRequest(projectId, data) {
+    return apiRequest(`/projects/${projectId}/documents`, {
+      method: 'POST',
+      body: JSON.stringify(data),
+    });
+  },
+  async checkDuplicate(projectId, documentType) {
+    return apiRequest(`/projects/${projectId}/documents/check-duplicate`, {
+      method: 'POST',
+      body: JSON.stringify({ documentType }),
+    });
+  },
+};
+
+/**
+ * Comment API — threaded comments on documents
+ */
+export const commentApi = {
+  async getComments(documentId) {
+    return apiRequest(`/documents/${documentId}/comments`);
+  },
+  async addComment(documentId, data) {
+    return apiRequest(`/documents/${documentId}/comments`, {
+      method: 'POST',
+      body: JSON.stringify(data),
+    });
+  },
+  async editComment(commentId, data) {
+    return apiRequest(`/comments/${commentId}`, {
+      method: 'PUT',
+      body: JSON.stringify(data),
+    });
+  },
+  async searchEmployees(prefix) {
+    const params = new URLSearchParams();
+    if (prefix) params.set('prefix', prefix);
+    const qs = params.toString();
+    return apiRequest(`/employees/search${qs ? `?${qs}` : ''}`);
+  },
+};
+
+/**
+ * Document Type API — document type catalog
+ */
+export const documentTypeApi = {
+  async getDocumentTypes(projectType) {
+    const params = new URLSearchParams();
+    if (projectType) params.set('projectType', projectType);
+    const qs = params.toString();
+    return apiRequest(`/document-types${qs ? `?${qs}` : ''}`);
+  },
+  async getDocumentType(typeId) {
+    return apiRequest(`/document-types/${typeId}`);
   },
 };

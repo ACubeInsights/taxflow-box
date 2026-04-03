@@ -137,4 +137,86 @@ router.get('/:clientFolderId/notes', async (req, res, next) => {
   }
 });
 
+/**
+ * POST /api/reviews/:fileId/undo-approve
+ * Undo approval within 10-minute window. Requires employeeId, version in body.
+ */
+router.post('/:fileId/undo-approve', async (req, res, next) => {
+  try {
+    const { fileId } = req.params;
+    const { employeeId, version } = req.body;
+
+    if (!employeeId) {
+      return res.status(400).json({ error: 'Missing required field: employeeId' });
+    }
+    if (version === undefined || version === null) {
+      return res.status(400).json({ error: 'Missing required field: version' });
+    }
+
+    const result = reviewService.undoApproval(fileId, employeeId, version);
+    res.json(result);
+  } catch (error) {
+    if (error.statusCode) {
+      return res.status(error.statusCode).json({ error: error.message });
+    }
+    next(error);
+  }
+});
+
+/**
+ * POST /api/reviews/documents/:documentId/transition
+ * Status transition with optimistic concurrency. Requires toStatus, employeeId, version in body.
+ */
+router.post('/documents/:documentId/transition', async (req, res, next) => {
+  try {
+    const { documentId } = req.params;
+    const { toStatus, employeeId, version, comment } = req.body;
+
+    if (!toStatus) {
+      return res.status(400).json({ error: 'Missing required field: toStatus' });
+    }
+    if (!employeeId) {
+      return res.status(400).json({ error: 'Missing required field: employeeId' });
+    }
+    if (version === undefined || version === null) {
+      return res.status(400).json({ error: 'Missing required field: version' });
+    }
+
+    const result = reviewService.transitionStatus(documentId, {
+      toStatus, employeeId, version, comment,
+    });
+    res.json(result);
+  } catch (error) {
+    if (error.statusCode) {
+      return res.status(error.statusCode).json({ error: error.message });
+    }
+    next(error);
+  }
+});
+
+/**
+ * POST /api/reviews/documents/bulk-transition
+ * Bulk status change. Requires documentIds array, toStatus, employeeId in body.
+ */
+router.post('/documents/bulk-transition', async (req, res, next) => {
+  try {
+    const { documentIds, toStatus, employeeId } = req.body;
+
+    if (!Array.isArray(documentIds) || documentIds.length === 0) {
+      return res.status(400).json({ error: 'documentIds must be a non-empty array' });
+    }
+    if (!toStatus) {
+      return res.status(400).json({ error: 'Missing required field: toStatus' });
+    }
+    if (!employeeId) {
+      return res.status(400).json({ error: 'Missing required field: employeeId' });
+    }
+
+    const result = reviewService.bulkTransition(documentIds, { toStatus, employeeId });
+    res.json(result);
+  } catch (error) {
+    next(error);
+  }
+});
+
 export default router;

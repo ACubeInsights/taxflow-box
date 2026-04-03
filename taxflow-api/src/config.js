@@ -53,4 +53,11 @@ export const config = {
 
   // AI
   aiConfidenceThreshold: parseFloat(process.env.AI_CONFIDENCE_THRESHOLD || '0.6'),
+
+  // SMTP (Nodemailer)
+  smtpHost: process.env.SMTP_HOST || 'smtp.gmail.com',
+  smtpPort: parseInt(process.env.SMTP_PORT || '587'),
+  smtpUser: process.env.SMTP_USER || '',
+  smtpPass: process.env.SMTP_PASS || '',
+  smtpFrom: process.env.SMTP_FROM || process.env.EMAIL_FROM || 'noreply@taxflowpro.com',
 };

@@ -1,6 +1,8 @@
 /**
- * ReviewService — Document approval, rejection, waive, bulk approve, and internal notes.
+ * ReviewService — Document approval, rejection, waive, bulk approve, internal notes,
+ * undo approval, version-based status transitions, and bulk transitions.
  *
+ * Existing (Box SDK):
  * - approveDocument: PATCH metadata + complete task
  * - rejectDocument: PATCH metadata + file comment (task stays open)
  * - waiveDocument: PATCH metadata + complete task
@@ -8,17 +10,44 @@
  * - createInternalNote: Upload to InternalNotes subfolder
  * - listInternalNotes: Return notes sorted by creation date descending
  *
- * Requirements: 12.1-12.5, 13.1-13.5, 14.1-14.3, 15.1-15.4, 17.1-17.5
+ * New (in-memory projectService):
+ * - transitionStatus: Validate transition, optimistic concurrency, audit trail, system comment
+ * - undoApproval: Revert Approved → Under_Review within 10-min window
+ * - bulkTransition: Batch transition Uploaded → Under_Review
+ *
+ * Requirements: 5.6, 6.2, 6.3, 6.4, 9.1, 9.4, 9.5, 9.6, 12.1-12.5, 13.1-13.5,
+ *               14.1-14.3, 15.1-15.4, 15.7, 17.1-17.5
  */
 
 import boxService from './boxService.js';
 import complianceService from './complianceService.js';
+import projectService from './projectService.js';
+import commentService from './commentService.js';
+import notificationService from './notificationService.js';
 
 const METADATA_SCOPE = 'enterprise';
 const METADATA_TEMPLATE = 'taxflow_document';
 const BULK_CONCURRENCY = 5;
 
+/** 10-minute undo window in milliseconds */
+const UNDO_WINDOW_MS = 10 * 60 * 1000;
+
+/** Valid status transitions for the 6-status document lifecycle (Req 6.2) */
+const VALID_TRANSITIONS = {
+  Not_Requested:      ['Uploaded'],
+  Uploaded:           ['Under_Review'],
+  Under_Review:       ['Approved', 'Revision_Requested', 'Waived'],
+  Revision_Requested: ['Uploaded'],
+  Approved:           ['Under_Review'],  // undo within 10-min window only
+  Waived:             [],                // terminal
+};
+
 class ReviewService {
+  constructor() {
+    /** @type {Map<string, number>} documentId → approvedAt timestamp (ms) for undo window tracking */
+    this._approvedAtMap = new Map();
+  }
+
   /**
    * Approves a document: PATCH metadata, complete task assignment.
    * Uses JSON Patch ops. If metadata PATCH fails, task is NOT completed. (Reqs 12.1-12.5)
@@ -272,6 +301,233 @@ class ReviewService {
     return notes;
   }
 
+  // ─── New methods (in-memory projectService data store) ──────────────
+
+  /**
+   * Transitions a document status with optimistic concurrency control.
+   * Validates against VALID_TRANSITIONS, checks version, records audit trail,
+   * generates system comment, dispatches revision email if needed. (Reqs 6.2, 6.3, 6.4, 9.1, 14.1-14.3, 15.7)
+   *
+   * @param {string} documentId
+   * @param {{ fromStatus: string, toStatus: string, employeeId: string, version: number, comment?: string }} options
+   * @returns {{ documentId: string, status: string, version: number, auditEntry: object }}
+   */
+  transitionStatus(documentId, { fromStatus, toStatus, employeeId, version, comment }) {
+    // Get document from projectService
+    const doc = projectService._documents.get(documentId);
+    if (!doc) {
+      const err = new Error('Document not found');
+      err.statusCode = 404;
+      throw err;
+    }
+
+    // Validate transition against state machine (Req 6.2, 6.3)
+    const allowed = VALID_TRANSITIONS[doc.status];
+    if (!allowed || !allowed.includes(toStatus)) {
+      const err = new Error(`Invalid transition from ${doc.status} to ${toStatus}`);
+      err.statusCode = 400;
+      throw err;
+    }
+
+    // Optimistic concurrency check (Req 14.1, 14.2, 14.3)
+    if (version !== undefined && version !== doc.version) {
+      const err = new Error('Version conflict: document has been modified by another user');
+      err.statusCode = 409;
+      throw err;
+    }
+
+    // Revision_Requested requires a comment between 10-1000 chars (Req 9.7)
+    if (toStatus === 'Revision_Requested') {
+      if (!comment || comment.trim().length < 10 || comment.trim().length > 1000) {
+        const err = new Error('Revision comment must be between 10 and 1000 characters');
+        err.statusCode = 400;
+        throw err;
+      }
+    }
+
+    // Perform the transition
+    const previousStatus = doc.status;
+    doc.status = toStatus;
+    doc.version = (doc.version || 1) + 1;
+    doc.updatedAt = new Date().toISOString();
+
+    if (toStatus === 'Revision_Requested' && comment) {
+      doc.revisionComments = comment.trim();
+    }
+
+    // Store approvedAt timestamp for undo tracking (Req 9.4)
+    if (toStatus === 'Approved') {
+      this._approvedAtMap.set(documentId, Date.now());
+    }
+
+    // Record audit trail entry (Req 6.4, 15.7)
+    const auditEntry = {
+      actor: employeeId,
+      action: `${previousStatus} → ${toStatus}`,
+      timestamp: doc.updatedAt,
+    };
+
+    projectService._addActivity({
+      type: 'status_change',
+      actorId: employeeId,
+      actorName: 'Employee',
+      documentId,
+      documentName: doc.name,
+      clientId: doc.clientId,
+      clientName: projectService._clients.get(doc.clientId)?.name || '',
+      description: `Status changed from ${previousStatus} to ${toStatus}`,
+    });
+
+    // Generate system comment (Req 10.4)
+    commentService.addSystemComment(documentId, {
+      action: 'status_change',
+      actorId: employeeId,
+      actorName: 'Employee',
+      fromStatus: previousStatus,
+      toStatus,
+    });
+
+    // Dispatch revision email if toStatus is Revision_Requested (Req 11.1, 11.2)
+    if (toStatus === 'Revision_Requested') {
+      const client = projectService._clients.get(doc.clientId);
+      if (client && client.email) {
+        // Fire-and-forget: use dispatchRevisionEmail for 7-day token
+        notificationService.dispatchRevisionEmail(client.email, documentId, comment).catch((err) => {
+          console.error(`Revision email dispatch failed for document ${documentId}:`, err.message);
+        });
+      }
+    }
+
+    return {
+      documentId,
+      status: toStatus,
+      version: doc.version,
+      auditEntry,
+    };
+  }
+
+  /**
+   * Undoes an approval within the 10-minute window.
+   * Reverts status from Approved to Under_Review, increments version,
+   * generates system comment. (Reqs 9.4, 9.5, 9.6)
+   *
+   * @param {string} fileId - Document ID
+   * @param {string} employeeId
+   * @param {number} version - Expected version for optimistic concurrency
+   * @returns {{ documentId: string, status: string, version: number }}
+   */
+  undoApproval(fileId, employeeId, version) {
+    const doc = projectService._documents.get(fileId);
+    if (!doc) {
+      const err = new Error('Document not found');
+      err.statusCode = 404;
+      throw err;
+    }
+
+    if (doc.status !== 'Approved') {
+      const err = new Error('Document is not in Approved status');
+      err.statusCode = 400;
+      throw err;
+    }
+
+    // Check undo window (Req 9.5)
+    const approvedAt = this._approvedAtMap.get(fileId);
+    if (!approvedAt) {
+      const err = new Error('No approval timestamp found for undo');
+      err.statusCode = 400;
+      throw err;
+    }
+
+    const elapsed = Date.now() - approvedAt;
+    if (elapsed > UNDO_WINDOW_MS) {
+      const err = new Error('Undo window has expired (10 minutes)');
+      err.statusCode = 422;
+      throw err;
+    }
+
+    // Optimistic concurrency check
+    if (version !== undefined && version !== doc.version) {
+      const err = new Error('Version conflict: document has been modified by another user');
+      err.statusCode = 409;
+      throw err;
+    }
+
+    // Revert status
+    doc.status = 'Under_Review';
+    doc.version = (doc.version || 1) + 1;
+    doc.updatedAt = new Date().toISOString();
+
+    // Remove approvedAt entry
+    this._approvedAtMap.delete(fileId);
+
+    // Record audit trail
+    projectService._addActivity({
+      type: 'status_change',
+      actorId: employeeId,
+      actorName: 'Employee',
+      documentId: fileId,
+      documentName: doc.name,
+      clientId: doc.clientId,
+      clientName: projectService._clients.get(doc.clientId)?.name || '',
+      description: 'Undid approval, reverted to Under_Review',
+    });
+
+    // Generate system comment
+    commentService.addSystemComment(fileId, {
+      action: 'undo_approval',
+      actorId: employeeId,
+      actorName: 'Employee',
+      fromStatus: 'Approved',
+      toStatus: 'Under_Review',
+    });
+
+    return {
+      documentId: fileId,
+      status: 'Under_Review',
+      version: doc.version,
+    };
+  }
+
+  /**
+   * Bulk transitions documents from Uploaded to Under_Review.
+   * Skips documents not in Uploaded status. (Req 5.6)
+   *
+   * @param {string[]} documentIds
+   * @param {{ toStatus: string, employeeId: string }} options
+   * @returns {{ total: number, succeeded: number, failed: number, skipped: number }}
+   */
+  bulkTransition(documentIds, { toStatus, employeeId }) {
+    const results = { total: documentIds.length, succeeded: 0, failed: 0, skipped: 0 };
+
+    for (const docId of documentIds) {
+      const doc = projectService._documents.get(docId);
+      if (!doc) {
+        results.failed++;
+        continue;
+      }
+
+      // Only transition Uploaded documents (Req 5.6)
+      if (doc.status !== 'Uploaded') {
+        results.skipped++;
+        continue;
+      }
+
+      try {
+        this.transitionStatus(docId, {
+          fromStatus: doc.status,
+          toStatus: 'Under_Review',
+          employeeId,
+          version: doc.version,
+        });
+        results.succeeded++;
+      } catch {
+        results.failed++;
+      }
+    }
+
+    return results;
+  }
+
   /**
    * Finds and completes the task assignment for a file.
    * @param {object} client - Box SDK client
@@ -300,5 +556,5 @@ class ReviewService {
 
 // Singleton instance
 const reviewService = new ReviewService();
-export { ReviewService };
+export { ReviewService, VALID_TRANSITIONS, UNDO_WINDOW_MS };
 export default reviewService;

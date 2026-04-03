@@ -1,20 +1,34 @@
 import { useReducer, createContext, useContext, useState, useCallback } from 'react'
 import { clientApi, vaultApi, onboardingApi, portalApi, reviewApi } from '../services/api.js'
 
-// --- Document Status values ---
+// --- Document Status values (6-status model) ---
 export const DocumentStatus = {
-  Pending: 'Pending',
+  Not_Requested: 'Not_Requested',
+  Uploaded: 'Uploaded',
   Under_Review: 'Under_Review',
   Revision_Requested: 'Revision_Requested',
   Approved: 'Approved',
+  Waived: 'Waived',
 }
 
 // --- Valid state machine transitions ---
 export const VALID_TRANSITIONS = {
-  [DocumentStatus.Pending]: [DocumentStatus.Under_Review],
-  [DocumentStatus.Under_Review]: [DocumentStatus.Approved, DocumentStatus.Revision_Requested],
-  [DocumentStatus.Revision_Requested]: [DocumentStatus.Under_Review],
-  [DocumentStatus.Approved]: [], // terminal state
+  [DocumentStatus.Not_Requested]: [DocumentStatus.Uploaded],
+  [DocumentStatus.Uploaded]: [DocumentStatus.Under_Review],
+  [DocumentStatus.Under_Review]: [DocumentStatus.Approved, DocumentStatus.Revision_Requested, DocumentStatus.Waived],
+  [DocumentStatus.Revision_Requested]: [DocumentStatus.Uploaded],
+  [DocumentStatus.Approved]: [DocumentStatus.Under_Review], // undo within 10-min window
+  [DocumentStatus.Waived]: [], // terminal
+}
+
+// --- Status color mapping ---
+export const STATUS_COLORS = {
+  [DocumentStatus.Not_Requested]: '#6b7280',       // Gray
+  [DocumentStatus.Uploaded]: '#3b82f6',             // Blue
+  [DocumentStatus.Under_Review]: '#eab308',         // Yellow
+  [DocumentStatus.Revision_Requested]: '#ef4444',   // Red
+  [DocumentStatus.Approved]: '#22c55e',             // Green
+  [DocumentStatus.Waived]: '#64748b',               // Slate
 }
 
 // --- Prior year (2024) templates for clone feature ---
@@ -28,9 +42,9 @@ export const PRIOR_YEAR_REQUESTS = [
 
 // --- Initial mock requests for demo ---
 export const INITIAL_MOCK_REQUESTS = [
-  { id: '1', name: 'W-2 Form', description: 'Wage and tax statement', dueDate: '2025-03-15', priority: 'High', status: 'Under_Review', revisionComments: null, uploadedFileName: 'w2-2024.pdf', clientId: 'client-1' },
-  { id: '2', name: '1099-DIV', description: 'Dividend income', dueDate: '2025-03-15', priority: 'Medium', status: 'Pending', revisionComments: null, uploadedFileName: null, clientId: 'client-1' },
-  { id: '3', name: 'Mortgage Interest', description: '1098 form', dueDate: '2025-04-01', priority: 'Low', status: 'Revision_Requested', revisionComments: 'The uploaded document is for 2023, not 2024. Please upload the correct year.', uploadedFileName: null, clientId: 'client-1' },
+  { id: '1', name: 'W-2 Form', description: 'Wage and tax statement', dueDate: '2025-03-15', priority: 'High', status: 'Under_Review', revisionComments: null, uploadedFileName: 'w2-2024.pdf', clientId: 'client-1', version: 1 },
+  { id: '2', name: '1099-DIV', description: 'Dividend income', dueDate: '2025-03-15', priority: 'Medium', status: 'Not_Requested', revisionComments: null, uploadedFileName: null, clientId: 'client-1', version: 1 },
+  { id: '3', name: 'Mortgage Interest', description: '1098 form', dueDate: '2025-04-01', priority: 'Low', status: 'Revision_Requested', revisionComments: 'The uploaded document is for 2023, not 2024. Please upload the correct year.', uploadedFileName: null, clientId: 'client-1', version: 1 },
 ]
 
 // --- Helper: check if a transition is valid ---
@@ -52,10 +66,11 @@ export function documentReducer(state, action) {
         description,
         dueDate,
         priority,
-        status: DocumentStatus.Pending,
+        status: DocumentStatus.Not_Requested,
         revisionComments: null,
         uploadedFileName: null,
         clientId,
+        version: 1,
       }
       return [...state, newRequest]
     }
@@ -68,10 +83,11 @@ export function documentReducer(state, action) {
         description: template.description,
         dueDate: template.dueDate,
         priority: template.priority,
-        status: DocumentStatus.Pending,
+        status: DocumentStatus.Not_Requested,
         revisionComments: null,
         uploadedFileName: null,
         clientId,
+        version: 1,
       }))
       return [...state, ...cloned]
     }
@@ -80,9 +96,9 @@ export function documentReducer(state, action) {
       const { requestId, fileName } = action.payload
       return state.map((req) => {
         if (req.id !== requestId) return req
-        const targetStatus = DocumentStatus.Under_Review
+        const targetStatus = DocumentStatus.Uploaded
         if (!isValidTransition(req.status, targetStatus)) return req
-        return { ...req, status: targetStatus, uploadedFileName: fileName }
+        return { ...req, status: targetStatus, uploadedFileName: fileName, version: (req.version || 1) + 1 }
       })
     }
 
@@ -92,7 +108,7 @@ export function documentReducer(state, action) {
         if (req.id !== requestId) return req
         const targetStatus = DocumentStatus.Approved
         if (!isValidTransition(req.status, targetStatus)) return req
-        return { ...req, status: targetStatus }
+        return { ...req, status: targetStatus, version: (req.version || 1) + 1 }
       })
     }
 
@@ -102,7 +118,45 @@ export function documentReducer(state, action) {
         if (req.id !== requestId) return req
         const targetStatus = DocumentStatus.Revision_Requested
         if (!isValidTransition(req.status, targetStatus)) return req
-        return { ...req, status: targetStatus, revisionComments: comments, uploadedFileName: null }
+        return { ...req, status: targetStatus, revisionComments: comments, uploadedFileName: null, version: (req.version || 1) + 1 }
+      })
+    }
+
+    case 'TRANSITION_STATUS': {
+      const { requestId, toStatus } = action.payload
+      return state.map((req) => {
+        if (req.id !== requestId) return req
+        if (!isValidTransition(req.status, toStatus)) return req
+        return { ...req, status: toStatus, version: (req.version || 1) + 1 }
+      })
+    }
+
+    case 'UNDO_APPROVAL': {
+      const { requestId } = action.payload
+      return state.map((req) => {
+        if (req.id !== requestId) return req
+        if (req.status !== DocumentStatus.Approved) return req
+        if (!isValidTransition(req.status, DocumentStatus.Under_Review)) return req
+        return { ...req, status: DocumentStatus.Under_Review, version: (req.version || 1) + 1 }
+      })
+    }
+
+    case 'BULK_TRANSITION': {
+      const { requestIds, toStatus } = action.payload
+      if (toStatus !== DocumentStatus.Under_Review) return state
+      return state.map((req) => {
+        if (!requestIds.includes(req.id)) return req
+        if (req.status !== DocumentStatus.Uploaded) return req
+        return { ...req, status: DocumentStatus.Under_Review, version: (req.version || 1) + 1 }
+      })
+    }
+
+    case 'WAIVE': {
+      const { requestId } = action.payload
+      return state.map((req) => {
+        if (req.id !== requestId) return req
+        if (!isValidTransition(req.status, DocumentStatus.Waived)) return req
+        return { ...req, status: DocumentStatus.Waived, version: (req.version || 1) + 1 }
       })
     }
 

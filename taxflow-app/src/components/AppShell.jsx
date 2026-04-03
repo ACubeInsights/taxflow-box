@@ -1,8 +1,8 @@
-import { useState, useEffect } from 'react'
+import { useState } from 'react'
+import { Routes, Route, Navigate } from 'react-router-dom'
 import { motion, AnimatePresence } from 'framer-motion'
 import { useAuth } from '../context/AuthContext'
 import { useDocumentWorkflow } from '../context/DocumentWorkflowContext'
-import Sidebar from './Sidebar'
 import TopNav from './TopNav'
 import SuperAdminDashboard from './dashboards/SuperAdminDashboard'
 import CXODashboard from './dashboards/CXODashboard'
@@ -11,6 +11,10 @@ import ClientDashboard from './dashboards/ClientDashboard'
 import UploadDropzone from './UploadDropzone'
 import DocumentRequestList from './DocumentRequestList'
 import ReviewMode from './ReviewMode'
+import ClientDetailView from './views/ClientDetailView'
+import ProjectDetailView from './views/ProjectDetailView'
+import DocumentDetailView from './views/DocumentDetailView'
+import NotFoundView from './views/NotFoundView'
 
 const DASHBOARDS = {
   superadmin: SuperAdminDashboard,
@@ -21,54 +25,9 @@ const DASHBOARDS = {
 
 export default function AppShell() {
   const { user } = useAuth()
-  const [sidebarCollapsed, setSidebarCollapsed] = useState(false)
-  const [activeView, setActiveView] = useState('default')
 
-  // Reset activeView when role changes
-  useEffect(() => {
-    setActiveView('default')
-  }, [user])
-
-  // Responsive: auto-collapse sidebar below 1024px viewport
-  useEffect(() => {
-    const mql = window.matchMedia('(max-width: 1023px)')
-
-    const handleChange = (e) => {
-      setSidebarCollapsed(e.matches)
-    }
-
-    // Set initial state
-    setSidebarCollapsed(mql.matches)
-
-    mql.addEventListener('change', handleChange)
-    return () => mql.removeEventListener('change', handleChange)
-  }, [])
-
+  const isEmployee = user === 'employee'
   const Dashboard = DASHBOARDS[user] || EmployeeDashboard
-
-  function renderContent() {
-    if (user === 'client') {
-      switch (activeView) {
-        case 'upload':
-          return <ClientUploadOnlyView />
-        case 'my-documents':
-          return <ClientDocumentsView />
-        default:
-          return <ClientDashboard />
-      }
-    }
-    if (user === 'employee') {
-      switch (activeView) {
-        case 'documents':
-          return <EmployeeDocumentsView />
-        case 'clients':
-          return <EmployeeClientsView />
-        default:
-          return <EmployeeDashboard />
-      }
-    }
-    return <Dashboard />
-  }
 
   return (
     <div className="flex min-h-screen bg-[var(--color-surface-lowest)] relative overflow-hidden font-sans">
@@ -84,28 +43,29 @@ export default function AppShell() {
         }}
       />
 
-      <Sidebar
-        collapsed={sidebarCollapsed}
-        onToggle={() => setSidebarCollapsed(p => !p)}
-        activeView={activeView}
-        onNavigate={setActiveView}
-      />
-
-      <div
-        className="flex-1 flex flex-col relative z-[1] min-w-0 transition-all duration-300 ease-[cubic-bezier(0.4,0,0.2,1)]"
-        style={{ marginLeft: sidebarCollapsed ? 72 : 240 }}
-      >
+      <div className="flex-1 flex flex-col relative z-[1] min-w-0">
         <TopNav />
         <AnimatePresence mode="wait">
           <motion.main
-            key={`${user}-${activeView}`}
+            key={user}
             initial={{ opacity: 0, scale: 0.99, y: 10 }}
             animate={{ opacity: 1, scale: 1, y: 0 }}
             exit={{ opacity: 0, scale: 0.99, y: -10 }}
             transition={{ duration: 0.3, ease: 'easeOut' }}
             className="flex-1 p-8 overflow-y-auto"
           >
-            {renderContent()}
+            {isEmployee ? (
+              <Routes>
+                <Route path="/" element={<Navigate to="/dashboard" replace />} />
+                <Route path="/dashboard" element={<EmployeeDashboard />} />
+                <Route path="/clients/:clientId" element={<ClientDetailView />} />
+                <Route path="/clients/:clientId/projects/:projectId" element={<ProjectDetailView />} />
+                <Route path="/clients/:clientId/projects/:projectId/documents/:documentId" element={<DocumentDetailView />} />
+                <Route path="*" element={<NotFoundView />} />
+              </Routes>
+            ) : (
+              <Dashboard />
+            )}
           </motion.main>
         </AnimatePresence>
       </div>
@@ -239,4 +199,3 @@ function EmployeeClientsView() {
     </div>
   )
 }
-
