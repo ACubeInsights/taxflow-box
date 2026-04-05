@@ -106,7 +106,7 @@ const DOCUMENT_TYPE_CATALOG = [
   },
 ];
 
-class DocumentTypeService {
+export class DocumentTypeService {
   constructor() {
     /** @type {Map<string, object>} typeId → DocumentType */
     this._catalog = new Map();
@@ -153,5 +153,5 @@ class DocumentTypeService {
 
 // Singleton instance
 const documentTypeService = new DocumentTypeService();
-export { DocumentTypeService, DOCUMENT_TYPE_CATALOG };
+export { DOCUMENT_TYPE_CATALOG };
 export default documentTypeService;

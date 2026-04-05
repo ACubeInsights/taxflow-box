@@ -1,12 +1,14 @@
 import { useState, useEffect, useCallback } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { motion } from 'framer-motion'
-import { Bot, Sparkles, Plus, FileSearch, Clock, AlertTriangle, RefreshCw } from 'lucide-react'
+import { Bot, Sparkles, Plus, FileSearch, Clock, AlertTriangle, RefreshCw, UserPlus } from 'lucide-react'
 import { SectionHeader, GlassPanel, PanelTitle, Badge } from '../ui'
 import { portalApi, projectApi } from '../../services/api'
+import { useAuth } from '../../context/AuthContext'
 import SummaryBar from '../SummaryBar'
 import ClientListPanel from '../ClientListPanel'
 import DocumentRequestCreator from '../DocumentRequestCreator'
+import OnboardClientModal from '../OnboardClientModal'
 
 const containerVariants = {
   hidden: { opacity: 0 },
@@ -47,7 +49,9 @@ const AI_INSIGHTS = [
 
 export default function EmployeeDashboard() {
   const navigate = useNavigate()
+  const { user } = useAuth()
   const [drawerOpen, setDrawerOpen] = useState(false)
+  const [onboardOpen, setOnboardOpen] = useState(false)
 
   // Activity feed state
   const [activity, setActivity] = useState([])
@@ -58,14 +62,14 @@ export default function EmployeeDashboard() {
     setActivityLoading(true)
     setActivityError(null)
     try {
-      const data = await portalApi.getEmployeeActivity('employee-1', 10)
+      const data = await portalApi.getEmployeeActivity(user?.id, 10)
       setActivity(data.activities || data || [])
     } catch (err) {
       setActivityError(err.message || 'Failed to load activity')
     } finally {
       setActivityLoading(false)
     }
-  }, [])
+  }, [user?.id])
 
   useEffect(() => {
     fetchActivity()
@@ -74,7 +78,7 @@ export default function EmployeeDashboard() {
   // Navigate to first pending document for "Review Next Document"
   const handleReviewNext = useCallback(async () => {
     try {
-      const clientsData = await projectApi.getEmployeeClients('employee-1')
+      const clientsData = await projectApi.getEmployeeClients(user?.id)
       const clients = clientsData.clients || clientsData || []
       for (const client of clients) {
         const projectsData = await projectApi.getClientProjects(client.id)
@@ -92,7 +96,7 @@ export default function EmployeeDashboard() {
     } catch {
       // Silently fail — user stays on dashboard
     }
-  }, [navigate])
+  }, [navigate, user?.id])
 
   return (
     <motion.div
@@ -139,7 +143,7 @@ export default function EmployeeDashboard() {
               <div
                 key={item.client}
                 className="p-4 rounded-[18px] bg-[var(--color-primary)]/5 border border-[var(--color-primary)]/15 transition-all duration-300 hover:bg-[var(--color-primary)]/10 hover:-translate-y-[2px]"
-                style={{ boxShadow: 'inset 0 1px 0 rgba(255,255,255,0.05)' }}
+                style={{ boxShadow: 'inset 0 1px 0 color-mix(in srgb, white 5%, transparent)' }}
               >
                 <div className="flex items-center gap-3 mb-2.5">
                   <span className="text-[13px] font-bold text-[var(--color-on-surface)]">{item.client}</span>
@@ -169,19 +173,17 @@ export default function EmployeeDashboard() {
               {[0, 1, 2].map((i) => (
                 <div
                   key={i}
-                  className="h-[40px] rounded-xl"
-                  style={{ background: 'rgba(255,255,255,0.04)', animation: 'pulse 1.5s ease-in-out infinite' }}
+                  className="h-[40px] rounded-xl bg-white/[0.04] animate-pulse"
                 />
               ))}
             </div>
           ) : activityError ? (
             <div className="py-6 text-center">
-              <AlertTriangle size={24} color="#f87171" style={{ margin: '0 auto 8px' }} />
-              <p className="text-[#f87171] text-xs font-semibold m-0 mb-2">Failed to load activity</p>
+              <AlertTriangle size={24} className="text-[var(--color-error)] mx-auto mb-2" />
+              <p className="text-[var(--color-error)] text-xs font-semibold m-0 mb-2">Failed to load activity</p>
               <button
                 onClick={fetchActivity}
-                className="inline-flex items-center gap-1.5 px-4 py-1.5 rounded-lg text-[12px] font-semibold cursor-pointer"
-                style={{ background: 'rgba(248,113,113,0.15)', border: '1px solid rgba(248,113,113,0.25)', color: '#f87171' }}
+                className="inline-flex items-center gap-1.5 px-4 py-1.5 rounded-lg text-[12px] font-semibold cursor-pointer bg-[var(--color-error)]/15 border border-[var(--color-error)]/25 text-[var(--color-error)]"
               >
                 <RefreshCw size={12} /> Retry
               </button>
@@ -216,8 +218,8 @@ export default function EmployeeDashboard() {
       <motion.div variants={itemVariants} className="flex flex-wrap gap-4 mb-8">
         <button
           onClick={() => setDrawerOpen(true)}
-          className="flex items-center gap-2 rounded-[14px] bg-gradient-to-r from-[var(--color-primary)] to-[var(--color-primary-container)] px-6 py-3 text-[13px] font-bold tracking-wide text-[var(--color-surface-lowest)] shadow-[0_8px_20px_rgba(173,198,255,0.25)] transition-all duration-300 hover:shadow-[0_12px_25px_rgba(173,198,255,0.4)] hover:-translate-y-[1px] active:scale-[0.98]"
-          style={{ boxShadow: 'inset 0 1px 0 rgba(255,255,255,0.4), 0 8px 20px rgba(173,198,255,0.25)' }}
+          className="flex items-center gap-2 rounded-[14px] bg-gradient-to-r from-[var(--color-primary)] to-[var(--color-primary-container)] px-6 py-3 text-[13px] font-bold tracking-wide text-[var(--color-surface-lowest)] shadow-[0_8px_20px_color-mix(in_srgb,var(--color-primary)_25%,transparent)] transition-all duration-300 hover:shadow-[0_12px_25px_color-mix(in_srgb,var(--color-primary)_40%,transparent)] hover:-translate-y-[1px] active:scale-[0.98]"
+          style={{ boxShadow: 'inset 0 1px 0 color-mix(in srgb, white 40%, transparent), 0 8px 20px color-mix(in srgb, var(--color-primary) 25%, transparent)' }}
         >
           <Plus size={16} strokeWidth={2.5} />
           New Document Request
@@ -229,12 +231,33 @@ export default function EmployeeDashboard() {
           <FileSearch size={16} strokeWidth={2.5} />
           Review Next Document
         </button>
+        <button
+          onClick={() => setOnboardOpen(true)}
+          className="flex items-center gap-2 rounded-[14px] border border-emerald-500/30 bg-emerald-500/10 px-6 py-3 text-[13px] font-bold tracking-wide text-emerald-400 transition-all duration-300 hover:bg-emerald-500/20 hover:-translate-y-[1px] active:scale-[0.98]"
+        >
+          <UserPlus size={16} strokeWidth={2.5} />
+          Onboard New Client
+        </button>
       </motion.div>
 
       {/* Document Request Creator */}
       <DocumentRequestCreator
         isOpen={drawerOpen}
         onClose={() => setDrawerOpen(false)}
+      />
+
+      {/* Onboard Client Modal */}
+      <OnboardClientModal
+        open={onboardOpen}
+        onClose={() => setOnboardOpen(false)}
+        onSuccess={(result) => {
+          setOnboardOpen(false)
+          // Navigate to the new client using the project service client ID
+          const clientId = result.clientId
+          if (clientId) {
+            navigate(`/clients/${clientId}`)
+          }
+        }}
       />
     </motion.div>
   )

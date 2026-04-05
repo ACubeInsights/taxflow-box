@@ -23,7 +23,7 @@ const TAX_DOCUMENT_SYSTEM_PROMPT =
   'taxpayer information, income amounts, and withholding details. ' +
   'Flag any missing or suspicious values.';
 
-class AIExtractionService {
+export class AIExtractionService {
   constructor() {
     /** @type {string|null} Cached AI agent ID */
     this._agentId = null;
@@ -273,5 +273,4 @@ class AIExtractionService {
 
 // Singleton instance
 const aiExtractionService = new AIExtractionService();
-export { AIExtractionService };
 export default aiExtractionService;

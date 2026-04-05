@@ -6,6 +6,7 @@
 
 import express from 'express';
 import reviewService from '../services/reviewService.js';
+import statusTransitionService from '../services/statusTransitionService.js';
 
 const router = express.Router();
 
@@ -153,7 +154,7 @@ router.post('/:fileId/undo-approve', async (req, res, next) => {
       return res.status(400).json({ error: 'Missing required field: version' });
     }
 
-    const result = reviewService.undoApproval(fileId, employeeId, version);
+    const result = statusTransitionService.undoApproval(fileId, employeeId, version);
     res.json(result);
   } catch (error) {
     if (error.statusCode) {
@@ -182,7 +183,7 @@ router.post('/documents/:documentId/transition', async (req, res, next) => {
       return res.status(400).json({ error: 'Missing required field: version' });
     }
 
-    const result = reviewService.transitionStatus(documentId, {
+    const result = statusTransitionService.transitionStatus(documentId, {
       toStatus, employeeId, version, comment,
     });
     res.json(result);
@@ -212,7 +213,7 @@ router.post('/documents/bulk-transition', async (req, res, next) => {
       return res.status(400).json({ error: 'Missing required field: employeeId' });
     }
 
-    const result = reviewService.bulkTransition(documentIds, { toStatus, employeeId });
+    const result = statusTransitionService.bulkTransition(documentIds, { toStatus, employeeId });
     res.json(result);
   } catch (error) {
     next(error);

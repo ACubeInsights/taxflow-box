@@ -13,7 +13,7 @@ import { config } from '../config.js';
 const METADATA_SCOPE = 'enterprise';
 const METADATA_TEMPLATE = 'taxflow_document';
 
-class SignService {
+export class SignService {
   /**
    * Creates a Box Sign request with signer config and redirect URLs.
    * Updates file metadata status to "pending_signature". (Reqs 25.1-25.6)
@@ -87,6 +87,7 @@ class SignService {
    * Updates metadata and dispatches notifications. (Reqs 26.1-26.5)
    *
    * @param {object} event - Webhook event payload
+   * @returns {Promise<void>}
    */
   async handleSignEvent(event) {
     const eventType = event.trigger || event.type || '';
@@ -187,5 +188,4 @@ class SignService {
 
 // Singleton instance
 const signService = new SignService();
-export { SignService };
 export default signService;

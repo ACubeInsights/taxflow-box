@@ -46,8 +46,8 @@ const ROLE_META = {
 
 export default function Sidebar({ collapsed, onToggle, activeView, onNavigate }) {
   const { user, logout } = useAuth()
-  const items = NAV_ITEMS[user] || NAV_ITEMS.employee
-  const meta = ROLE_META[user] || ROLE_META.employee
+  const items = NAV_ITEMS[user?.role] || NAV_ITEMS.employee
+  const meta = ROLE_META[user?.role] || ROLE_META.employee
 
   return (
     <div
@@ -165,10 +165,10 @@ export default function Sidebar({ collapsed, onToggle, activeView, onNavigate })
           <>
             <div className="flex-1 min-w-0 flex flex-col">
               <span className="text-[12px] font-semibold text-white whitespace-nowrap overflow-hidden text-ellipsis">
-                {meta.label}
+                {user?.name || meta.label}
               </span>
               <span className="text-[10px] text-[var(--color-on-surface-variant)] font-medium">
-                demo@taxflow.pro
+                {user?.email || 'demo@taxflow.pro'}
               </span>
             </div>
             <button

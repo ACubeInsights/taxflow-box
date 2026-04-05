@@ -1,7 +1,8 @@
 import { useState, useEffect, useRef } from 'react'
 import { useAuth } from '../context/AuthContext'
 import { notificationApi } from '../services/api'
-import { Bell, LogOut, Upload, AtSign, RotateCcw, FileText, Mail, AlertCircle } from 'lucide-react'
+import { Bell, LogOut, Upload, AtSign, RotateCcw, FileText, Mail, AlertCircle, KeyRound } from 'lucide-react'
+import ChangePasswordModal from './ChangePasswordModal'
 
 const EVENT_TYPE_ICONS = {
   document_uploaded: Upload,
@@ -20,14 +21,15 @@ const ROLE_META = {
 
 export default function TopNav() {
   const { user, logout } = useAuth()
-  const meta = ROLE_META[user] || ROLE_META.employee
+  const meta = ROLE_META[user?.role] || ROLE_META.employee
   const [notifications, setNotifications] = useState([])
   const [showNotifications, setShowNotifications] = useState(false)
+  const [changePasswordOpen, setChangePasswordOpen] = useState(false)
   const pollRef = useRef(null)
 
   const unreadCount = notifications.filter(n => !n.read).length
 
-  const isEmployee = user === 'employee'
+  const isEmployee = user?.role === 'employee'
 
   // Poll notifications every 30 seconds — only for employee role
   useEffect(() => {
@@ -243,6 +245,24 @@ export default function TopNav() {
           {meta.label.slice(0, 2).toUpperCase()}
         </div>
 
+        {/* Change Password */}
+        <button
+            onClick={() => setChangePasswordOpen(true)}
+            style={{
+              width: 36, height: 36, borderRadius: 10,
+              background: 'rgba(255,255,255,0.04)',
+              border: '1px solid rgba(255,255,255,0.07)',
+              display: 'flex', alignItems: 'center', justifyContent: 'center',
+              cursor: 'pointer', color: 'rgba(255,255,255,0.4)', transition: 'all 0.2s',
+            }}
+            onMouseEnter={e => { e.currentTarget.style.background = 'rgba(255,255,255,0.08)'; e.currentTarget.style.color = '#fff' }}
+            onMouseLeave={e => { e.currentTarget.style.background = 'rgba(255,255,255,0.04)'; e.currentTarget.style.color = 'rgba(255,255,255,0.4)' }}
+            aria-label="Change password"
+            title="Change password"
+          >
+            <KeyRound size={15} />
+          </button>
+
         {/* Logout */}
         <button
           onClick={handleLogout}
@@ -272,6 +292,8 @@ export default function TopNav() {
           <LogOut size={15} />
         </button>
       </div>
+
+      <ChangePasswordModal open={changePasswordOpen} onClose={() => setChangePasswordOpen(false)} />
     </div>
   )
 }

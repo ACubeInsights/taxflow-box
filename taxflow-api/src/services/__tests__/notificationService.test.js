@@ -1,5 +1,6 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { NotificationService } from '../notificationService.js';
+import { InAppNotificationStore } from '../inAppNotificationStore.js';
 
 /**
  * Tests for the NEW notificationService methods:
@@ -15,7 +16,7 @@ describe('NotificationService — new methods', () => {
   let service;
 
   beforeEach(() => {
-    service = new NotificationService();
+    service = new NotificationService(new InAppNotificationStore());
   });
 
   // ─── dispatchMentionNotification ──────────────────────────────────

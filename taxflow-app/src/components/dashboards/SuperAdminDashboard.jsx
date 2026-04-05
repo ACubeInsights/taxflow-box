@@ -1,6 +1,10 @@
+import { useState } from 'react'
+import { useNavigate } from 'react-router-dom'
 import { motion } from 'framer-motion'
-import { Shield, Users, Activity, Server, Bot, CheckCircle, AlertTriangle, Cpu, Globe, Database, ArrowUpRight } from 'lucide-react'
+import { Shield, Users, Activity, Server, Bot, CheckCircle, AlertTriangle, Cpu, Globe, Database, ArrowUpRight, UserPlus, UserCog } from 'lucide-react'
 import { StatCard, SectionHeader, GlassPanel, PanelTitle, StatusDot, ProgressBar, Badge } from '../ui'
+import OnboardClientModal from '../OnboardClientModal'
+import AddEmployeeModal from '../AddEmployeeModal'
 
 const containerVariants = {
   hidden: { opacity: 0 },
@@ -31,6 +35,10 @@ const RECENT_USERS = [
 ]
 
 export default function SuperAdminDashboard() {
+  const navigate = useNavigate()
+  const [onboardOpen, setOnboardOpen] = useState(false)
+  const [addEmployeeOpen, setAddEmployeeOpen] = useState(false)
+
   return (
     <motion.div
       variants={containerVariants}
@@ -122,10 +130,26 @@ export default function SuperAdminDashboard() {
         <GlassPanel delay={350}>
           <div className="flex items-center justify-between mb-6">
             <PanelTitle>Recent Users</PanelTitle>
-            <button className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-[var(--color-primary)]/10 text-[var(--color-primary)] text-[11px] font-bold tracking-widest uppercase border border-[var(--color-primary)]/20 hover:bg-[var(--color-primary)]/20 transition-colors duration-300">
-              Manage All
-              <ArrowUpRight size={12} strokeWidth={3} />
-            </button>
+            <div className="flex items-center gap-2">
+              <button
+                onClick={() => setAddEmployeeOpen(true)}
+                className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-[var(--color-secondary)]/10 text-[var(--color-secondary)] text-[11px] font-bold tracking-widest uppercase border border-[var(--color-secondary)]/20 hover:bg-[var(--color-secondary)]/20 transition-colors duration-300 cursor-pointer"
+              >
+                <UserCog size={12} strokeWidth={3} />
+                Add Employee
+              </button>
+              <button
+                onClick={() => setOnboardOpen(true)}
+                className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-emerald-500/10 text-emerald-400 text-[11px] font-bold tracking-widest uppercase border border-emerald-500/20 hover:bg-emerald-500/20 transition-colors duration-300 cursor-pointer"
+              >
+                <UserPlus size={12} strokeWidth={3} />
+                Onboard Client
+              </button>
+              <button className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-[var(--color-primary)]/10 text-[var(--color-primary)] text-[11px] font-bold tracking-widest uppercase border border-[var(--color-primary)]/20 hover:bg-[var(--color-primary)]/20 transition-colors duration-300">
+                Manage All
+                <ArrowUpRight size={12} strokeWidth={3} />
+              </button>
+            </div>
           </div>
 
           <div className="grid gap-3">
@@ -153,6 +177,24 @@ export default function SuperAdminDashboard() {
           </div>
         </GlassPanel>
       </motion.div>
+
+      {/* Onboard Client Modal */}
+      <OnboardClientModal
+        open={onboardOpen}
+        onClose={() => setOnboardOpen(false)}
+        onSuccess={(result) => {
+          setOnboardOpen(false)
+          const clientId = result.clientId
+          if (clientId) {
+            navigate(`/clients/${clientId}`)
+          }
+        }}
+      />
+
+      <AddEmployeeModal
+        open={addEmployeeOpen}
+        onClose={() => setAddEmployeeOpen(false)}
+      />
     </motion.div>
   )
 }

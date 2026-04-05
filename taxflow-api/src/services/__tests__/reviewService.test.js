@@ -1,70 +1,40 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest';
-import { ReviewService, VALID_TRANSITIONS, UNDO_WINDOW_MS } from '../reviewService.js';
+import { StatusTransitionService, VALID_TRANSITIONS, UNDO_WINDOW_MS } from '../statusTransitionService.js';
 import { ProjectService } from '../projectService.js';
 import { CommentService } from '../commentService.js';
+import { NotificationService } from '../notificationService.js';
+import { InAppNotificationStore } from '../inAppNotificationStore.js';
 
 /**
- * Tests for the NEW reviewService methods only:
+ * Tests for the status transition methods (extracted from reviewService):
  * - transitionStatus
  * - undoApproval
  * - bulkTransition
  *
- * These methods work with the in-memory projectService data store,
- * NOT the Box SDK methods.
+ * Each test gets fresh service instances via constructor injection,
+ * ensuring full test isolation without singleton state pollution.
  */
 
-// We need to mock the module-level imports so the ReviewService constructor
-// and methods use our fresh instances instead of the singletons.
-vi.mock('../projectService.js', async () => {
-  const { ProjectService } = await vi.importActual('../projectService.js');
-  const instance = new ProjectService();
-  return { default: instance, ProjectService };
-});
-
-vi.mock('../commentService.js', async () => {
-  const { CommentService } = await vi.importActual('../commentService.js');
-  const instance = new CommentService();
-  return { default: instance, CommentService };
-});
-
-vi.mock('../notificationService.js', async () => {
-  const { NotificationService } = await vi.importActual('../notificationService.js');
-  const instance = new NotificationService();
-  return { default: instance, NotificationService };
-});
-
-// We don't need boxService or complianceService for the new methods
-vi.mock('../boxService.js', () => ({ default: {} }));
-vi.mock('../complianceService.js', () => ({ default: {} }));
-
-describe('ReviewService — new methods', () => {
-  /** @type {ReviewService} */
+describe('StatusTransitionService', () => {
+  /** @type {StatusTransitionService} */
   let service;
   /** @type {ProjectService} */
   let projService;
+  /** @type {CommentService} */
+  let cmtService;
+  /** @type {NotificationService} */
+  let notifService;
 
-  beforeEach(async () => {
-    // Get fresh project service (re-seeded)
-    const projMod = await import('../projectService.js');
-    // Re-seed the project service for each test
-    const freshProj = new ProjectService();
-    Object.assign(projMod.default, freshProj);
-    projMod.default._clients = freshProj._clients;
-    projMod.default._projects = freshProj._projects;
-    projMod.default._documents = freshProj._documents;
-    projMod.default._activities = freshProj._activities;
-    projMod.default._employeeClients = freshProj._employeeClients;
-    projMod.default._activityIdCounter = freshProj._activityIdCounter;
-    projMod.default._documentIdCounter = freshProj._documentIdCounter;
-    projService = projMod.default;
+  beforeEach(() => {
+    projService = new ProjectService();
+    cmtService = new CommentService();
+    notifService = new NotificationService(new InAppNotificationStore());
 
-    // Fresh comment service
-    const cmtMod = await import('../commentService.js');
-    const freshCmt = new CommentService();
-    cmtMod.default._comments = freshCmt._comments;
-    cmtMod.default._idCounter = freshCmt._idCounter;
-
-    service = new ReviewService();
+    service = new StatusTransitionService({
+      projectService: projService,
+      commentService: cmtService,
+      notificationService: notifService,
+    });
   });
 
   // ─── VALID_TRANSITIONS constant ─────────────────────────────────────
@@ -129,7 +99,7 @@ describe('ReviewService — new methods', () => {
       });
 
       expect(result.status).toBe('Revision_Requested');
-      const doc = projService._documents.get('d6');
+      const doc = projService.getDocument('d6');
       expect(doc.revisionComments).toBe('Please fix the amounts on page 2, they do not match.');
     });
 
@@ -218,36 +188,36 @@ describe('ReviewService — new methods', () => {
     });
 
     it('increments version on successful transition', () => {
-      const docBefore = projService._documents.get('d2');
+      const docBefore = projService.getDocument('d2');
       const versionBefore = docBefore.version;
 
       service.transitionStatus('d2', {
         fromStatus: 'Uploaded', toStatus: 'Under_Review', employeeId: 'emp1', version: versionBefore,
       });
 
-      expect(projService._documents.get('d2').version).toBe(versionBefore + 1);
+      expect(projService.getDocument('d2').version).toBe(versionBefore + 1);
     });
 
     it('records activity entry on transition', () => {
-      const activitiesBefore = projService._activities.length;
+      const activitiesBefore = projService.getEmployeeActivity('employee-1', 100).length;
 
       service.transitionStatus('d2', {
         fromStatus: 'Uploaded', toStatus: 'Under_Review', employeeId: 'emp1', version: 1,
       });
 
-      expect(projService._activities.length).toBe(activitiesBefore + 1);
-      const lastActivity = projService._activities[projService._activities.length - 1];
+      const activitiesAfter = projService.getEmployeeActivity('employee-1', 100);
+      expect(activitiesAfter.length).toBe(activitiesBefore + 1);
+      const lastActivity = activitiesAfter[0]; // sorted descending by timestamp
       expect(lastActivity.type).toBe('status_change');
       expect(lastActivity.documentId).toBe('d2');
     });
 
-    it('generates system comment on transition', async () => {
+    it('generates system comment on transition', () => {
       service.transitionStatus('d2', {
         fromStatus: 'Uploaded', toStatus: 'Under_Review', employeeId: 'emp1', version: 1,
       });
 
-      const cmtMod = await import('../commentService.js');
-      const comments = cmtMod.default.getComments('d2');
+      const comments = cmtService.getComments('d2');
       expect(comments.length).toBeGreaterThanOrEqual(1);
       const systemComment = comments.find((c) => c.type === 'system');
       expect(systemComment).toBeDefined();
@@ -265,7 +235,7 @@ describe('ReviewService — new methods', () => {
         fromStatus: 'Under_Review', toStatus: 'Approved', employeeId: 'emp1', version: 1,
       });
 
-      const approvedDoc = projService._documents.get('d6');
+      const approvedDoc = projService.getDocument('d6');
       expect(approvedDoc.status).toBe('Approved');
       const versionAfterApprove = approvedDoc.version;
 
@@ -274,7 +244,7 @@ describe('ReviewService — new methods', () => {
 
       expect(result.status).toBe('Under_Review');
       expect(result.version).toBe(versionAfterApprove + 1);
-      expect(projService._documents.get('d6').status).toBe('Under_Review');
+      expect(projService.getDocument('d6').status).toBe('Under_Review');
     });
 
     it('clears approvedAt entry after undo', () => {
@@ -283,7 +253,7 @@ describe('ReviewService — new methods', () => {
       });
       expect(service._approvedAtMap.has('d6')).toBe(true);
 
-      const doc = projService._documents.get('d6');
+      const doc = projService.getDocument('d6');
       service.undoApproval('d6', 'emp1', doc.version);
       expect(service._approvedAtMap.has('d6')).toBe(false);
     });
@@ -310,7 +280,7 @@ describe('ReviewService — new methods', () => {
       // Manually set approvedAt to 11 minutes ago
       service._approvedAtMap.set('d6', Date.now() - 11 * 60 * 1000);
 
-      const doc = projService._documents.get('d6');
+      const doc = projService.getDocument('d6');
       expect(() => service.undoApproval('d6', 'emp1', doc.version)).toThrow('Undo window has expired');
 
       try {
@@ -328,16 +298,15 @@ describe('ReviewService — new methods', () => {
       expect(() => service.undoApproval('d6', 'emp1', 999)).toThrow('Version conflict');
     });
 
-    it('generates system comment on undo', async () => {
+    it('generates system comment on undo', () => {
       service.transitionStatus('d6', {
         fromStatus: 'Under_Review', toStatus: 'Approved', employeeId: 'emp1', version: 1,
       });
 
-      const doc = projService._documents.get('d6');
+      const doc = projService.getDocument('d6');
       service.undoApproval('d6', 'emp1', doc.version);
 
-      const cmtMod = await import('../commentService.js');
-      const comments = cmtMod.default.getComments('d6');
+      const comments = cmtService.getComments('d6');
       const undoComment = comments.find((c) => c.type === 'system' && c.text.includes('Approved') && c.text.includes('Under_Review'));
       expect(undoComment).toBeDefined();
     });
@@ -358,10 +327,10 @@ describe('ReviewService — new methods', () => {
       expect(result.skipped).toBe(2);   // d1 (Approved) and d6 (Under_Review)
       expect(result.failed).toBe(0);
 
-      expect(projService._documents.get('d2').status).toBe('Under_Review');
-      expect(projService._documents.get('d7').status).toBe('Under_Review');
-      expect(projService._documents.get('d1').status).toBe('Approved');   // unchanged
-      expect(projService._documents.get('d6').status).toBe('Under_Review'); // was already Under_Review
+      expect(projService.getDocument('d2').status).toBe('Under_Review');
+      expect(projService.getDocument('d7').status).toBe('Under_Review');
+      expect(projService.getDocument('d1').status).toBe('Approved');   // unchanged
+      expect(projService.getDocument('d6').status).toBe('Under_Review'); // was already Under_Review
     });
 
     it('returns failed count for non-existent documents', () => {
@@ -400,16 +369,16 @@ describe('ReviewService — new methods', () => {
     });
 
     it('increments version for each transitioned document', () => {
-      const v2Before = projService._documents.get('d2').version;
-      const v7Before = projService._documents.get('d7').version;
+      const v2Before = projService.getDocument('d2').version;
+      const v7Before = projService.getDocument('d7').version;
 
       service.bulkTransition(['d2', 'd7'], {
         toStatus: 'Under_Review',
         employeeId: 'emp1',
       });
 
-      expect(projService._documents.get('d2').version).toBe(v2Before + 1);
-      expect(projService._documents.get('d7').version).toBe(v7Before + 1);
+      expect(projService.getDocument('d2').version).toBe(v2Before + 1);
+      expect(projService.getDocument('d7').version).toBe(v7Before + 1);
     });
   });
 

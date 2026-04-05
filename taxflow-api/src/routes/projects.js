@@ -10,6 +10,19 @@ import projectService from '../services/projectService.js';
 const router = express.Router();
 
 /**
+ * GET /api/admin/clients
+ * Returns ALL clients (super admin only).
+ */
+router.get('/admin/clients', async (req, res, next) => {
+  try {
+    const clients = projectService.getAllClients();
+    res.json(clients);
+  } catch (error) {
+    next(error);
+  }
+});
+
+/**
  * GET /api/employee/:employeeId/clients
  * Returns assigned clients with optional search/filter query params.
  */

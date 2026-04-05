@@ -17,7 +17,7 @@ const RETENTION_DAYS = 2555; // 7 years
 const CLASSIFICATION_TEMPLATE = 'securityClassification-6VMVochwUWo';
 const CLASSIFICATION_KEY = 'Box__Security__Classification__Key';
 
-class ComplianceService {
+export class ComplianceService {
   constructor() {
     /** @type {string|null} Cached retention policy ID */
     this._retentionPolicyId = null;
@@ -154,6 +154,7 @@ class ComplianceService {
    * Releases a legal hold by deleting the assignment. (Req 30.4)
    *
    * @param {string} assignmentId - Legal hold policy assignment ID
+   * @returns {Promise<void>}
    */
   async releaseLegalHold(assignmentId) {
     const client = boxService.getBoxClient();
@@ -168,6 +169,7 @@ class ComplianceService {
    *
    * @param {string} fileId - Box file ID
    * @param {'Public'|'Internal'|'Confidential'} level - Classification level
+   * @returns {Promise<void>}
    */
   async applyClassification(fileId, level) {
     const validLevels = ['Public', 'Internal', 'Confidential'];
@@ -205,5 +207,4 @@ class ComplianceService {
 
 // Singleton instance
 const complianceService = new ComplianceService();
-export { ComplianceService };
 export default complianceService;

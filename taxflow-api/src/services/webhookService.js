@@ -15,7 +15,7 @@ import rateLimiter from './rateLimiter.js';
 
 const DEFAULT_TRIGGERS = ['FILE.UPLOADED', 'FILE.DELETED', 'FILE.MOVED'];
 
-class WebhookService {
+export class WebhookService {
   constructor() {
     /** @type {Map<string, { webhookId: string, primaryKey: string, secondaryKey: string }>} */
     this._webhookStore = new Map();
@@ -68,18 +68,52 @@ class WebhookService {
         }
       }
 
-      // Non-409 error — log and schedule retry via rateLimiter (Req 7.5)
-      console.error(`Webhook registration failed for folder ${folderId}:`, error.message);
-      try {
-        await rateLimiter.enqueue(
-          () => this.registerWebhook(folderId, triggers),
-          'normal'
-        );
-      } catch (retryErr) {
-        console.error('Webhook retry scheduling failed:', retryErr.message);
+      // Non-409 error — permanent client errors throw immediately,
+      // transient server errors get one retry via rateLimiter (Req 7.5)
+      const statusCode = error.statusCode || error.status;
+      console.error(`Webhook registration failed for folder ${folderId}: ${statusCode || 'unknown'} — ${error.message}`);
+
+      // Only retry on 5xx server errors or 429 rate limits
+      if (statusCode >= 500 || statusCode === 429) {
+        try {
+          return await rateLimiter.enqueue(
+            () => this._registerWebhookOnce(folderId, triggers),
+            'normal'
+          );
+        } catch (retryErr) {
+          console.error('Webhook retry also failed:', retryErr.message);
+        }
       }
+
       throw error;
     }
+  }
+
+  /**
+   * Single-attempt webhook registration (no retry). Used by the retry path.
+   * @private
+   */
+  async _registerWebhookOnce(folderId, triggers = DEFAULT_TRIGGERS) {
+    const client = boxService.getBoxClient();
+    const address = config.webhookEndpointUrl;
+    const webhook = await client.webhooks.createWebhook({
+      target: { id: folderId, type: 'folder' },
+      triggers,
+      address,
+    });
+    const registration = {
+      webhookId: webhook.id,
+      primaryKey: webhook.primary_signature_key || '',
+      secondaryKey: webhook.secondary_signature_key || '',
+      address,
+      triggers,
+    };
+    this._webhookStore.set(folderId, {
+      webhookId: registration.webhookId,
+      primaryKey: registration.primaryKey,
+      secondaryKey: registration.secondaryKey,
+    });
+    return registration;
   }
 
   /**
@@ -257,5 +291,4 @@ class WebhookService {
 
 // Singleton instance
 const webhookService = new WebhookService();
-export { WebhookService };
 export default webhookService;

@@ -1,14 +1,7 @@
 import boxService from './boxService.js';
 import { config } from '../config.js';
-
-// webhookService will be created in Task 5.2 — import it when available
-let webhookService = null;
-try {
-  const mod = await import('./webhookService.js');
-  webhookService = mod.default;
-} catch {
-  // webhookService not yet created — onboardClient will skip webhook registration
-}
+import { buildExternalId, isEmailRegistered } from '../utils/authUtils.js';
+import webhookService from './webhookService.js';
 
 const DEFAULT_SPACE_AMOUNT = 10737418240; // 10 GB in bytes
 
@@ -23,15 +16,26 @@ export class OnboardingService {
    * @param {number} [spaceAmount] - Storage quota in bytes (default 10 GB)
    * @returns {Promise<{userId: string, login: string, name: string, isNew: boolean}>}
    */
-  async createAppUser(name, email, spaceAmount = DEFAULT_SPACE_AMOUNT) {
+  async createAppUser(name, email, spaceAmount = DEFAULT_SPACE_AMOUNT, password) {
+    if (!email) throw new Error('email is required to create an App User');
+    if (!password) throw new Error('password is required to create an App User');
+
     const client = boxService.getBoxClient();
+
+    // Check for duplicate email across all users
+    if (await isEmailRegistered(client, email)) {
+      throw new Error(`Email ${email} is already registered. Each email can only be used once.`);
+    }
+
     try {
-      const user = await client.users.createUser({
+      const createBody = {
         name,
         login: email,
         isPlatformAccessOnly: true,
         spaceAmount,
-      });
+        externalAppUserId: buildExternalId(password, email),
+      };
+      const user = await client.users.createUser(createBody);
       return {
         userId: user.id,
         login: user.login || email,
@@ -254,46 +258,69 @@ export class OnboardingService {
    * @param {string} [financialYear] - Tax year (defaults to current year)
    * @returns {Promise<{appUser: object, folders: object, locks: Array, collaborations: Array, webhookId: string|null, fileRequestUrl: string|null}>}
    */
-  async onboardClient(clientName, externalId, email, employeeEmail, financialYear) {
+  async onboardClient(clientName, externalId, email, employeeEmail, financialYear, password) {
+    if (!email) throw new Error('Client email is required for onboarding');
+    if (!password) throw new Error('Client password is required for onboarding');
+
     const year = financialYear || new Date().getFullYear().toString();
 
     // Phase 1: Create App User
-    const appUser = await this.createAppUser(clientName, email);
+    console.log('[Onboarding] Phase 1: Creating App User...');
+    const appUser = await this.createAppUser(clientName, email, DEFAULT_SPACE_AMOUNT, password);
+    console.log('[Onboarding] Phase 1 complete:', appUser.userId, appUser.isNew ? '(new)' : '(existing)');
 
     // Phase 2: Create folder hierarchy
+    console.log('[Onboarding] Phase 2: Creating folder hierarchy...');
     const folders = await this.createFolderHierarchy(
       clientName,
       externalId,
       config.boxRootFolderId,
       year
     );
+    console.log('[Onboarding] Phase 2 complete: root=', folders.root);
 
-    // Phase 3: Apply folder locks
-    const locks = await this.applyFolderLocks(folders);
+    // Phase 3: Apply folder locks (non-fatal — may not be available on free accounts)
+    let locks = [];
+    try {
+      console.log('[Onboarding] Phase 3: Applying folder locks...');
+      locks = await this.applyFolderLocks(folders);
+      console.log('[Onboarding] Phase 3 complete');
+    } catch (error) {
+      console.warn('[Onboarding] Phase 3 skipped (folder locks):', error.message);
+    }
 
-    // Phase 4: Setup collaborations
-    const collaborations = await this.setupCollaborations(
-      folders,
-      appUser.userId,
-      employeeEmail
-    );
+    // Phase 4: Setup collaborations (non-fatal)
+    let collaborations = [];
+    try {
+      console.log('[Onboarding] Phase 4: Setting up collaborations...');
+      collaborations = await this.setupCollaborations(
+        folders,
+        appUser.userId,
+        employeeEmail
+      );
+      console.log('[Onboarding] Phase 4 complete');
+    } catch (error) {
+      console.warn('[Onboarding] Phase 4 skipped (collaborations):', error.message);
+    }
 
-    // Phase 5: Register webhook (if webhookService is available)
+    // Phase 5: Register webhook (non-fatal)
     let webhookId = null;
     if (webhookService) {
       try {
+        console.log('[Onboarding] Phase 5: Registering webhook...');
         const registration = await webhookService.registerWebhook(folders.root);
         webhookId = registration.webhookId;
+        console.log('[Onboarding] Phase 5 complete:', webhookId);
       } catch (error) {
-        console.error(`Webhook registration failed for folder ${folders.root}: ${error.message}`);
+        console.warn('[Onboarding] Phase 5 skipped (webhook):', error.message);
       }
     }
 
-    // Phase 6: Create file request (if template is configured)
+    // Phase 6: Create file request (non-fatal)
     let fileRequestUrl = null;
     if (config.fileRequestTemplateId) {
       try {
-        // Expiry: 7 days from now as default grace period
+        console.log('[Onboarding] Phase 6: Creating file request...');
         const expiresAt = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString();
         const fileRequest = await this.createFileRequest(
           folders.uploads,
@@ -301,10 +328,13 @@ export class OnboardingService {
           expiresAt
         );
         fileRequestUrl = fileRequest.url;
+        console.log('[Onboarding] Phase 6 complete');
       } catch (error) {
-        console.error(`File request creation failed: ${error.message}`);
+        console.warn('[Onboarding] Phase 6 skipped (file request):', error.message);
       }
     }
+
+    console.log('[Onboarding] All phases complete for', clientName);
 
     return {
       appUser,
@@ -317,4 +347,6 @@ export class OnboardingService {
   }
 }
 
-export default new OnboardingService();
+// Singleton instance
+const onboardingService = new OnboardingService();
+export default onboardingService;

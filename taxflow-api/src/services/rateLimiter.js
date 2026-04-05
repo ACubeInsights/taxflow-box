@@ -8,6 +8,8 @@
  * Requirements: 37.1, 37.2, 37.3, 37.4, 37.5
  */
 
+import { createHttpError } from '../utils/httpError.js';
+
 /** @typedef {'urgent' | 'high' | 'normal' | 'low'} Priority */
 
 const PRIORITY_ORDER = { urgent: 0, high: 1, normal: 2, low: 3 };
@@ -50,8 +52,7 @@ export class RateLimiter {
 
     // Reject low-priority requests when queue is full (Req 37.5)
     if (priority === 'low' && depth >= this.maxQueueDepth) {
-      const err = new Error('Queue depth exceeded — low-priority request rejected');
-      err.statusCode = 503;
+      const err = createHttpError('Queue depth exceeded — low-priority request rejected', 503);
       err.retryAfter = 30;
       throw err;
     }

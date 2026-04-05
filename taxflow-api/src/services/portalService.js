@@ -23,7 +23,7 @@ const MAX_ZIP_FILES = 100;
 const ZIP_POLL_INTERVAL_MS = 1000;
 const ZIP_MAX_POLL_ATTEMPTS = 60;
 
-class PortalService {
+export class PortalService {
   /**
    * Client progress via metadata query, cached 60s. (Reqs 19.1-19.5)
    *
@@ -396,5 +396,4 @@ class PortalService {
 
 // Singleton instance
 const portalService = new PortalService();
-export { PortalService };
 export default portalService;

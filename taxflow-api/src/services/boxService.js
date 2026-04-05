@@ -1,7 +1,7 @@
 import { BoxWrapperService } from '../../../box-wrapper-service/dist/index.js';
 import { config } from '../config.js';
 
-class BoxService {
+export class BoxService {
   constructor() {
     this.service = new BoxWrapperService({
       configPath: config.boxConfigPath,
@@ -87,4 +87,6 @@ class BoxService {
   }
 }
 
-export default new BoxService();
+// Singleton instance
+const boxService = new BoxService();
+export default boxService;

@@ -10,12 +10,13 @@
 import crypto from 'crypto';
 import boxService from './boxService.js';
 import { config } from '../config.js';
+import { retryWithBackoff } from '../utils/retryWithBackoff.js';
 
 const CHUNKED_THRESHOLD_BYTES = (config.chunkedUploadThresholdMb || 50) * 1024 * 1024;
 const CHUNK_SIZE_BYTES = (config.chunkSizeMb || 8) * 1024 * 1024;
 const MAX_CHUNK_RETRIES = 3;
 
-class UploadService {
+export class UploadService {
   /**
    * Uploads a file, routing to standard or chunked based on 50MB threshold. (Req 36.1)
    *
@@ -86,7 +87,12 @@ class UploadService {
     const totalParts = Math.ceil(fileSize / partSize);
     const uploadedParts = [];
 
-    // Compute overall SHA-1 for commit (Req 36.3)
+    // Compute the SHA-1 digest of the entire file content before chunking.
+    // Box's chunked upload API requires this whole-file SHA-1 at commit time
+    // to verify that all uploaded parts reassemble into the original file.
+    // This is a data-integrity check, not a security hash — Box uses SHA-1
+    // because its chunked upload protocol (RFC 3230 digest header) predates
+    // the deprecation of SHA-1 for cryptographic purposes. (Req 36.3)
     const sha1Hash = crypto.createHash('sha1').update(fileBuffer).digest('base64');
 
     try {
@@ -103,7 +109,11 @@ class UploadService {
         uploadedParts.push(part);
       }
 
-      // Commit session with SHA-1 digest (Req 36.3)
+      // Commit the upload session by sending all part descriptors and the
+      // whole-file SHA-1 digest. Box reassembles the parts in order and
+      // compares the resulting file's SHA-1 against our digest. If they
+      // don't match, the commit fails — protecting against corrupted or
+      // missing chunks. (Req 36.3)
       const commitResult = await client.chunkedUploads.createFileUploadSessionCommit(
         sessionId,
         {
@@ -141,10 +151,11 @@ class UploadService {
    * @returns {Promise<object>} Uploaded part descriptor
    */
   async _uploadChunkWithRetry(client, sessionId, chunk, contentRange, maxRetries) {
-    let lastError;
-
-    for (let attempt = 0; attempt <= maxRetries; attempt++) {
-      try {
+    return retryWithBackoff(
+      async () => {
+        // Per-chunk SHA-1 digest sent in the "digest" header so Box can verify
+        // each individual part's integrity on receipt, independent of the
+        // whole-file SHA-1 used at commit time.
         const sha1 = crypto.createHash('sha1').update(chunk).digest('base64');
 
         const part = await client.chunkedUploads.uploadFilePartByUrl(
@@ -157,20 +168,12 @@ class UploadService {
         );
 
         return part.part || part;
-      } catch (err) {
-        lastError = err;
-        if (attempt < maxRetries) {
-          // Brief backoff before retry
-          await new Promise((resolve) => setTimeout(resolve, 1000 * (attempt + 1)));
-        }
-      }
-    }
-
-    throw lastError;
+      },
+      { maxRetries, baseDelayMs: 1000 }
+    );
   }
 }
 
 // Singleton instance
 const uploadService = new UploadService();
-export { UploadService };
 export default uploadService;

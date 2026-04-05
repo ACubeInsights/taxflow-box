@@ -11,6 +11,7 @@
  */
 
 import notificationService from './notificationService.js';
+import { createHttpError } from '../utils/httpError.js';
 
 const EDIT_WINDOW_MS = 5 * 60 * 1000; // 5 minutes
 
@@ -26,7 +27,7 @@ const EMPLOYEE_DIRECTORY = [
   { id: 'emp8', name: 'Jennifer Lee' },
 ];
 
-class CommentService {
+export class CommentService {
   constructor() {
     /** @type {Map<string, object[]>} documentId → Comment[] */
     this._comments = new Map();
@@ -57,15 +58,11 @@ class CommentService {
    */
   addComment(documentId, { type, authorId, authorName, text, mentions = [] }) {
     if (type !== 'review' && type !== 'internal') {
-      const err = new Error('Comment type must be "review" or "internal"');
-      err.statusCode = 400;
-      throw err;
+      throw createHttpError('Comment type must be "review" or "internal"', 400);
     }
 
     if (!text || !text.trim()) {
-      const err = new Error('Comment text cannot be empty');
-      err.statusCode = 400;
-      throw err;
+      throw createHttpError('Comment text cannot be empty', 400);
     }
 
     const now = new Date().toISOString();
@@ -150,28 +147,20 @@ class CommentService {
     const comment = this._findCommentById(commentId);
 
     if (!comment) {
-      const err = new Error('Comment not found');
-      err.statusCode = 404;
-      throw err;
+      throw createHttpError('Comment not found', 404);
     }
 
     if (comment.authorId !== requesterId) {
-      const err = new Error('Only the author can edit this comment');
-      err.statusCode = 403;
-      throw err;
+      throw createHttpError('Only the author can edit this comment', 403);
     }
 
     const elapsed = Date.now() - new Date(comment.createdAt).getTime();
     if (elapsed > EDIT_WINDOW_MS) {
-      const err = new Error('Edit window has expired (5 minutes)');
-      err.statusCode = 422;
-      throw err;
+      throw createHttpError('Edit window has expired (5 minutes)', 422);
     }
 
     if (!text || !text.trim()) {
-      const err = new Error('Comment text cannot be empty');
-      err.statusCode = 400;
-      throw err;
+      throw createHttpError('Comment text cannot be empty', 400);
     }
 
     comment.text = text.trim();
@@ -226,5 +215,5 @@ class CommentService {
 
 // Singleton instance
 const commentService = new CommentService();
-export { CommentService, EMPLOYEE_DIRECTORY, EDIT_WINDOW_MS };
+export { EMPLOYEE_DIRECTORY, EDIT_WINDOW_MS };
 export default commentService;

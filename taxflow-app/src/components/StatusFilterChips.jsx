@@ -1,13 +1,5 @@
-import { DocumentStatus, STATUS_COLORS } from '../context/DocumentWorkflowContext'
-
-const STATUS_LABELS = {
-  [DocumentStatus.Not_Requested]: 'Not Requested',
-  [DocumentStatus.Uploaded]: 'Uploaded',
-  [DocumentStatus.Under_Review]: 'Under Review',
-  [DocumentStatus.Revision_Requested]: 'Revision Requested',
-  [DocumentStatus.Approved]: 'Approved',
-  [DocumentStatus.Waived]: 'Waived',
-}
+import { DocumentStatus } from '../constants/statusTransitions.js'
+import { STATUS_COLORS, STATUS_LABELS } from '../constants/statusColors'
 
 const ALL_STATUSES = Object.values(DocumentStatus)
 

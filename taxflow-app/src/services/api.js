@@ -17,6 +17,11 @@ export function getAuthToken() {
 async function apiRequest(endpoint, options = {}) {
   const url = `${API_BASE_URL}${endpoint}`;
   
+  // Default 90-second timeout for API calls
+  const timeoutMs = options.timeout || 90000;
+  const controller = new AbortController();
+  const timeoutId = setTimeout(() => controller.abort(), timeoutMs);
+
   try {
     const headers = {
       'Content-Type': 'application/json',
@@ -30,6 +35,7 @@ async function apiRequest(endpoint, options = {}) {
     const response = await fetch(url, {
       ...options,
       headers,
+      signal: controller.signal,
     });
 
     if (!response.ok) {
@@ -43,10 +49,73 @@ async function apiRequest(endpoint, options = {}) {
 
     return await response.json();
   } catch (error) {
+    if (error.name === 'AbortError') {
+      console.error(`API Timeout (${endpoint}): Request timed out after ${timeoutMs}ms`);
+      throw new Error('Request timed out. The server may be busy — please try again.');
+    }
     console.error(`API Error (${endpoint}):`, error);
     throw error;
+  } finally {
+    clearTimeout(timeoutId);
   }
 }
+
+/**
+ * Employee API — super admin creates employees
+ */
+export const employeeApi = {
+  async createEmployee(name, email, role, password) {
+    return apiRequest('/employees', {
+      method: 'POST',
+      body: JSON.stringify({ name, email, role, password }),
+    });
+  },
+};
+
+/**
+ * Auth API — login, logout, session validation
+ */
+export const authApi = {
+  async loginClient(email, password) {
+    return apiRequest('/auth/login', {
+      method: 'POST',
+      body: JSON.stringify({ email, password, loginType: 'client' }),
+    });
+  },
+  async loginStaff(email, password) {
+    return apiRequest('/auth/login', {
+      method: 'POST',
+      body: JSON.stringify({ email, password, loginType: 'staff' }),
+    });
+  },
+  async getMe() {
+    return apiRequest('/auth/me');
+  },
+  async logout() {
+    return apiRequest('/auth/logout', { method: 'POST' });
+  },
+  async refreshSession() {
+    return apiRequest('/auth/refresh', { method: 'POST' });
+  },
+  async changePassword(currentPassword, newPassword) {
+    return apiRequest('/auth/change-password', {
+      method: 'POST',
+      body: JSON.stringify({ currentPassword, newPassword }),
+    });
+  },
+  async forgotPassword(email) {
+    return apiRequest('/auth/forgot-password', {
+      method: 'POST',
+      body: JSON.stringify({ email }),
+    });
+  },
+  async resetPassword(token, newPassword) {
+    return apiRequest('/auth/reset-password', {
+      method: 'POST',
+      body: JSON.stringify({ token, newPassword }),
+    });
+  },
+};
 
 /**
  * Client API
@@ -107,10 +176,10 @@ export const vaultApi = {
 };
 
 export const onboardingApi = {
-  async onboardClient(clientName, externalId, email, employeeEmail, financialYear) {
+  async onboardClient(clientName, externalId, email, employeeEmail, financialYear, password) {
     return apiRequest('/onboarding', {
       method: 'POST',
-      body: JSON.stringify({ clientName, externalId, email, employeeEmail, financialYear }),
+      body: JSON.stringify({ clientName, externalId, email, employeeEmail, financialYear, password }),
     });
   },
 };
@@ -246,6 +315,9 @@ export const complianceApi = {
  * Project API — Client → Project → Document hierarchy
  */
 export const projectApi = {
+  async getAllClients() {
+    return apiRequest('/admin/clients');
+  },
   async getEmployeeClients(employeeId, filters = {}) {
     const params = new URLSearchParams();
     if (filters.search) params.set('search', filters.search);

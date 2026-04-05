@@ -19,12 +19,15 @@ import complianceRoutes from './routes/compliance.js';
 import projectRoutes from './routes/projects.js';
 import commentRoutes from './routes/comments.js';
 import documentTypeRoutes from './routes/documentTypes.js';
+import authRoutes from './routes/auth.js';
+import employeeRoutes from './routes/employees.js';
 import complianceService from './services/complianceService.js';
 import aiExtractionService from './services/aiExtractionService.js';
 import webhookService from './services/webhookService.js';
 import signService from './services/signService.js';
 import postUploadPipeline from './services/postUploadPipeline.js';
 import { syncTaxflowDocumentTemplate } from './services/metadataTemplateDefinition.js';
+import { errorHandler } from './middleware/errorHandler.js';
 
 const app = express();
 
@@ -36,6 +39,8 @@ app.get('/health', (req, res) => {
   res.json({ status: 'ok', timestamp: new Date().toISOString() });
 });
 
+app.use('/api/auth', authRoutes);
+app.use('/api/employees', employeeRoutes);
 app.use('/api/clients', clientRoutes);
 app.use('/api/documents', documentRoutes);
 app.use('/api/vaults', vaultRoutes);
@@ -52,12 +57,7 @@ app.use('/api', projectRoutes);
 app.use('/api', commentRoutes);
 app.use('/api', documentTypeRoutes);
 
-app.use((err, req, res, next) => {
-  console.error('Error:', err.message);
-  res.status(err.status || 500).json({
-    error: err.message || 'Internal server error',
-  });
-});
+app.use(errorHandler);
 
 app.use((req, res) => {
   res.status(404).json({ error: 'Route not found' });

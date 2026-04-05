@@ -1,12 +1,20 @@
 import { AnimatePresence, motion } from 'framer-motion'
+import { useLocation } from 'react-router-dom'
 import { AuthProvider, useAuth } from './context/AuthContext'
 import { DocumentWorkflowProvider } from './context/DocumentWorkflowContext'
 import LoginScreen from './components/LoginScreen'
+import ResetPasswordPage from './components/ResetPasswordPage'
 import AppShell from './components/AppShell'
 import './App.css'
 
 function AppContent() {
   const { user, transitioning } = useAuth()
+  const location = useLocation()
+
+  // Handle /reset-password route regardless of auth state
+  if (location.pathname === '/reset-password') {
+    return <ResetPasswordPage />
+  }
 
   return (
     <div

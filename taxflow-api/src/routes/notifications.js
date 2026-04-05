@@ -10,6 +10,7 @@
 
 import express from 'express';
 import notificationService from '../services/notificationService.js';
+import deepLinkTokenService from '../services/deepLinkTokenService.js';
 
 // Notifications router — mount at /api/notifications
 const router = express.Router();
@@ -43,7 +44,7 @@ deepLinkRouter.get('/deep-link', (req, res) => {
   }
 
   try {
-    const payload = notificationService.verifyDeepLinkToken(token);
+    const payload = deepLinkTokenService.verifyDeepLinkToken(token);
 
     // Build redirect URL with context parameters
     const { fileId, clientId, action } = payload;

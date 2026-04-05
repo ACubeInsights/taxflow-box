@@ -16,8 +16,16 @@
 const DOCUMENT_STATUSES = ['Not_Requested', 'Uploaded', 'Under_Review', 'Revision_Requested', 'Approved', 'Waived'];
 
 import notificationService from './notificationService.js';
+import { createHttpError } from '../utils/httpError.js';
+import {
+  clients as seedClients,
+  projects as seedProjects,
+  documents as seedDocuments,
+  activities as seedActivities,
+  employeeClients as seedEmployeeClients,
+} from '../fixtures/seedData.js';
 
-class ProjectService {
+export class ProjectService {
   constructor() {
     /** @type {Map<string, object>} clientId → ClientSummary */
     this._clients = new Map();
@@ -40,421 +48,105 @@ class ProjectService {
 
   /**
    * Seeds the in-memory stores with realistic demo data.
+   * Data is loaded from src/fixtures/seedData.js (Reqs 4.3, 8.3).
    */
   _seed() {
-    // --- Clients ---
-    const clients = [
-      {
-        id: 'c1',
-        name: 'Acme Industries',
-        email: 'sageastral14@gmail.com',
-        entityType: 'Business',
-        engagementStatus: 'Active',
-        activeProjects: 2,
-        pendingActions: 3,
-        boxFolderId: 'box-folder-c1',
-      },
-      {
-        id: 'c2',
-        name: 'Jane Smith',
-        email: 'sageastral14@gmail.com',
-        entityType: 'Individual',
-        engagementStatus: 'Active',
-        activeProjects: 1,
-        pendingActions: 1,
-        boxFolderId: 'box-folder-c2',
-      },
-      {
-        id: 'c3',
-        name: 'Greenfield Trust',
-        email: 'sageastral14@gmail.com',
-        entityType: 'Trust',
-        engagementStatus: 'On_Hold',
-        activeProjects: 1,
-        pendingActions: 0,
-        boxFolderId: 'box-folder-c3',
-      },
-      {
-        id: 'c4',
-        name: 'Stellare Software Inc.',
-        email: 'sageastral14@gmail.com',
-        entityType: 'S-Corp',
-        engagementStatus: 'Active',
-        activeProjects: 1,
-        pendingActions: 2,
-        boxFolderId: 'box-folder-c4',
-      },
-      {
-        id: 'c5',
-        name: 'Ray Kowalski',
-        email: 'sageastral14@gmail.com',
-        entityType: 'Individual',
-        engagementStatus: 'Active',
-        activeProjects: 1,
-        pendingActions: 1,
-        boxFolderId: 'box-folder-c5',
-      },
-      {
-        id: 'c6',
-        name: 'Blue Horizon Partners',
-        email: 'sageastral14@gmail.com',
-        entityType: 'Partnership',
-        engagementStatus: 'Active',
-        activeProjects: 1,
-        pendingActions: 0,
-        boxFolderId: 'box-folder-c6',
-      },
-      {
-        id: 'c7',
-        name: 'Maria & Carlos Reyes',
-        email: 'sageastral14@gmail.com',
-        entityType: 'Individual',
-        engagementStatus: 'Complete',
-        activeProjects: 0,
-        pendingActions: 0,
-        boxFolderId: 'box-folder-c7',
-      },
-    ];
-
-    for (const c of clients) {
-      this._clients.set(c.id, c);
+    for (const c of seedClients) {
+      this._clients.set(c.id, { ...c });
     }
-    this._clientIdCounter = 7;
+    this._clientIdCounter = seedClients.length;
 
-    // Employee assignments — employee-1 gets 5 clients, employee-2 gets 3 (with overlap on c3)
-    this._employeeClients.set('employee-1', ['c1', 'c2', 'c3', 'c4', 'c5']);
-    this._employeeClients.set('employee-2', ['c3', 'c6', 'c7']);
-
-    // --- Projects ---
-    const projects = [
-      {
-        id: 'p1',
-        clientId: 'c1',
-        name: '2024 Corporate Tax Return',
-        description: 'Annual corporate tax filing for Acme Industries',
-        status: 'Active',
-        documentCount: 4,
-        progressPercentage: 25,
-        createdAt: '2024-11-01T10:00:00.000Z',
-      },
-      {
-        id: 'p2',
-        clientId: 'c1',
-        name: '2024 Quarterly Estimates',
-        description: 'Q1-Q4 estimated tax payments',
-        status: 'Active',
-        documentCount: 2,
-        progressPercentage: 50,
-        createdAt: '2024-11-15T09:00:00.000Z',
-      },
-      {
-        id: 'p3',
-        clientId: 'c2',
-        name: '2024 Individual Tax Return',
-        description: 'Personal tax filing for Jane Smith',
-        status: 'Active',
-        documentCount: 3,
-        progressPercentage: 33,
-        createdAt: '2024-12-01T08:00:00.000Z',
-      },
-      {
-        id: 'p4',
-        clientId: 'c3',
-        name: '2024 Trust Tax Return',
-        description: 'Annual trust tax filing',
-        status: 'On_Hold',
-        documentCount: 2,
-        progressPercentage: 0,
-        createdAt: '2024-10-20T14:00:00.000Z',
-      },
-      {
-        id: 'p5',
-        clientId: 'c4',
-        name: '2024 S-Corp Tax Return',
-        description: 'Annual S-Corp filing for Stellare Software',
-        status: 'Active',
-        documentCount: 3,
-        progressPercentage: 33,
-        createdAt: '2024-11-10T10:00:00.000Z',
-      },
-      {
-        id: 'p6',
-        clientId: 'c5',
-        name: '2024 Individual Tax Return',
-        description: 'Personal tax filing for Ray Kowalski',
-        status: 'Active',
-        documentCount: 2,
-        progressPercentage: 0,
-        createdAt: '2024-12-15T09:00:00.000Z',
-      },
-      {
-        id: 'p7',
-        clientId: 'c6',
-        name: '2024 Partnership Return',
-        description: 'Annual partnership filing for Blue Horizon',
-        status: 'Active',
-        documentCount: 2,
-        progressPercentage: 50,
-        createdAt: '2024-11-05T11:00:00.000Z',
-      },
-      {
-        id: 'p8',
-        clientId: 'c7',
-        name: '2024 Individual Tax Return',
-        description: 'Personal tax filing for Reyes family',
-        status: 'Complete',
-        documentCount: 2,
-        progressPercentage: 100,
-        createdAt: '2024-10-01T08:00:00.000Z',
-      },
-    ];
-
-    for (const p of projects) {
-      this._projects.set(p.id, p);
+    for (const [employeeId, clientIds] of Object.entries(seedEmployeeClients)) {
+      this._employeeClients.set(employeeId, [...clientIds]);
     }
-    this._projectIdCounter = 8;
 
-    // --- Documents ---
-    const now = new Date().toISOString();
-    const documents = [
-      // Project p1 (Acme Corporate Tax)
-      {
-        id: 'd1', name: 'W-2 Forms', description: 'Employee wage statements',
-        dueDate: '2025-03-15', priority: 'High', status: 'Approved',
-        revisionComments: null, uploadedFileName: 'w2-2024.pdf', fileId: 'box-file-d1',
-        clientId: 'c1', projectId: 'p1', documentType: 'W-2',
-        version: 2, isDraft: false, createdAt: '2024-11-02T10:00:00.000Z',
-        updatedAt: '2025-01-10T14:30:00.000Z', createdBy: 'employee-1',
-      },
-      {
-        id: 'd2', name: '1099-DIV Statements', description: 'Dividend income statements',
-        dueDate: '2025-03-15', priority: 'Medium', status: 'Uploaded',
-        revisionComments: null, uploadedFileName: '1099div-2024.pdf', fileId: 'box-file-d2',
-        clientId: 'c1', projectId: 'p1', documentType: '1099-DIV',
-        version: 1, isDraft: false, createdAt: '2024-11-05T11:00:00.000Z',
-        updatedAt: '2025-01-12T09:00:00.000Z', createdBy: 'employee-1',
-      },
-      {
-        id: 'd3', name: 'Schedule C - Business Income', description: 'Business profit/loss statement',
-        dueDate: '2025-03-15', priority: 'High', status: 'Revision_Requested',
-        revisionComments: 'Missing page 2 of the schedule. Please re-upload the complete document.',
-        uploadedFileName: 'schedule-c-2024.pdf', fileId: 'box-file-d3',
-        clientId: 'c1', projectId: 'p1', documentType: 'Schedule_C',
-        version: 3, isDraft: false, createdAt: '2024-11-03T09:00:00.000Z',
-        updatedAt: '2025-01-15T16:00:00.000Z', createdBy: 'employee-1',
-      },
-      {
-        id: 'd4', name: 'Bank Statements', description: 'Year-end bank statements',
-        dueDate: '2025-04-01', priority: 'Low', status: 'Not_Requested',
-        revisionComments: null, uploadedFileName: null, fileId: null,
-        clientId: 'c1', projectId: 'p1', documentType: 'Bank_Statement',
-        version: 1, isDraft: true, createdAt: '2024-12-01T10:00:00.000Z',
-        updatedAt: '2024-12-01T10:00:00.000Z', createdBy: 'employee-1',
-      },
-      // Project p2 (Acme Quarterly Estimates)
-      {
-        id: 'd5', name: 'Q1 Estimated Payment Receipt', description: 'Proof of Q1 estimated tax payment',
-        dueDate: '2025-04-15', priority: 'Medium', status: 'Approved',
-        revisionComments: null, uploadedFileName: 'q1-receipt.pdf', fileId: 'box-file-d5',
-        clientId: 'c1', projectId: 'p2', documentType: 'Payment_Receipt',
-        version: 2, isDraft: false, createdAt: '2024-11-20T10:00:00.000Z',
-        updatedAt: '2025-01-05T11:00:00.000Z', createdBy: 'employee-1',
-      },
-      {
-        id: 'd6', name: 'Q2 Estimated Payment Receipt', description: 'Proof of Q2 estimated tax payment',
-        dueDate: '2025-06-15', priority: 'Medium', status: 'Under_Review',
-        revisionComments: null, uploadedFileName: 'q2-receipt.pdf', fileId: 'box-file-d6',
-        clientId: 'c1', projectId: 'p2', documentType: 'Payment_Receipt',
-        version: 1, isDraft: false, createdAt: '2024-11-20T10:30:00.000Z',
-        updatedAt: '2025-01-18T08:00:00.000Z', createdBy: 'employee-1',
-      },
-      // Project p3 (Jane Smith Individual)
-      {
-        id: 'd7', name: 'W-2 Form', description: 'Wage and tax statement',
-        dueDate: '2025-04-15', priority: 'High', status: 'Uploaded',
-        revisionComments: null, uploadedFileName: 'jane-w2.pdf', fileId: 'box-file-d7',
-        clientId: 'c2', projectId: 'p3', documentType: 'W-2',
-        version: 1, isDraft: false, createdAt: '2024-12-05T10:00:00.000Z',
-        updatedAt: '2025-01-20T10:00:00.000Z', createdBy: 'employee-1',
-      },
-      {
-        id: 'd8', name: '1098 Mortgage Interest', description: 'Mortgage interest statement',
-        dueDate: '2025-04-15', priority: 'Medium', status: 'Not_Requested',
-        revisionComments: null, uploadedFileName: null, fileId: null,
-        clientId: 'c2', projectId: 'p3', documentType: '1098',
-        version: 1, isDraft: false, createdAt: '2024-12-05T10:30:00.000Z',
-        updatedAt: '2024-12-05T10:30:00.000Z', createdBy: 'employee-1',
-      },
-      {
-        id: 'd9', name: 'Charitable Donation Receipts', description: 'Receipts for charitable contributions',
-        dueDate: '2025-04-15', priority: 'Low', status: 'Waived',
-        revisionComments: null, uploadedFileName: null, fileId: null,
-        clientId: 'c2', projectId: 'p3', documentType: 'Donation_Receipt',
-        version: 2, isDraft: false, createdAt: '2024-12-10T09:00:00.000Z',
-        updatedAt: '2025-01-08T15:00:00.000Z', createdBy: 'employee-1',
-      },
-      // Project p4 (Greenfield Trust)
-      {
-        id: 'd10', name: 'Trust Agreement', description: 'Copy of the trust agreement',
-        dueDate: '2025-03-01', priority: 'High', status: 'Not_Requested',
-        revisionComments: null, uploadedFileName: null, fileId: null,
-        clientId: 'c3', projectId: 'p4', documentType: 'Trust_Agreement',
-        version: 1, isDraft: false, createdAt: '2024-10-25T10:00:00.000Z',
-        updatedAt: '2024-10-25T10:00:00.000Z', createdBy: 'employee-1',
-      },
-      {
-        id: 'd11', name: 'K-1 Schedule', description: 'Beneficiary income schedule',
-        dueDate: '2025-03-01', priority: 'Medium', status: 'Not_Requested',
-        revisionComments: null, uploadedFileName: null, fileId: null,
-        clientId: 'c3', projectId: 'p4', documentType: 'K-1',
-        version: 1, isDraft: false, createdAt: '2024-10-25T10:30:00.000Z',
-        updatedAt: '2024-10-25T10:30:00.000Z', createdBy: 'employee-1',
-      },
-      // Project p5 (Stellare Software S-Corp)
-      {
-        id: 'd12', name: 'S-Corp Tax Return (1120S)', description: 'Federal S-Corp income tax return',
-        dueDate: '2025-03-15', priority: 'High', status: 'Uploaded',
-        revisionComments: null, uploadedFileName: '1120s-2024.pdf', fileId: 'box-file-d12',
-        clientId: 'c4', projectId: 'p5', documentType: 'schedule-k1',
-        version: 1, isDraft: false, createdAt: '2024-11-12T10:00:00.000Z',
-        updatedAt: '2025-01-22T09:00:00.000Z', createdBy: 'employee-1',
-      },
-      {
-        id: 'd13', name: 'Payroll Records', description: 'Annual payroll summary and W-3',
-        dueDate: '2025-03-15', priority: 'Medium', status: 'Under_Review',
-        revisionComments: null, uploadedFileName: 'payroll-2024.xlsx', fileId: 'box-file-d13',
-        clientId: 'c4', projectId: 'p5', documentType: 'bank-statement',
-        version: 1, isDraft: false, createdAt: '2024-11-12T10:30:00.000Z',
-        updatedAt: '2025-01-25T14:00:00.000Z', createdBy: 'employee-1',
-      },
-      {
-        id: 'd14', name: 'R&D Tax Credit Documentation', description: 'Qualifying research expense receipts',
-        dueDate: '2025-04-15', priority: 'High', status: 'Not_Requested',
-        revisionComments: null, uploadedFileName: null, fileId: null,
-        clientId: 'c4', projectId: 'p5', documentType: 'schedule-c',
-        version: 1, isDraft: false, createdAt: '2024-11-15T09:00:00.000Z',
-        updatedAt: '2024-11-15T09:00:00.000Z', createdBy: 'employee-1',
-      },
-      // Project p6 (Ray Kowalski Individual)
-      {
-        id: 'd15', name: 'W-2 Form', description: 'Wage and tax statement from employer',
-        dueDate: '2025-04-15', priority: 'High', status: 'Uploaded',
-        revisionComments: null, uploadedFileName: 'ray-w2-2024.pdf', fileId: 'box-file-d15',
-        clientId: 'c5', projectId: 'p6', documentType: 'W-2',
-        version: 1, isDraft: false, createdAt: '2024-12-20T10:00:00.000Z',
-        updatedAt: '2025-01-28T11:00:00.000Z', createdBy: 'employee-1',
-      },
-      {
-        id: 'd16', name: '1099-NEC Freelance Income', description: 'Nonemployee compensation from gig work',
-        dueDate: '2025-04-15', priority: 'Medium', status: 'Not_Requested',
-        revisionComments: null, uploadedFileName: null, fileId: null,
-        clientId: 'c5', projectId: 'p6', documentType: '1099-nec',
-        version: 1, isDraft: false, createdAt: '2024-12-20T10:30:00.000Z',
-        updatedAt: '2024-12-20T10:30:00.000Z', createdBy: 'employee-1',
-      },
-      // Project p7 (Blue Horizon Partnership — emp2)
-      {
-        id: 'd17', name: 'Partnership Agreement', description: 'Copy of the partnership agreement',
-        dueDate: '2025-03-15', priority: 'High', status: 'Approved',
-        revisionComments: null, uploadedFileName: 'partnership-agreement.pdf', fileId: 'box-file-d17',
-        clientId: 'c6', projectId: 'p7', documentType: 'trust-agreement',
-        version: 2, isDraft: false, createdAt: '2024-11-08T10:00:00.000Z',
-        updatedAt: '2025-01-05T16:00:00.000Z', createdBy: 'employee-2',
-      },
-      {
-        id: 'd18', name: 'K-1 Schedules for Partners', description: 'Income distribution schedules',
-        dueDate: '2025-03-15', priority: 'Medium', status: 'Uploaded',
-        revisionComments: null, uploadedFileName: 'k1-partners-2024.pdf', fileId: 'box-file-d18',
-        clientId: 'c6', projectId: 'p7', documentType: 'schedule-k1',
-        version: 1, isDraft: false, createdAt: '2024-11-08T10:30:00.000Z',
-        updatedAt: '2025-01-20T09:00:00.000Z', createdBy: 'employee-2',
-      },
-      // Project p8 (Reyes family — emp2, Complete)
-      {
-        id: 'd19', name: 'W-2 Forms', description: 'Wage statements for both filers',
-        dueDate: '2025-04-15', priority: 'High', status: 'Approved',
-        revisionComments: null, uploadedFileName: 'reyes-w2-2024.pdf', fileId: 'box-file-d19',
-        clientId: 'c7', projectId: 'p8', documentType: 'W-2',
-        version: 2, isDraft: false, createdAt: '2024-10-05T10:00:00.000Z',
-        updatedAt: '2024-12-15T14:00:00.000Z', createdBy: 'employee-2',
-      },
-      {
-        id: 'd20', name: '1098 Mortgage Interest', description: 'Mortgage interest deduction',
-        dueDate: '2025-04-15', priority: 'Medium', status: 'Approved',
-        revisionComments: null, uploadedFileName: 'reyes-1098-2024.pdf', fileId: 'box-file-d20',
-        clientId: 'c7', projectId: 'p8', documentType: '1098',
-        version: 2, isDraft: false, createdAt: '2024-10-05T10:30:00.000Z',
-        updatedAt: '2024-12-20T11:00:00.000Z', createdBy: 'employee-2',
-      },
-    ];
-
-    for (const d of documents) {
-      this._documents.set(d.id, d);
+    for (const p of seedProjects) {
+      this._projects.set(p.id, { ...p });
     }
-    this._documentIdCounter = 20;
+    this._projectIdCounter = seedProjects.length;
 
-    // --- Activity entries ---
-    this._activities = [
-      {
-        id: 'a1', type: 'status_change', actorId: 'employee-1', actorName: 'Alex Johnson',
-        documentId: 'd1', documentName: 'W-2 Forms', clientId: 'c1', clientName: 'Acme Industries',
-        description: 'Approved document W-2 Forms', timestamp: '2025-01-10T14:30:00.000Z',
-      },
-      {
-        id: 'a2', type: 'upload', actorId: 'c1-user', actorName: 'Acme Industries',
-        documentId: 'd2', documentName: '1099-DIV Statements', clientId: 'c1', clientName: 'Acme Industries',
-        description: 'Client uploaded 1099-DIV Statements', timestamp: '2025-01-12T09:00:00.000Z',
-      },
-      {
-        id: 'a3', type: 'status_change', actorId: 'employee-1', actorName: 'Alex Johnson',
-        documentId: 'd3', documentName: 'Schedule C - Business Income', clientId: 'c1', clientName: 'Acme Industries',
-        description: 'Requested revision for Schedule C - Business Income', timestamp: '2025-01-15T16:00:00.000Z',
-      },
-      {
-        id: 'a4', type: 'comment', actorId: 'employee-1', actorName: 'Alex Johnson',
-        documentId: 'd6', documentName: 'Q2 Estimated Payment Receipt', clientId: 'c1', clientName: 'Acme Industries',
-        description: 'Added review comment on Q2 Estimated Payment Receipt', timestamp: '2025-01-18T08:00:00.000Z',
-      },
-      {
-        id: 'a5', type: 'upload', actorId: 'c2-user', actorName: 'Jane Smith',
-        documentId: 'd7', documentName: 'W-2 Form', clientId: 'c2', clientName: 'Jane Smith',
-        description: 'Client uploaded W-2 Form', timestamp: '2025-01-20T10:00:00.000Z',
-      },
-      {
-        id: 'a6', type: 'request_created', actorId: 'employee-1', actorName: 'Alex Johnson',
-        documentId: 'd9', documentName: 'Charitable Donation Receipts', clientId: 'c2', clientName: 'Jane Smith',
-        description: 'Created document request for Charitable Donation Receipts', timestamp: '2024-12-10T09:00:00.000Z',
-      },
-      {
-        id: 'a7', type: 'upload', actorId: 'c4-user', actorName: 'Stellare Software Inc.',
-        documentId: 'd12', documentName: 'S-Corp Tax Return (1120S)', clientId: 'c4', clientName: 'Stellare Software Inc.',
-        description: 'Client uploaded S-Corp Tax Return', timestamp: '2025-01-22T09:00:00.000Z',
-      },
-      {
-        id: 'a8', type: 'status_change', actorId: 'employee-1', actorName: 'Alex Johnson',
-        documentId: 'd13', documentName: 'Payroll Records', clientId: 'c4', clientName: 'Stellare Software Inc.',
-        description: 'Started review of Payroll Records', timestamp: '2025-01-25T14:00:00.000Z',
-      },
-      {
-        id: 'a9', type: 'upload', actorId: 'c5-user', actorName: 'Ray Kowalski',
-        documentId: 'd15', documentName: 'W-2 Form', clientId: 'c5', clientName: 'Ray Kowalski',
-        description: 'Client uploaded W-2 Form', timestamp: '2025-01-28T11:00:00.000Z',
-      },
-      {
-        id: 'a10', type: 'status_change', actorId: 'emp2', actorName: 'Maria Garcia',
-        documentId: 'd17', documentName: 'Partnership Agreement', clientId: 'c6', clientName: 'Blue Horizon Partners',
-        description: 'Approved Partnership Agreement', timestamp: '2025-01-05T16:00:00.000Z',
-      },
-      {
-        id: 'a11', type: 'status_change', actorId: 'emp2', actorName: 'Maria Garcia',
-        documentId: 'd19', documentName: 'W-2 Forms', clientId: 'c7', clientName: 'Maria & Carlos Reyes',
-        description: 'Approved W-2 Forms', timestamp: '2024-12-15T14:00:00.000Z',
-      },
-    ];
-    this._activityIdCounter = 11;
+    for (const d of seedDocuments) {
+      this._documents.set(d.id, { ...d });
+    }
+    this._documentIdCounter = seedDocuments.length;
+
+    this._activities = seedActivities.map((a) => ({ ...a }));
+    this._activityIdCounter = seedActivities.length;
   }
 
   // ─── Public API ───────────────────────────────────────────────────────
+
+  /**
+   * Registers a newly onboarded client into the project service.
+   * Called after Box onboarding completes.
+   *
+   * @param {{ name: string, email: string, externalId: string, entityType?: string, boxFolderId: string, boxUserId: string }} data
+   * @param {string} employeeId - The employee who onboarded this client
+   * @returns {object} The created client record
+   */
+  registerOnboardedClient(data, employeeId) {
+    const id = `c${++this._clientIdCounter}`;
+    const client = {
+      id,
+      name: data.name,
+      email: data.email,
+      entityType: data.entityType || 'Individual',
+      engagementStatus: 'Active',
+      activeProjects: 0,
+      pendingActions: 0,
+      boxFolderId: data.boxFolderId,
+      boxUserId: data.boxUserId,
+      externalId: data.externalId,
+    };
+
+    this._clients.set(id, client);
+
+    // Assign to the employee
+    const existing = this._employeeClients.get(employeeId) || [];
+    if (!existing.includes(id)) {
+      this._employeeClients.set(employeeId, [...existing, id]);
+    }
+
+    // Create a default project for the new client
+    const projectId = `p${++this._projectIdCounter}`;
+    const year = new Date().getFullYear();
+    this._projects.set(projectId, {
+      id: projectId,
+      clientId: id,
+      name: `${year} Tax Return`,
+      description: `Tax filing for ${data.name}`,
+      status: 'Active',
+      documentCount: 0,
+      progressPercentage: 0,
+      createdAt: new Date().toISOString(),
+    });
+
+    this._addActivity({
+      type: 'client_onboarded',
+      actorId: employeeId,
+      actorName: 'Employee',
+      documentId: null,
+      documentName: null,
+      clientId: id,
+      clientName: data.name,
+      description: `Onboarded new client ${data.name}`,
+    });
+
+    return { ...client, projectId };
+  }
+
+  /**
+   * Returns ALL clients (for super admin). No employee filter.
+   *
+   * @returns {object[]} ClientSummary[]
+   */
+  getAllClients() {
+    return Array.from(this._clients.values()).map((c) => ({
+      ...c,
+      activeProjects: this._countActiveProjects(c.id),
+      pendingActions: this._countPendingActions(c.id),
+    }));
+  }
 
   /**
    * Returns clients assigned to an employee with optional search/filter.
@@ -568,26 +260,18 @@ class ProjectService {
   createDocumentRequest(projectId, { name, description, priority, dueDate, documentType, isDraft }) {
     const project = this._projects.get(projectId);
     if (!project) {
-      const err = new Error('Project not found');
-      err.statusCode = 404;
-      throw err;
+      throw createHttpError('Project not found', 404);
     }
 
     // Validate required fields (Req 7.4)
     if (!name || !name.trim()) {
-      const err = new Error('Missing required field: name');
-      err.statusCode = 400;
-      throw err;
+      throw createHttpError('Missing required field: name', 400);
     }
     if (!documentType || !documentType.trim()) {
-      const err = new Error('Missing required field: documentType');
-      err.statusCode = 400;
-      throw err;
+      throw createHttpError('Missing required field: documentType', 400);
     }
     if (!dueDate || !dueDate.trim()) {
-      const err = new Error('Missing required field: dueDate');
-      err.statusCode = 400;
-      throw err;
+      throw createHttpError('Missing required field: dueDate', 400);
     }
 
     const now = new Date().toISOString();
@@ -731,6 +415,69 @@ class ProjectService {
     return { activeClients, pendingReviews, overdueDocuments, awaitingClientAction };
   }
 
+  /**
+   * Returns a single document by ID, or null if not found. (Req 12.1)
+   *
+   * @param {string} documentId
+   * @returns {object|null} DocumentRequest or null
+   */
+  getDocument(documentId) {
+    const doc = this._documents.get(documentId);
+    return doc ? { ...doc } : null;
+  }
+
+  /**
+   * Updates a document's status with optimistic concurrency control. (Req 12.1)
+   * Increments version and sets updatedAt timestamp.
+   *
+   * @param {string} documentId
+   * @param {string} status - New status value
+   * @param {number} [version] - Expected version for concurrency check
+   * @param {object} [extra] - Additional fields to set (e.g., revisionComments)
+   * @returns {object} Updated document (copy)
+   */
+  updateDocumentStatus(documentId, status, version, extra) {
+    const doc = this._documents.get(documentId);
+    if (!doc) {
+      throw createHttpError('Document not found', 404);
+    }
+
+    if (version !== undefined && version !== doc.version) {
+      throw createHttpError('Version conflict: document has been modified by another user', 409);
+    }
+
+    doc.status = status;
+    doc.version = (doc.version || 1) + 1;
+    doc.updatedAt = new Date().toISOString();
+
+    if (extra) {
+      Object.assign(doc, extra);
+    }
+
+    return { ...doc };
+  }
+
+  /**
+   * Returns a single client by ID, or null if not found. (Req 12.1)
+   *
+   * @param {string} clientId
+   * @returns {object|null} ClientSummary or null
+   */
+  getClient(clientId) {
+    const client = this._clients.get(clientId);
+    return client ? { ...client } : null;
+  }
+
+  /**
+   * Records an activity entry. Public wrapper for internal _addActivity. (Req 12.1)
+   *
+   * @param {object} entry - Partial ActivityEntry (without id/timestamp)
+   * @returns {void}
+   */
+  addActivity(entry) {
+    this._addActivity(entry);
+  }
+
   // ─── Internal helpers ─────────────────────────────────────────────────
 
   /**
@@ -799,5 +546,5 @@ class ProjectService {
 
 // Singleton instance
 const projectService = new ProjectService();
-export { ProjectService, DOCUMENT_STATUSES };
+export { DOCUMENT_STATUSES };
 export default projectService;

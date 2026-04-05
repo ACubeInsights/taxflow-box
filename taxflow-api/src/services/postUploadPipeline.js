@@ -17,7 +17,7 @@ import notificationService from './notificationService.js';
 const METADATA_SCOPE = 'enterprise';
 const METADATA_TEMPLATE = 'taxflow_document';
 
-class PostUploadPipeline {
+export class PostUploadPipeline {
   /**
    * Processes a FILE.UPLOADED webhook event.
    * Detects whether this is a new upload or a revision (re-upload after rejection).
@@ -313,5 +313,4 @@ class PostUploadPipeline {
 
 // Singleton instance
 const postUploadPipeline = new PostUploadPipeline();
-export { PostUploadPipeline };
 export default postUploadPipeline;

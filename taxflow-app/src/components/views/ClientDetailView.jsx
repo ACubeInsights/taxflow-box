@@ -32,9 +32,24 @@ export default function ClientDetailView() {
     setClientLoading(true)
     setClientError(null)
     try {
-      const data = await projectApi.getEmployeeClients('employee-1')
-      const clients = data.clients || data || []
-      const found = clients.find((c) => c.id === clientId)
+      // Try employee-specific clients first, then fall back to all clients
+      let clients = []
+      try {
+        const data = await projectApi.getEmployeeClients('employee-1')
+        clients = data.clients || data || []
+      } catch { /* ignore */ }
+
+      let found = clients.find((c) => c.id === clientId)
+
+      // If not found, try all clients (super admin view)
+      if (!found) {
+        try {
+          const allData = await projectApi.getAllClients()
+          const allClients = allData.clients || allData || []
+          found = allClients.find((c) => c.id === clientId)
+        } catch { /* ignore */ }
+      }
+
       if (!found) {
         setClientError('not_found')
       } else {

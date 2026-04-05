@@ -47,7 +47,7 @@ export default function ReviewMode({ request, onApprove, onRequestRevision, onBa
 
     const fetchToken = async () => {
       try {
-        const result = await tokenApi.getPreviewToken(request.fileId, user || 'employee-1')
+        const result = await tokenApi.getPreviewToken(request.fileId, user?.id || 'employee-1')
         setPreviewToken(result)
         setPreviewError(null)
 
@@ -69,14 +69,14 @@ export default function ReviewMode({ request, onApprove, onRequestRevision, onBa
     return () => {
       if (refreshTimerRef.current) clearTimeout(refreshTimerRef.current)
     }
-  }, [request.fileId, user])
+  }, [request.fileId, user?.id])
 
   const handleApprove = async () => {
     setActionLoading(true)
     setActionError(null)
     try {
       if (request.fileId) {
-        await reviewApi.approve(request.fileId, user || 'employee-1')
+        await reviewApi.approve(request.fileId, user?.id || 'employee-1')
       }
       onApprove()
     } catch (err) {
@@ -91,7 +91,7 @@ export default function ReviewMode({ request, onApprove, onRequestRevision, onBa
     setActionError(null)
     try {
       if (request.fileId) {
-        await reviewApi.reject(request.fileId, user || 'employee-1', comments)
+        await reviewApi.reject(request.fileId, user?.id || 'employee-1', comments)
       }
       onRequestRevision(comments)
     } catch (err) {

@@ -7,5 +7,15 @@ export default defineConfig({
       'tests/property/**/*.property.test.ts',
     ],
     globals: true,
+    testTimeout: 10000,
+    coverage: {
+      provider: 'v8',
+      thresholds: {
+        statements: 60,
+        branches: 60,
+        functions: 60,
+        lines: 60,
+      },
+    },
   },
 });

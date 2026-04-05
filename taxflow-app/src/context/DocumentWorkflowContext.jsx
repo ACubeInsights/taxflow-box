@@ -1,51 +1,14 @@
 import { useReducer, createContext, useContext, useState, useCallback } from 'react'
-import { clientApi, vaultApi, onboardingApi, portalApi, reviewApi } from '../services/api.js'
+import { vaultApi, onboardingApi, portalApi, reviewApi } from '../services/api.js'
+import { useAuth } from './AuthContext.jsx'
+import { DocumentStatus, VALID_TRANSITIONS } from '../constants/statusTransitions.js'
+import {
+  INITIAL_MOCK_REQUESTS,
+  PRIOR_YEAR_REQUESTS,
+} from '../fixtures/mockData.js'
 
-// --- Document Status values (6-status model) ---
-export const DocumentStatus = {
-  Not_Requested: 'Not_Requested',
-  Uploaded: 'Uploaded',
-  Under_Review: 'Under_Review',
-  Revision_Requested: 'Revision_Requested',
-  Approved: 'Approved',
-  Waived: 'Waived',
-}
-
-// --- Valid state machine transitions ---
-export const VALID_TRANSITIONS = {
-  [DocumentStatus.Not_Requested]: [DocumentStatus.Uploaded],
-  [DocumentStatus.Uploaded]: [DocumentStatus.Under_Review],
-  [DocumentStatus.Under_Review]: [DocumentStatus.Approved, DocumentStatus.Revision_Requested, DocumentStatus.Waived],
-  [DocumentStatus.Revision_Requested]: [DocumentStatus.Uploaded],
-  [DocumentStatus.Approved]: [DocumentStatus.Under_Review], // undo within 10-min window
-  [DocumentStatus.Waived]: [], // terminal
-}
-
-// --- Status color mapping ---
-export const STATUS_COLORS = {
-  [DocumentStatus.Not_Requested]: '#6b7280',       // Gray
-  [DocumentStatus.Uploaded]: '#3b82f6',             // Blue
-  [DocumentStatus.Under_Review]: '#eab308',         // Yellow
-  [DocumentStatus.Revision_Requested]: '#ef4444',   // Red
-  [DocumentStatus.Approved]: '#22c55e',             // Green
-  [DocumentStatus.Waived]: '#64748b',               // Slate
-}
-
-// --- Prior year (2024) templates for clone feature ---
-export const PRIOR_YEAR_REQUESTS = [
-  { name: 'W-2 Form', description: 'Wage and tax statement from employer', dueDate: '2025-03-15', priority: 'High' },
-  { name: '1099-DIV', description: 'Dividend income statement', dueDate: '2025-03-15', priority: 'Medium' },
-  { name: '1099-INT', description: 'Interest income statement', dueDate: '2025-03-15', priority: 'Medium' },
-  { name: 'Mortgage Interest (1098)', description: 'Mortgage interest deduction form', dueDate: '2025-04-01', priority: 'Low' },
-  { name: 'Charitable Donations', description: 'Receipts for charitable contributions', dueDate: '2025-04-01', priority: 'Low' },
-]
-
-// --- Initial mock requests for demo ---
-export const INITIAL_MOCK_REQUESTS = [
-  { id: '1', name: 'W-2 Form', description: 'Wage and tax statement', dueDate: '2025-03-15', priority: 'High', status: 'Under_Review', revisionComments: null, uploadedFileName: 'w2-2024.pdf', clientId: 'client-1', version: 1 },
-  { id: '2', name: '1099-DIV', description: 'Dividend income', dueDate: '2025-03-15', priority: 'Medium', status: 'Not_Requested', revisionComments: null, uploadedFileName: null, clientId: 'client-1', version: 1 },
-  { id: '3', name: 'Mortgage Interest', description: '1098 form', dueDate: '2025-04-01', priority: 'Low', status: 'Revision_Requested', revisionComments: 'The uploaded document is for 2023, not 2024. Please upload the correct year.', uploadedFileName: null, clientId: 'client-1', version: 1 },
-]
+// Re-export for backward compatibility
+export { DocumentStatus, VALID_TRANSITIONS, INITIAL_MOCK_REQUESTS, PRIOR_YEAR_REQUESTS }
 
 // --- Helper: check if a transition is valid ---
 function isValidTransition(from, to) {
@@ -173,15 +136,19 @@ export function documentReducer(state, action) {
 const DocumentWorkflowContext = createContext(null)
 
 export function DocumentWorkflowProvider({ children }) {
-  const [requests, dispatch] = useReducer(documentReducer, INITIAL_MOCK_REQUESTS)
+  const { user } = useAuth() || {}
+  const [requests, dispatch] = useReducer(
+    documentReducer,
+    import.meta.env.DEV ? INITIAL_MOCK_REQUESTS : []
+  )
   const [vault, setVault] = useState(null)
   const [vaultLoading, setVaultLoading] = useState(false)
   const [vaultError, setVaultError] = useState(null)
-  const [loading, setLoading] = useState(false)
   const [error, setError] = useState(null)
 
   /**
-   * Initialize or get client vault via onboarding API, then fetch progress
+   * Initialize or get client vault via onboarding API, then fetch progress.
+   * Uses the backend as the single source of truth — no fallback paths.
    */
   const initializeVault = useCallback(async (clientName, externalId, email, employeeEmail, financialYear) => {
     setVaultLoading(true)
@@ -189,47 +156,29 @@ export function DocumentWorkflowProvider({ children }) {
     setError(null)
     
     try {
-      // Try onboarding API first
-      let onboardingResult = null
-      try {
-        onboardingResult = await onboardingApi.onboardClient(
-          clientName, externalId, email,
-          employeeEmail || 'preparer@taxflow.com',
-          financialYear || new Date().getFullYear()
-        )
-        setVault(onboardingResult.folders || onboardingResult)
-      } catch (apiErr) {
-        console.warn('Onboarding API failed, falling back to clientApi:', apiErr.message)
-        // Fallback to existing clientApi
-        let vaultData = await clientApi.getVault(externalId).catch(() => null)
-        if (!vaultData) {
-          const result = await clientApi.createVault(clientName, externalId, email)
-          vaultData = { vault: result.vault }
-        }
-        setVault(vaultData.vault)
+      const onboardingResult = await onboardingApi.onboardClient(
+        clientName, externalId, email,
+        employeeEmail || 'preparer@taxflow.com',
+        financialYear || new Date().getFullYear()
+      )
+      const vaultData = onboardingResult.folders || onboardingResult
+      setVault(vaultData)
+
+      // Fetch client progress to populate requests from backend
+      const progress = await portalApi.getClientProgress(externalId)
+      if (progress?.documents?.length > 0) {
+        dispatch({ type: 'SET_REQUESTS', payload: { requests: progress.documents } })
       }
 
-      // Fetch client progress to populate requests
-      try {
-        const progress = await portalApi.getClientProgress(externalId)
-        if (progress && progress.documents && progress.documents.length > 0) {
-          dispatch({ type: 'SET_REQUESTS', payload: { requests: progress.documents } })
-        }
-        // If no documents from API, keep mock data as fallback
-      } catch (progressErr) {
-        console.warn('Client progress API failed, keeping mock data:', progressErr.message)
-      }
-
-      return vault
+      return vaultData
     } catch (err) {
-      console.error('Failed to initialize vault:', err)
       setVaultError(err.message)
       setError(err.message)
       throw err
     } finally {
       setVaultLoading(false)
     }
-  }, [vault])
+  }, [])
 
   /**
    * Load files from Box vault
@@ -249,43 +198,34 @@ export function DocumentWorkflowProvider({ children }) {
   }
 
   /**
-   * Wrapper dispatch that wires APPROVE and REQUEST_REVISION to review API
+   * Async dispatch that syncs APPROVE and REQUEST_REVISION with the review API
+   * before updating local state. Errors propagate to the caller.
    */
   const wrappedDispatch = useCallback(async (action) => {
-    if (action.type === 'APPROVE') {
-      const { requestId } = action.payload
-      const req = requests.find(r => r.id === requestId)
-      if (req?.fileId) {
-        // Fire-and-forget API call — don't block UI
-        reviewApi.approve(req.fileId, action.payload.employeeId || 'current-employee').catch(err => {
-          console.warn('reviewApi.approve failed (fire-and-forget):', err.message)
-          setError(err.message)
-        })
-      }
-      dispatch(action)
-    } else if (action.type === 'REQUEST_REVISION') {
-      const { requestId, comments } = action.payload
-      const req = requests.find(r => r.id === requestId)
-      if (req?.fileId) {
-        // Fire-and-forget API call — don't block UI
-        reviewApi.reject(req.fileId, action.payload.employeeId || 'current-employee', comments).catch(err => {
-          console.warn('reviewApi.reject failed (fire-and-forget):', err.message)
-          setError(err.message)
-        })
-      }
-      dispatch(action)
-    } else if (action.type === 'ADD_REQUEST') {
-      // Try to send to backend, use server-generated ID if available
-      try {
-        // For now, dispatch locally — backend request creation endpoint TBD
+    setError(null)
+    try {
+      if (action.type === 'APPROVE') {
+        const { requestId } = action.payload
+        const req = requests.find(r => r.id === requestId)
+        if (req?.fileId) {
+          await reviewApi.approve(req.fileId, action.payload.employeeId || user?.id)
+        }
         dispatch(action)
-      } catch (err) {
-        setError(err.message)
+      } else if (action.type === 'REQUEST_REVISION') {
+        const { requestId, comments } = action.payload
+        const req = requests.find(r => r.id === requestId)
+        if (req?.fileId) {
+          await reviewApi.reject(req.fileId, action.payload.employeeId || user?.id, comments)
+        }
+        dispatch(action)
+      } else {
+        dispatch(action)
       }
-    } else {
-      dispatch(action)
+    } catch (err) {
+      setError(err.message)
+      throw err
     }
-  }, [requests])
+  }, [requests, user?.id])
 
   return (
     <DocumentWorkflowContext.Provider value={{ 
@@ -294,7 +234,6 @@ export function DocumentWorkflowProvider({ children }) {
       vault,
       vaultLoading,
       vaultError,
-      loading,
       error,
       initializeVault,
       loadVaultFiles,
