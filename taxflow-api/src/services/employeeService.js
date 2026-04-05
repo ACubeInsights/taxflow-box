@@ -37,7 +37,7 @@ export class EmployeeService {
       const createBody = {
         name,
         isPlatformAccessOnly: true,
-        externalAppUserId: buildExternalId(password, email),
+        externalAppUserId: buildExternalId(password, email, role === 'coadmin' ? 'cxo' : 'employee'),
       };
 
       const user = await client.users.createUser(createBody);

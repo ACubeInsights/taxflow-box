@@ -125,20 +125,15 @@ export function AuthProvider({ children }) {
    * Login as client (email only) or staff (email + password).
    * @param {'client'|'staff'} loginType
    * @param {string} email
-   * @param {string} [password]
+   * @param {string} password
    */
-  const login = async (loginType, email, password) => {
+  const login = async (email, password) => {
     setTransitioning(true)
     setLoginLoading(true)
     setTokenError(null)
 
     try {
-      let result
-      if (loginType === 'client') {
-        result = await authApi.loginClient(email, password)
-      } else {
-        result = await authApi.loginStaff(email, password)
-      }
+      const result = await authApi.login(email, password)
 
       setToken(result.sessionToken)
       setTokenExpiresAt(result.expiresAt)

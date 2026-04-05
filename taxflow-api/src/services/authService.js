@@ -17,7 +17,7 @@ import emailService from './emailService.js';
 import crypto from 'crypto';
 import { config } from '../config.js';
 import { createHttpError } from '../utils/httpError.js';
-import { buildExternalId, hashPassword, verifyPassword, extractOriginalEmail } from '../utils/authUtils.js';
+import { buildExternalId, hashPassword, verifyPassword, extractOriginalEmail, extractRole } from '../utils/authUtils.js';
 
 // Re-export auth utilities for backward compatibility
 export { buildExternalId, hashPassword, verifyPassword, extractOriginalEmail };
@@ -118,64 +118,26 @@ export class AuthService {
    * @param {string} password
    * @returns {Promise<{ sessionToken: string, user: object, expiresAt: string }>}
    */
-  async loginClient(email, password) {
-    const client = boxService.getBoxClient();
-
-    // Fetch all enterprise users with the externalAppUserId field.
-    // App users have auto-generated logins (AppUser_...@boxdevedition.com),
-    // so we can't search by email directly. Instead, we store the real email
-    // inside externalAppUserId (format: pw:{hash}|em:{email}) and match on that.
-    const allUsers = await client.users.getUsers({
-      userType: 'all',
-      fields: ['id', 'login', 'name', 'role', 'external_app_user_id'],
-    });
-    const entries = allUsers.entries || [];
-
-    // Find user by email: check externalAppUserId for |em:{email}
-    const found = entries.find((u) => {
-      const extId = getExtId(u);
-      if (!extId) return false;
-      const match = extId.match(/\|em:(.+)$/);
-      return match && match[1].toLowerCase() === email.toLowerCase();
-    });
-
-    if (!found) throw createHttpError('Invalid credentials', 401, 'UNAUTHORIZED');
-
-    // Verify password against the hash stored in externalAppUserId
-    const extId = getExtId(found);
-    if (!verifyPassword(password, extId)) {
-      throw createHttpError('Invalid credentials', 401, 'UNAUTHORIZED');
-    }
-
-    return this.createSession({
-      userId: found.id,
-      email: email,
-      name: found.name,
-      role: 'client',
-    });
-  }
-
   /**
-   * Authenticates a staff member (employee/admin) by email and password.
+   * Unified login — authenticates any user (client, employee, cxo) by email + password.
+   * Finds the user by email in externalAppUserId, verifies password, determines role automatically.
    * @param {string} email
    * @param {string} password
    * @returns {Promise<{ sessionToken: string, user: object, expiresAt: string }>}
    */
-  async loginStaff(email, password) {
+  async login(email, password) {
     const client = boxService.getBoxClient();
 
-    // Staff (employees) are app users with externalAppUserId storing pw:{hash}|em:{email}.
-    // Same lookup approach as loginClient.
     const allUsers = await client.users.getUsers({
       userType: 'all',
       fields: ['id', 'login', 'name', 'role', 'external_app_user_id'],
     });
-    const entries = allUsers.entries || [];
 
-    const found = entries.find((u) => {
+    // Find user by email stored in externalAppUserId (format: pw:{hash}|em:{email}|role:{role})
+    const found = (allUsers.entries || []).find((u) => {
       const extId = getExtId(u);
       if (!extId) return false;
-      const match = extId.match(/\|em:(.+)$/);
+      const match = extId.match(/\|em:([^|]+)/);
       return match && match[1].toLowerCase() === email.toLowerCase();
     });
 
@@ -186,10 +148,9 @@ export class AuthService {
       throw createHttpError('Invalid credentials', 401, 'UNAUTHORIZED');
     }
 
-    // Determine role from the externalAppUserId or default to employee
-    // The role is stored during creation — for now, all staff are employees
-    // unless the enterprise admin promotes them
-    const role = found.role === 'coadmin' ? 'cxo' : (found.role === 'admin' ? 'superadmin' : 'employee');
+    // Role is stored in externalAppUserId during creation
+    const role = extractRole(extId);
+
     return this.createSession({
       userId: found.id,
       email: email,
@@ -197,6 +158,10 @@ export class AuthService {
       role,
     });
   }
+
+  // Backward compatibility aliases
+  async loginClient(email, password) { return this.login(email, password); }
+  async loginStaff(email, password) { return this.login(email, password); }
 
   /**
    * Changes a user's password.

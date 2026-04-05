@@ -9,7 +9,6 @@ import DemoLoginSection from './DemoLoginSection'
 
 export default function LoginScreen() {
   const { login, demoLogin, loginLoading, tokenError } = useAuth()
-  const [activeTab, setActiveTab] = useState('staff') // 'staff' | 'client'
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
   const [error, setError] = useState(null)
@@ -24,27 +23,14 @@ export default function LoginScreen() {
     return () => mql.removeEventListener('change', handler)
   }, [])
 
-  // Clear error when switching tabs
-  useEffect(() => {
-    setError(null)
-    setEmail('')
-    setPassword('')
-    setForgotMode(false)
-  }, [activeTab])
-
-  const isStaffFormValid = email.trim() !== '' && password.trim() !== ''
-  const isClientFormValid = email.trim() !== '' && password.trim() !== ''
+  const isFormValid = email.trim() !== '' && password.trim() !== ''
 
   const handleSubmit = async (e) => {
     e.preventDefault()
     setError(null)
 
     try {
-      if (activeTab === 'client') {
-        await login('client', email.trim(), password)
-      } else {
-        await login('staff', email.trim(), password)
-      }
+      await login(email.trim(), password)
     } catch (err) {
       setError(err.message || 'Login failed')
     }
@@ -86,26 +72,6 @@ export default function LoginScreen() {
             <p className="mt-2 text-[10px] text-[var(--color-on-surface-variant)] tracking-[0.16em] font-bold uppercase">
               Powered by Box AI
             </p>
-          </div>
-
-          {/* Tab switcher */}
-          <div className="flex rounded-xl overflow-hidden mb-6 border border-[var(--color-outline-variant)]">
-            {['staff', 'client'].map((tab) => (
-              <button
-                key={tab}
-                type="button"
-                onClick={() => setActiveTab(tab)}
-                className="flex-1 py-2.5 text-[12px] font-bold tracking-wide uppercase transition-all duration-200 cursor-pointer border-none"
-                style={{
-                  background: activeTab === tab
-                    ? 'linear-gradient(180deg, var(--color-primary), var(--color-primary-container))'
-                    : 'transparent',
-                  color: activeTab === tab ? 'var(--color-surface-lowest)' : 'var(--color-on-surface-variant)',
-                }}
-              >
-                {tab === 'staff' ? 'Staff Login' : 'Client Portal'}
-              </button>
-            ))}
           </div>
 
           {/* Login form or Forgot Password form */}
@@ -152,45 +118,28 @@ export default function LoginScreen() {
               />
             </div>
 
-            {activeTab === 'client' && (
-              <div className="flex items-center justify-between mb-4">
-                <p className="m-0 text-[11px] text-[var(--color-on-surface-variant)] leading-relaxed">
-                  Use the credentials your tax preparer provided. No signup needed.
-                </p>
-                <button
-                  type="button"
-                  onClick={() => { setForgotMode(true); setError(null) }}
-                  className="bg-transparent border-none text-[11px] font-semibold text-[var(--color-primary)] cursor-pointer p-0 whitespace-nowrap ml-3 hover:text-white transition-colors"
-                >
-                  Forgot password?
-                </button>
-              </div>
-            )}
-
-            {activeTab === 'staff' && (
-              <div className="flex items-center justify-between mb-4">
-                <p className="m-0 text-[11px] text-[var(--color-on-surface-variant)] leading-relaxed">
-                  Staff accounts are created by your system administrator.
-                </p>
-                <button
-                  type="button"
-                  onClick={() => { setForgotMode(true); setError(null) }}
-                  className="bg-transparent border-none text-[11px] font-semibold text-[var(--color-primary)] cursor-pointer p-0 whitespace-nowrap ml-3 hover:text-white transition-colors"
-                >
-                  Forgot password?
-                </button>
-              </div>
-            )}
+            <div className="flex items-center justify-between mb-4">
+              <p className="m-0 text-[11px] text-[var(--color-on-surface-variant)] leading-relaxed">
+                Sign in with your registered email and password.
+              </p>
+              <button
+                type="button"
+                onClick={() => { setForgotMode(true); setError(null) }}
+                className="bg-transparent border-none text-[11px] font-semibold text-[var(--color-primary)] cursor-pointer p-0 whitespace-nowrap ml-3 hover:text-white transition-colors"
+              >
+                Forgot password?
+              </button>
+            </div>
 
             <button
               type="submit"
-              disabled={loginLoading || (activeTab === 'staff' ? !isStaffFormValid : !isClientFormValid)}
+              disabled={loginLoading || !isFormValid}
               className="relative w-full py-4 rounded-xl text-[15px] font-bold tracking-tight text-[var(--color-surface-lowest)] transition-all duration-300 overflow-hidden group cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
               style={{
-                background: (activeTab === 'staff' ? !isStaffFormValid : !isClientFormValid)
+                background: !isFormValid
                   ? 'var(--color-surface-highest)'
                   : 'linear-gradient(180deg, var(--color-primary), var(--color-primary-container))',
-                boxShadow: (activeTab === 'staff' ? !isStaffFormValid : !isClientFormValid)
+                boxShadow: !isFormValid
                   ? 'none'
                   : 'inset 0 1px 0 rgba(255,255,255,0.4), 0 8px 30px rgba(173,198,255,0.25)',
               }}

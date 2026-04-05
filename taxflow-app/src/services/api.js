@@ -76,18 +76,15 @@ export const employeeApi = {
  * Auth API — login, logout, session validation
  */
 export const authApi = {
-  async loginClient(email, password) {
+  async login(email, password) {
     return apiRequest('/auth/login', {
       method: 'POST',
-      body: JSON.stringify({ email, password, loginType: 'client' }),
+      body: JSON.stringify({ email, password }),
     });
   },
-  async loginStaff(email, password) {
-    return apiRequest('/auth/login', {
-      method: 'POST',
-      body: JSON.stringify({ email, password, loginType: 'staff' }),
-    });
-  },
+  // Backward compatibility
+  async loginClient(email, password) { return this.login(email, password); },
+  async loginStaff(email, password) { return this.login(email, password); },
   async getMe() {
     return apiRequest('/auth/me');
   },

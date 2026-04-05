@@ -27,19 +27,11 @@ router.post('/login', async (req, res, next) => {
     if (!email) {
       return res.status(400).json({ error: 'Email is required' });
     }
-
-    let result;
-
-    if (loginType === 'client') {
-      // Client login — email + password
-      result = await authService.loginClient(email, password);
-    } else {
-      // Staff login — email + password
-      if (!password) {
-        return res.status(400).json({ error: 'Password is required for staff login' });
-      }
-      result = await authService.loginStaff(email, password);
+    if (!password) {
+      return res.status(400).json({ error: 'Password is required' });
     }
+
+    const result = await authService.login(email, password);
 
     res.json(result);
   } catch (error) {

@@ -20,15 +20,16 @@ export function hashPassword(password) {
 }
 
 /**
- * Builds the externalAppUserId value encoding both password and original email.
- * Format: "pw:{hash}|em:{email}"
+ * Builds the externalAppUserId value encoding password, email, and role.
+ * Format: "pw:{hash}|em:{email}|role:{role}"
  * @param {string} password
- * @param {string} email - Original email provided during creation
+ * @param {string} email
+ * @param {string} [role='client'] - User role (client, employee, cxo, superadmin)
  * @returns {string}
  */
-export function buildExternalId(password, email) {
+export function buildExternalId(password, email, role = 'client') {
   const pwHash = crypto.createHash('sha256').update(password).digest('hex');
-  return `pw:${pwHash}|em:${email.toLowerCase()}`;
+  return `pw:${pwHash}|em:${email.toLowerCase()}|role:${role}`;
 }
 
 /**
@@ -38,8 +39,19 @@ export function buildExternalId(password, email) {
  */
 export function extractOriginalEmail(extId) {
   if (!extId) return null;
-  const match = extId.match(/\|em:(.+)$/);
+  const match = extId.match(/\|em:([^|]+)/);
   return match ? match[1] : null;
+}
+
+/**
+ * Extracts the role from an externalAppUserId value.
+ * @param {string} extId
+ * @returns {string} Defaults to 'client' if no role found
+ */
+export function extractRole(extId) {
+  if (!extId) return 'client';
+  const match = extId.match(/\|role:([^|]+)/);
+  return match ? match[1] : 'client';
 }
 
 /**
@@ -69,7 +81,7 @@ export async function isEmailRegistered(boxClient, email) {
   const normalizedEmail = email.toLowerCase();
   return (allUsers.entries || []).some((u) => {
     const extId = u.externalAppUserId || '';
-    const match = extId.match(/\|em:(.+)$/);
+    const match = extId.match(/\|em:([^|]+)/);
     return match && match[1] === normalizedEmail;
   });
 }

@@ -33,7 +33,7 @@ export class OnboardingService {
         login: email,
         isPlatformAccessOnly: true,
         spaceAmount,
-        externalAppUserId: buildExternalId(password, email),
+        externalAppUserId: buildExternalId(password, email, 'client'),
       };
       const user = await client.users.createUser(createBody);
       return {
