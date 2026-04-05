@@ -4,6 +4,19 @@ import { requireAuth, requireRole } from '../middleware/authMiddleware.js';
 
 const router = express.Router();
 
+/**
+ * GET /api/employees
+ * Lists all employees (for dropdowns, assignment, etc.)
+ */
+router.get('/', requireAuth, requireRole('superadmin', 'employee', 'cxo'), async (req, res, next) => {
+  try {
+    const employees = await employeeService.listEmployees();
+    res.json(employees);
+  } catch (error) {
+    next(error);
+  }
+});
+
 router.post('/', requireAuth, requireRole('superadmin'), async (req, res, next) => {
   try {
     const { name, email, role, password } = req.body;

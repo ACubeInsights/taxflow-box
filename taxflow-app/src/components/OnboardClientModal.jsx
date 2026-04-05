@@ -1,7 +1,7 @@
-import { useState } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
-import { X, UserPlus, Loader2, CheckCircle2, AlertCircle } from 'lucide-react'
-import { onboardingApi } from '../services/api'
+import { X, UserPlus, Loader2, CheckCircle2, AlertCircle, ChevronDown } from 'lucide-react'
+import { onboardingApi, employeeApi } from '../services/api'
 import { useAuth } from '../context/AuthContext.jsx'
 import FloatingLabel from './FloatingLabel'
 
@@ -18,6 +18,31 @@ export default function OnboardClientModal({ open, onClose, onSuccess }) {
   const [loading, setLoading] = useState(false)
   const [result, setResult] = useState(null)
   const [error, setError] = useState(null)
+
+  // Employee dropdown state
+  const [employees, setEmployees] = useState([])
+  const [empSearch, setEmpSearch] = useState('')
+  const [empDropdownOpen, setEmpDropdownOpen] = useState(false)
+  const empRef = useRef(null)
+
+  // Fetch employees on mount (for super admin)
+  useEffect(() => {
+    if (!isEmployee && open) {
+      employeeApi.listEmployees().then(setEmployees).catch(() => setEmployees([]))
+    }
+  }, [open, isEmployee])
+
+  // Close dropdown on outside click
+  useEffect(() => {
+    const handler = (e) => { if (empRef.current && !empRef.current.contains(e.target)) setEmpDropdownOpen(false) }
+    document.addEventListener('mousedown', handler)
+    return () => document.removeEventListener('mousedown', handler)
+  }, [])
+
+  const filteredEmployees = employees.filter((emp) => {
+    const q = empSearch.toLowerCase()
+    return emp.name.toLowerCase().includes(q) || emp.email.toLowerCase().includes(q)
+  })
 
   const isValid = clientName.trim() && externalId.trim() && email.trim() && password.trim().length >= 6 && employeeEmail.trim()
 
@@ -139,13 +164,54 @@ export default function OnboardClientModal({ open, onClose, onSuccess }) {
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
                 />
-                <FloatingLabel
-                  label={isEmployee ? 'Assigned Employee (you)' : 'Assigned Employee Email'}
-                  type="email"
-                  value={employeeEmail}
-                  onChange={(e) => !isEmployee && setEmployeeEmail(e.target.value)}
-                  disabled={isEmployee}
-                />
+                {isEmployee ? (
+                  <FloatingLabel
+                    label="Assigned Employee (you)"
+                    type="email"
+                    value={employeeEmail}
+                    disabled
+                  />
+                ) : (
+                  <div ref={empRef} className="relative">
+                    <div
+                      className="flex items-center gap-2 px-4 py-3.5 rounded-xl border border-[var(--color-outline-variant)] bg-[var(--color-surface-high)] cursor-pointer transition-colors hover:border-[var(--color-primary)]"
+                      onClick={() => setEmpDropdownOpen(!empDropdownOpen)}
+                    >
+                      <input
+                        type="text"
+                        placeholder="Search employee..."
+                        value={empDropdownOpen ? empSearch : (employeeEmail ? employees.find(e => e.email === employeeEmail)?.name || employeeEmail : '')}
+                        onChange={(e) => { setEmpSearch(e.target.value); setEmpDropdownOpen(true) }}
+                        onFocus={() => setEmpDropdownOpen(true)}
+                        className="flex-1 bg-transparent border-none outline-none text-[14px] text-[var(--color-on-surface)] placeholder:text-[var(--color-on-surface-variant)]"
+                      />
+                      <ChevronDown size={16} className={`text-[var(--color-on-surface-variant)] transition-transform ${empDropdownOpen ? 'rotate-180' : ''}`} />
+                    </div>
+                    {employeeEmail && !empDropdownOpen && (
+                      <p className="m-0 mt-1 text-[10px] text-[var(--color-on-surface-variant)] pl-1">{employeeEmail}</p>
+                    )}
+                    {empDropdownOpen && (
+                      <div className="absolute z-50 top-full left-0 right-0 mt-1 max-h-48 overflow-y-auto rounded-xl border border-[var(--color-outline-variant)] bg-[var(--color-surface-container)] shadow-lg">
+                        {filteredEmployees.length === 0 ? (
+                          <div className="px-4 py-3 text-[12px] text-[var(--color-on-surface-variant)]">
+                            {employees.length === 0 ? 'No employees found. Create one first.' : 'No match'}
+                          </div>
+                        ) : filteredEmployees.map((emp) => (
+                          <button
+                            key={emp.id}
+                            type="button"
+                            onClick={() => { setEmployeeEmail(emp.email); setEmpSearch(''); setEmpDropdownOpen(false) }}
+                            className="w-full text-left px-4 py-2.5 text-[13px] border-none bg-transparent cursor-pointer hover:bg-[var(--color-surface-highest)] transition-colors"
+                            style={{ color: 'var(--color-on-surface)' }}
+                          >
+                            <span className="font-medium">{emp.name}</span>
+                            <span className="ml-2 text-[11px] text-[var(--color-on-surface-variant)]">{emp.email}</span>
+                          </button>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                )}
                 <FloatingLabel
                   label="Financial Year"
                   type="text"

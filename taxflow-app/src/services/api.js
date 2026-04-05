@@ -70,6 +70,9 @@ export const employeeApi = {
       body: JSON.stringify({ name, email, role, password }),
     });
   },
+  async listEmployees() {
+    return apiRequest('/employees');
+  },
 };
 
 /**

@@ -6,9 +6,36 @@
  */
 
 import boxService from './boxService.js';
-import { buildExternalId, isEmailRegistered } from '../utils/authUtils.js';
+import { buildExternalId, isEmailRegistered, extractOriginalEmail, extractRole } from '../utils/authUtils.js';
 
 export class EmployeeService {
+  /**
+   * Lists all employees (users with role 'employee' or 'cxo' in externalAppUserId).
+   * @returns {Promise<Array<{ id: string, name: string, email: string, role: string }>>}
+   */
+  async listEmployees() {
+    const client = boxService.getBoxClient();
+    const allUsers = await client.users.getUsers({
+      userType: 'all',
+      fields: ['id', 'name', 'external_app_user_id'],
+    });
+    return (allUsers.entries || [])
+      .filter((u) => {
+        const extId = u.externalAppUserId || '';
+        const role = extractRole(extId);
+        return role === 'employee' || role === 'cxo';
+      })
+      .map((u) => {
+        const extId = u.externalAppUserId || '';
+        return {
+          id: u.id,
+          name: u.name,
+          email: extractOriginalEmail(extId) || '',
+          role: extractRole(extId),
+        };
+      });
+  }
+
   /**
    * Creates a Box managed user for a new employee.
    *
