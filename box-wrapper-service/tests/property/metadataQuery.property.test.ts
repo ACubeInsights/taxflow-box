@@ -22,7 +22,7 @@ vi.mock('fs', () => ({
   ),
 }));
 
-const mockSearchByMetadataQuery = vi.fn();
+const mockExecuteRead = vi.fn();
 const mockGetMetadataTemplate = vi.fn();
 
 vi.mock('box-node-sdk', () => ({
@@ -35,7 +35,8 @@ vi.mock('box-node-sdk', () => ({
     folderMetadata: { createFolderMetadataById: vi.fn() },
     metadataCascadePolicies: { createMetadataCascadePolicy: vi.fn() },
     metadataTemplates: { getMetadataTemplate: mockGetMetadataTemplate },
-    search: { searchByMetadataQuery: mockSearchByMetadataQuery },
+    metadataQueries: { executeRead: mockExecuteRead },
+    search: { searchByMetadataQuery: vi.fn() },
   })),
 }));
 
@@ -56,7 +57,7 @@ describe('Property 7: Metadata query construction and result mapping', () => {
           vi.clearAllMocks();
 
           mockGetMetadataTemplate.mockResolvedValue({ templateKey: 'taxFlowClientProfile' });
-          mockSearchByMetadataQuery.mockResolvedValue({
+          mockExecuteRead.mockResolvedValue({
             entries: [{ id: folderId, name: folderName, type: 'folder' }],
           });
 
@@ -64,10 +65,10 @@ describe('Property 7: Metadata query construction and result mapping', () => {
           await service.syncMetadataSchema();
           const result = await service.findVaultByExternalId(externalId);
 
-          // Verify searchByMetadataQuery was called with correct parameters
-          expect(mockSearchByMetadataQuery).toHaveBeenCalledOnce();
-          const queryArg = mockSearchByMetadataQuery.mock.calls[0][0];
-          expect(queryArg.from).toBe('enterprise.taxFlowClientProfile');
+          // Verify executeRead was called with correct parameters
+          expect(mockExecuteRead).toHaveBeenCalledOnce();
+          const queryArg = mockExecuteRead.mock.calls[0][0];
+          expect(queryArg.from).toBe('enterprise_taxFlowClientProfile');
           expect(queryArg.query).toBe('client_external_id = :id');
           expect(queryArg.queryParams).toEqual({ id: externalId });
 

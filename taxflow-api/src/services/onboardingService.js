@@ -118,11 +118,13 @@ export class OnboardingService {
 
   /**
    * Applies folder locks to root, SignedDocuments, and InternalNotes.
-   * Continues on individual failure.
+   * On enterprise tier: any failure is fatal — throws an exception halting onboarding.
+   * On free tier: failures are non-fatal — logs warning, continues.
    * @param {{root: string, signedDocuments: string, internalNotes: string}} manifest
+   * @param {string} [tier='free'] - Detected Box tier ('enterprise' or 'free')
    * @returns {Promise<Array<{folderId: string, lockId: string, success: boolean, error?: string}>>}
    */
-  async applyFolderLocks(manifest) {
+  async applyFolderLocks(manifest, tier = 'free') {
     const client = boxService.getBoxClient();
     const foldersToLock = [
       manifest.root,
@@ -143,6 +145,16 @@ export class OnboardingService {
         results.push({ folderId, lockId: null, success: false, error: error.message });
       }
     }
+
+    // On enterprise tier, any failure is fatal
+    if (tier === 'enterprise') {
+      const failed = results.filter(r => !r.success);
+      if (failed.length > 0) {
+        const failedIds = failed.map(r => r.folderId).join(', ');
+        throw new Error(`Folder lock enforcement failed on enterprise tier. Failed folder IDs: ${failedIds}`);
+      }
+    }
+
     return results;
   }
 
@@ -151,13 +163,16 @@ export class OnboardingService {
    * Client App User: Uploads→viewer_uploader, Tax→viewer, SignedDocuments→viewer
    * Employee: root→editor
    * NO client access to InternalNotes.
-   * Handles 409 conflicts gracefully.
+   * Handles 409 conflicts gracefully (treated as success on both tiers).
+   * On enterprise tier: any non-409 failure is fatal — throws with failed folder IDs and roles.
+   * On free tier: failures are non-fatal — logs warning, continues.
    * @param {{root: string, tax: string, uploads: string, signedDocuments: string}} manifest
    * @param {string} appUserId - Box App User ID for the client
    * @param {string} employeeEmail - Assigned employee email
+   * @param {string} [tier='free'] - Detected Box tier ('enterprise' or 'free')
    * @returns {Promise<Array<{folderId: string, role: string, success: boolean, error?: string}>>}
    */
-  async setupCollaborations(manifest, appUserId, employeeEmail) {
+  async setupCollaborations(manifest, appUserId, employeeEmail, tier = 'free') {
     const client = boxService.getBoxClient();
 
     // Client App User collaborations (by user ID)
@@ -185,7 +200,7 @@ export class OnboardingService {
         results.push({ folderId, role, success: true });
       } catch (error) {
         if (error.statusCode === 409) {
-          // Already exists — treat as success
+          // Already exists — treat as success on both tiers
           results.push({ folderId, role, success: true });
         } else {
           results.push({ folderId, role, success: false, error: error.message });
@@ -208,6 +223,15 @@ export class OnboardingService {
         } else {
           results.push({ folderId, role, success: false, error: error.message });
         }
+      }
+    }
+
+    // On enterprise tier, any non-409 failure is fatal
+    if (tier === 'enterprise') {
+      const failed = results.filter(r => !r.success);
+      if (failed.length > 0) {
+        const failedDetails = failed.map(r => `${r.folderId} (${r.role})`).join(', ');
+        throw new Error(`Collaboration enforcement failed on enterprise tier. Failed: ${failedDetails}`);
       }
     }
 
@@ -251,18 +275,22 @@ export class OnboardingService {
   /**
    * Full client onboarding orchestrator.
    * Chains: App User → folder hierarchy → folder locks → collaborations → webhook → file request.
+   * Receives tier from boxService.getTier() and passes it to each tier-aware phase.
+   * Enterprise: phases 3 (locks) and 4 (collaborations) are mandatory — errors propagate.
+   * Free: phases 3 and 4 are non-fatal — catch, warn, continue.
    * @param {string} clientName
    * @param {string} externalId
    * @param {string} email - Client email
    * @param {string} employeeEmail - Assigned employee email
    * @param {string} [financialYear] - Tax year (defaults to current year)
-   * @returns {Promise<{appUser: object, folders: object, locks: Array, collaborations: Array, webhookId: string|null, fileRequestUrl: string|null}>}
+   * @returns {Promise<{appUser: object, folders: object, locks: Array, collaborations: Array, webhookId: string|null, fileRequestUrl: string|null, tier: string}>}
    */
   async onboardClient(clientName, externalId, email, employeeEmail, financialYear, password) {
     if (!email) throw new Error('Client email is required for onboarding');
     if (!password) throw new Error('Client password is required for onboarding');
 
     const year = financialYear || new Date().getFullYear().toString();
+    const tier = boxService.getTier();
 
     // Phase 1: Create App User
     console.log('[Onboarding] Phase 1: Creating App User...');
@@ -279,28 +307,50 @@ export class OnboardingService {
     );
     console.log('[Onboarding] Phase 2 complete: root=', folders.root);
 
-    // Phase 3: Apply folder locks (non-fatal — may not be available on free accounts)
+    // Phase 3: Apply folder locks
+    // Enterprise: mandatory — let errors propagate
+    // Free: non-fatal — catch, warn, continue
     let locks = [];
-    try {
-      console.log('[Onboarding] Phase 3: Applying folder locks...');
-      locks = await this.applyFolderLocks(folders);
+    if (tier === 'enterprise') {
+      console.log('[Onboarding] Phase 3: Applying folder locks (enterprise — mandatory)...');
+      locks = await this.applyFolderLocks(folders, tier);
       console.log('[Onboarding] Phase 3 complete');
-    } catch (error) {
-      console.warn('[Onboarding] Phase 3 skipped (folder locks):', error.message);
+    } else {
+      try {
+        console.log('[Onboarding] Phase 3: Applying folder locks...');
+        locks = await this.applyFolderLocks(folders, tier);
+        console.log('[Onboarding] Phase 3 complete');
+      } catch (error) {
+        console.warn('[Onboarding] Phase 3 skipped (folder locks):', error.message);
+      }
     }
 
-    // Phase 4: Setup collaborations (non-fatal)
+    // Phase 4: Setup collaborations
+    // Enterprise: mandatory — let errors propagate
+    // Free: non-fatal — catch, warn, continue
     let collaborations = [];
-    try {
-      console.log('[Onboarding] Phase 4: Setting up collaborations...');
+    if (tier === 'enterprise') {
+      console.log('[Onboarding] Phase 4: Setting up collaborations (enterprise — mandatory)...');
       collaborations = await this.setupCollaborations(
         folders,
         appUser.userId,
-        employeeEmail
+        employeeEmail,
+        tier
       );
       console.log('[Onboarding] Phase 4 complete');
-    } catch (error) {
-      console.warn('[Onboarding] Phase 4 skipped (collaborations):', error.message);
+    } else {
+      try {
+        console.log('[Onboarding] Phase 4: Setting up collaborations...');
+        collaborations = await this.setupCollaborations(
+          folders,
+          appUser.userId,
+          employeeEmail,
+          tier
+        );
+        console.log('[Onboarding] Phase 4 complete');
+      } catch (error) {
+        console.warn('[Onboarding] Phase 4 skipped (collaborations):', error.message);
+      }
     }
 
     // Phase 5: Register webhook (non-fatal)
@@ -343,6 +393,7 @@ export class OnboardingService {
       collaborations,
       webhookId,
       fileRequestUrl,
+      tier,
     };
   }
 }

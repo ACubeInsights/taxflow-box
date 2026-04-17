@@ -24,7 +24,7 @@ const mockCreateFolder = vi.fn();
 const mockCreateFolderMetadata = vi.fn();
 const mockCreateCascadePolicy = vi.fn();
 const mockGetMetadataTemplate = vi.fn();
-const mockSearchByMetadataQuery = vi.fn();
+const mockExecuteRead = vi.fn();
 
 vi.mock('box-node-sdk', () => ({
   JwtConfig: {
@@ -36,7 +36,8 @@ vi.mock('box-node-sdk', () => ({
     folderMetadata: { createFolderMetadataById: mockCreateFolderMetadata },
     metadataCascadePolicies: { createMetadataCascadePolicy: mockCreateCascadePolicy },
     metadataTemplates: { getMetadataTemplate: mockGetMetadataTemplate },
-    search: { searchByMetadataQuery: mockSearchByMetadataQuery },
+    metadataQueries: { executeRead: mockExecuteRead },
+    search: { searchByMetadataQuery: vi.fn() },
   })),
 }));
 
@@ -92,7 +93,7 @@ describe('BoxWrapperService', () => {
 
   describe('findVaultByExternalId() returns null when no results (Req 4.3)', () => {
     it('returns null when entries array is empty', async () => {
-      mockSearchByMetadataQuery.mockResolvedValue({ entries: [] });
+      mockExecuteRead.mockResolvedValue({ entries: [] });
 
       const result = await service.findVaultByExternalId('nonexistent-id');
 
@@ -100,7 +101,7 @@ describe('BoxWrapperService', () => {
     });
 
     it('returns null when entries is undefined', async () => {
-      mockSearchByMetadataQuery.mockResolvedValue({});
+      mockExecuteRead.mockResolvedValue({});
 
       const result = await service.findVaultByExternalId('nonexistent-id');
 
@@ -110,7 +111,7 @@ describe('BoxWrapperService', () => {
 
   describe('findVaultByExternalId() throws descriptive error on API failure (Req 4.4)', () => {
     it('throws error containing the externalId on API failure', async () => {
-      mockSearchByMetadataQuery.mockRejectedValue(new Error('Network timeout'));
+      mockExecuteRead.mockRejectedValue(new Error('Network timeout'));
 
       await expect(
         service.findVaultByExternalId('ext-abc'),

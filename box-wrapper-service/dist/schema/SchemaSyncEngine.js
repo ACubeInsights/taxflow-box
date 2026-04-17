@@ -1,5 +1,4 @@
 const TEMPLATE_KEY = 'taxFlowClientProfile';
-const TEMPLATE_SCOPE = 'global'; // Changed from 'enterprise' to 'global' for free developer accounts
 const TEMPLATE_FIELDS = [
     { type: 'string', key: 'client_external_id', displayName: 'Client External ID' },
     { type: 'string', key: 'client_email', displayName: 'Client Email' },
@@ -18,20 +17,24 @@ const TEMPLATE_FIELDS = [
 ];
 export class SchemaSyncEngine {
     client;
-    constructor(client) {
+    scope;
+    constructor(client, scope = 'enterprise') {
         this.client = client;
+        this.scope = scope;
     }
     /**
-     * Creates or verifies the taxFlowClientProfile template.
-     * @throws Error on unexpected failures (non-409 errors)
+     * Creates or verifies the taxFlowClientProfile template in the configured scope.
+     * When the template already exists, verifies all required fields are present.
+     * @throws Error on unexpected failures (non-409 errors), including scope, template key, and HTTP status
      */
     async sync() {
         console.log('[SchemaSyncEngine] Starting metadata template sync...');
-        console.log('[SchemaSyncEngine] Template:', TEMPLATE_SCOPE, TEMPLATE_KEY);
+        console.log('[SchemaSyncEngine] Template:', this.scope, TEMPLATE_KEY);
         try {
-            const existing = await this.client.metadataTemplates.getMetadataTemplate(TEMPLATE_SCOPE, TEMPLATE_KEY);
+            const existing = await this.client.metadataTemplates.getMetadataTemplate(this.scope, TEMPLATE_KEY);
             console.log('[SchemaSyncEngine] Template already exists:', existing);
-            // Template already exists — nothing to do
+            // Field discrepancy detection: compare existing fields against canonical definition
+            this.detectFieldDiscrepancies(existing);
             return;
         }
         catch (error) {
@@ -39,14 +42,14 @@ export class SchemaSyncEngine {
             console.log('[SchemaSyncEngine] GET template returned status:', statusCode);
             if (statusCode !== 404) {
                 const message = error instanceof Error ? error.message : String(error);
-                throw new Error(`Schema sync failed: ${message}`);
+                throw new Error(`Schema sync failed for template '${TEMPLATE_KEY}' in scope '${this.scope}': HTTP ${statusCode ?? 'unknown'} — ${message}`);
             }
             // 404 means template doesn't exist — proceed to create
             console.log('[SchemaSyncEngine] Template does not exist, creating...');
         }
         try {
             const created = await this.client.metadataTemplates.createMetadataTemplate({
-                scope: TEMPLATE_SCOPE,
+                scope: this.scope,
                 templateKey: TEMPLATE_KEY,
                 displayName: 'TaxFlow Client Profile',
                 fields: TEMPLATE_FIELDS.map((field) => ({
@@ -68,7 +71,7 @@ export class SchemaSyncEngine {
                 return;
             }
             const message = error instanceof Error ? error.message : String(error);
-            throw new Error(`Schema sync failed: ${message}`);
+            throw new Error(`Schema sync failed for template '${TEMPLATE_KEY}' in scope '${this.scope}': HTTP ${statusCode ?? 'unknown'} — ${message}`);
         }
     }
     /**
@@ -76,6 +79,24 @@ export class SchemaSyncEngine {
      */
     getTemplateFields() {
         return [...TEMPLATE_FIELDS];
+    }
+    /**
+     * Compares existing template fields against the canonical TEMPLATE_FIELDS definition.
+     * Logs a warning for any missing fields.
+     */
+    detectFieldDiscrepancies(existingTemplate) {
+        const existing = existingTemplate;
+        const existingFields = Array.isArray(existing?.fields) ? existing.fields : [];
+        const existingKeys = new Set(existingFields
+            .filter((f) => f !== null && typeof f === 'object')
+            .map((f) => f.key)
+            .filter((k) => typeof k === 'string'));
+        const missingKeys = TEMPLATE_FIELDS
+            .map((f) => f.key)
+            .filter((key) => !existingKeys.has(key));
+        if (missingKeys.length > 0) {
+            console.warn(`[SchemaSyncEngine] Field discrepancy detected in template '${TEMPLATE_KEY}' (scope: ${this.scope}): missing fields: ${missingKeys.join(', ')}`);
+        }
     }
     getStatusCode(error) {
         // Try multiple ways to extract status code from Box SDK errors

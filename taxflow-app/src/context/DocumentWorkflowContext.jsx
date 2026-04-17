@@ -1,5 +1,5 @@
 import { useReducer, createContext, useContext, useState, useCallback } from 'react'
-import { vaultApi, onboardingApi, portalApi, reviewApi } from '../services/api.js'
+import { vaultApi, onboardingApi, portalApi, reviewApi, clientApi } from '../services/api.js'
 import { useAuth } from './AuthContext.jsx'
 import { DocumentStatus, VALID_TRANSITIONS } from '../constants/statusTransitions.js'
 import {
@@ -147,7 +147,35 @@ export function DocumentWorkflowProvider({ children }) {
   const [error, setError] = useState(null)
 
   /**
-   * Initialize or get client vault via onboarding API, then fetch progress.
+   * Look up an existing client vault by external ID.
+   * This is the primary path for clients who have already been onboarded.
+   */
+  const lookupVault = useCallback(async (externalId) => {
+    setVaultLoading(true)
+    setVaultError(null)
+    setError(null)
+
+    try {
+      const result = await clientApi.getVault(externalId)
+      if (result?.vault) {
+        setVault(result.vault)
+        return result.vault
+      }
+      return null
+    } catch (err) {
+      // 404 means vault doesn't exist yet — not an error
+      if (err.message?.includes('404') || err.message?.includes('not found')) {
+        return null
+      }
+      console.warn('Vault lookup failed:', err.message)
+      return null
+    } finally {
+      setVaultLoading(false)
+    }
+  }, [])
+
+  /**
+   * Initialize or get client vault. Tries lookup first, falls back to onboarding.
    * Uses the backend as the single source of truth — no fallback paths.
    */
   const initializeVault = useCallback(async (clientName, externalId, email, employeeEmail, financialYear) => {
@@ -156,6 +184,22 @@ export function DocumentWorkflowProvider({ children }) {
     setError(null)
     
     try {
+      // Step 1: Try to look up existing vault first
+      const existingVault = await lookupVault(externalId)
+      if (existingVault) {
+        // Fetch client progress to populate requests from backend
+        try {
+          const progress = await portalApi.getClientProgress(externalId)
+          if (progress?.documents?.length > 0) {
+            dispatch({ type: 'SET_REQUESTS', payload: { requests: progress.documents } })
+          }
+        } catch (progressErr) {
+          console.warn('Client progress fetch failed:', progressErr.message)
+        }
+        return existingVault
+      }
+
+      // Step 2: Vault doesn't exist — try onboarding (requires employee auth)
       const onboardingResult = await onboardingApi.onboardClient(
         clientName, externalId, email,
         employeeEmail || 'preparer@taxflow.com',
@@ -236,6 +280,7 @@ export function DocumentWorkflowProvider({ children }) {
       vaultError,
       error,
       initializeVault,
+      lookupVault,
       loadVaultFiles,
     }}>
       {children}

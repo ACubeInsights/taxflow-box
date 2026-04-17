@@ -22,6 +22,9 @@ export default function ClientUploadView({ request, onBack }) {
     })
   }
 
+  // Fallback folder ID for uploads when vault is not available (demo/dev mode)
+  const uploadFolderId = vault?.root || vault?.uploads || vault?.id || '0'
+
   const isUploadable =
     request.status === 'Pending' || request.status === 'Revision_Requested'
   const isUnderReview = request.status === 'Under_Review'
@@ -84,7 +87,7 @@ export default function ClientUploadView({ request, onBack }) {
             <UploadDropzone 
               onUpload={handleUpload} 
               disabled={false} 
-              folderId={vault?.id}
+              folderId={uploadFolderId}
               requestId={request.id}
             />
           </motion.div>
@@ -114,7 +117,7 @@ export default function ClientUploadView({ request, onBack }) {
               <UploadDropzone 
                 onUpload={handleUpload} 
                 disabled={true} 
-                folderId={vault?.id}
+                folderId={uploadFolderId}
                 requestId={request.id}
               />
             </div>

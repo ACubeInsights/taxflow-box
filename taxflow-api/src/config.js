@@ -14,6 +14,7 @@ export const config = {
   nodeEnv: process.env.NODE_ENV || 'development',
   boxConfigPath: resolve(__dirname, '../', boxConfigPath),
   boxRootFolderId: process.env.BOX_ROOT_FOLDER_ID || '0',
+  boxEnterpriseId: process.env.BOX_ENTERPRISE_ID || '',
   boxAdminEmail: process.env.BOX_ADMIN_EMAIL || '',
   frontendUrl: process.env.FRONTEND_URL || 'http://localhost:5173',
 

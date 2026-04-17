@@ -73,7 +73,13 @@ export default function ClientDashboard() {
   const [dragging, setDragging] = useState(false)
   const [uploaded, setUploaded] = useState([])
   const [selectedRequest, setSelectedRequest] = useState(null)
-  const { requests, vault, vaultLoading, initializeVault } = useDocumentWorkflow()
+  const { requests, vault, vaultLoading, initializeVault, lookupVault } = useDocumentWorkflow()
+  const { user } = useAuth() || {}
+
+  // Derive client external ID from logged-in user
+  const clientExternalId = user?.externalId || user?.id || 'client-1'
+  const clientName = user?.name || 'Client'
+  const clientEmail = user?.email || ''
 
   // API data state
   const [apiData, setApiData] = useState(null)
@@ -85,7 +91,7 @@ export default function ClientDashboard() {
     setApiLoading(true)
     setApiError(null)
     try {
-      const data = await portalApi.getClientProgress('client-1')
+      const data = await portalApi.getClientProgress(clientExternalId)
       setApiData(data)
     } catch (err) {
       console.warn('Client progress API failed, using fallback data:', err.message)
@@ -99,20 +105,28 @@ export default function ClientDashboard() {
     fetchProgress()
   }, [])
 
-  // Initialize vault on mount (simulating logged-in client)
+  // Initialize vault on mount — try lookup first, then onboarding
   useEffect(() => {
     const initVault = async () => {
       try {
-        await initializeVault('John Doe', 'client-1', 'john.doe@example.com')
+        // First try to look up existing vault by client's external ID
+        const existing = await lookupVault(clientExternalId)
+        if (existing) return
+
+        // If no vault found, try full initialization (requires employee auth)
+        await initializeVault(clientName, clientExternalId, clientEmail)
       } catch (error) {
-        console.error('Failed to initialize vault:', error)
+        console.warn('Vault initialization failed (expected in demo mode):', error.message)
       }
     }
     
     if (!vault && !vaultLoading) {
       initVault()
     }
-  }, [vault, vaultLoading, initializeVault])
+  }, [vault, vaultLoading, initializeVault, lookupVault, clientExternalId, clientName, clientEmail])
+
+  // Fallback folder ID for uploads when vault is not available (demo/dev mode)
+  const uploadFolderId = vault?.root || vault?.uploads || vault?.id || '0'
 
   // Derive display data from API or fallback
   const TAX_STEPS = apiData ? deriveSteps(apiData.statusCounts) : TAX_STEPS_FALLBACK
@@ -126,7 +140,7 @@ export default function ClientDashboard() {
       }))
     : PREPARER_REQUESTS_FALLBACK
 
-  const clientRequests = requests.filter(r => r.clientId === 'client-1')
+  const clientRequests = requests.filter(r => r.clientId === clientExternalId)
   const activeRequest = selectedRequest
     ? clientRequests.find(r => r.id === selectedRequest)
     : null
@@ -331,8 +345,8 @@ export default function ClientDashboard() {
           onUpload={(fileName, fileData) => {
             setUploaded(prev => [...prev, fileName])
           }}
-          disabled={!vault}
-          folderId={vault?.id}
+          disabled={false}
+          folderId={uploadFolderId}
         />
       </motion.div>
 

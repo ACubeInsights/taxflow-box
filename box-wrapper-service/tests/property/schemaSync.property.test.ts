@@ -1,5 +1,5 @@
 // Feature: box-wrapper-service, Property 3: Non-409 schema sync errors propagate
-// **Validates: Requirements 2.3, 2.4**
+// **Validates: Requirements 2.3, 2.4, 2.5**
 
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import fc from 'fast-check';
@@ -36,7 +36,7 @@ describe('Property 3: Non-409 schema sync errors propagate', () => {
     vi.clearAllMocks();
   });
 
-  it('non-409 error status codes during template creation cause sync() to throw', async () => {
+  it('non-409 error status codes during template creation cause sync() to throw with scope, template key, and status', async () => {
     await fc.assert(
       fc.asyncProperty(
         // Generate HTTP error status codes 400–599 excluding 409
@@ -49,9 +49,17 @@ describe('Property 3: Non-409 schema sync errors propagate', () => {
             createMetadataTemplate: vi.fn().mockRejectedValue(apiError(statusCode)),
           });
 
-          const engine = new SchemaSyncEngine(mockClient);
+          const engine = new SchemaSyncEngine(mockClient, 'enterprise');
 
-          await expect(engine.sync()).rejects.toThrow('Schema sync failed');
+          try {
+            await engine.sync();
+            expect.fail('Expected sync() to throw');
+          } catch (e: unknown) {
+            const msg = (e as Error).message;
+            expect(msg).toContain('enterprise');
+            expect(msg).toContain('taxFlowClientProfile');
+            expect(msg).toContain(String(statusCode));
+          }
         },
       ),
       { numRuns: 100 },
@@ -72,7 +80,7 @@ describe('Property 3: Non-409 schema sync errors propagate', () => {
             createMetadataTemplate: vi.fn().mockRejectedValue(apiError(statusCode)),
           });
 
-          const engine = new SchemaSyncEngine(mockClient);
+          const engine = new SchemaSyncEngine(mockClient, 'enterprise');
 
           // 409 should be treated as success — no error thrown
           await expect(engine.sync()).resolves.toBeUndefined();
@@ -82,7 +90,7 @@ describe('Property 3: Non-409 schema sync errors propagate', () => {
     );
   });
 
-  it('non-404 error status codes during template check also cause sync() to throw', async () => {
+  it('non-404 error status codes during template check cause sync() to throw with scope, template key, and status', async () => {
     await fc.assert(
       fc.asyncProperty(
         // Generate HTTP error status codes 400–599 excluding 404
@@ -94,9 +102,44 @@ describe('Property 3: Non-409 schema sync errors propagate', () => {
             getMetadataTemplate: vi.fn().mockRejectedValue(apiError(statusCode)),
           });
 
-          const engine = new SchemaSyncEngine(mockClient);
+          const engine = new SchemaSyncEngine(mockClient, 'enterprise');
 
-          await expect(engine.sync()).rejects.toThrow('Schema sync failed');
+          try {
+            await engine.sync();
+            expect.fail('Expected sync() to throw');
+          } catch (e: unknown) {
+            const msg = (e as Error).message;
+            expect(msg).toContain('enterprise');
+            expect(msg).toContain('taxFlowClientProfile');
+            expect(msg).toContain(String(statusCode));
+          }
+        },
+      ),
+      { numRuns: 100 },
+    );
+  });
+
+  it('error messages include scope when using a custom scope', async () => {
+    await fc.assert(
+      fc.asyncProperty(
+        fc.string({ minLength: 1, maxLength: 20 }).filter((s) => s.trim().length > 0),
+        fc.integer({ min: 400, max: 599 }).filter((code) => code !== 404),
+        async (scope, statusCode) => {
+          const mockClient = createMockClient({
+            getMetadataTemplate: vi.fn().mockRejectedValue(apiError(statusCode)),
+          });
+
+          const engine = new SchemaSyncEngine(mockClient, scope);
+
+          try {
+            await engine.sync();
+            expect.fail('Expected sync() to throw');
+          } catch (e: unknown) {
+            const msg = (e as Error).message;
+            expect(msg).toContain(scope);
+            expect(msg).toContain('taxFlowClientProfile');
+            expect(msg).toContain(String(statusCode));
+          }
         },
       ),
       { numRuns: 100 },
