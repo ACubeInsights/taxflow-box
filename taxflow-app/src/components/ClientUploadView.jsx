@@ -1,6 +1,7 @@
 import { motion } from 'framer-motion'
 import { ArrowLeft, Calendar, CheckCircle, Clock } from 'lucide-react'
 import { useDocumentWorkflow } from '../context/DocumentWorkflowContext'
+import { useAuth } from '../context/AuthContext'
 import { StatusBadge, Badge, GlassPanel } from './ui'
 import UploadDropzone from './UploadDropzone'
 import RevisionAlert from './RevisionAlert'
@@ -14,6 +15,7 @@ const PRIORITY_COLORS = {
 
 export default function ClientUploadView({ request, onBack }) {
   const { dispatch, vault } = useDocumentWorkflow()
+  const { user } = useAuth() || {}
 
   const handleUpload = (fileName) => {
     dispatch({
@@ -22,8 +24,8 @@ export default function ClientUploadView({ request, onBack }) {
     })
   }
 
-  // Fallback folder ID for uploads when vault is not available (demo/dev mode)
-  const uploadFolderId = vault?.root || vault?.uploads || vault?.id || '0'
+  // Use vault uploads folder from login response first, then context vault, or null
+  const uploadFolderId = vault?.uploads || user?.vault?.uploads || null
 
   const isUploadable =
     request.status === 'Pending' || request.status === 'Revision_Requested'

@@ -5,6 +5,7 @@ import { Search, AlertTriangle, RefreshCw, Users } from 'lucide-react'
 import { GlassPanel, PanelTitle, Badge } from './ui'
 import { projectApi } from '../services/api'
 import { saveFilters, loadFilters } from '../services/sessionFilters'
+import { useAuth } from '../context/AuthContext'
 
 const FILTER_KEY = '/dashboard:clientFilters'
 
@@ -27,6 +28,8 @@ const ENTITY_COLORS = {
 
 export default function ClientListPanel() {
   const navigate = useNavigate()
+  const { user } = useAuth()
+  const employeeId = user?.id || 'employee-1'
   const [clients, setClients] = useState([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState(null)
@@ -41,14 +44,14 @@ export default function ClientListPanel() {
     setLoading(true)
     setError(null)
     try {
-      const data = await projectApi.getEmployeeClients('employee-1')
+      const data = await projectApi.getEmployeeClients(employeeId)
       setClients(data.clients || data || [])
     } catch (err) {
       setError(err.message || 'Failed to load clients')
     } finally {
       setLoading(false)
     }
-  }, [])
+  }, [employeeId])
 
   useEffect(() => {
     fetchClients()

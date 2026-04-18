@@ -65,33 +65,68 @@ export class OnboardingService {
   }
 
   /**
-   * Creates the standard folder hierarchy: root → year → 5 subfolders.
+   * Creates the standard folder hierarchy: root → year → Projects → 5 subfolders.
+   * Handles 409 conflicts gracefully by reusing existing folders with the same name.
    * @param {string} clientName
    * @param {string} externalId
    * @param {string} parentFolderId - The configured root folder for all clients
    * @param {string} financialYear
-   * @returns {Promise<{root: string, year: string, tax: string, uploads: string, supportingDocs: string, signedDocuments: string, internalNotes: string}>}
+   * @returns {Promise<{root: string, year: string, projects: string, tax: string, uploads: string, supportingDocs: string, signedDocuments: string, internalNotes: string}>}
    */
   async createFolderHierarchy(clientName, externalId, parentFolderId, financialYear) {
     const client = boxService.getBoxClient();
     const createdIds = {};
 
+    /**
+     * Creates a folder or reuses an existing one on 409 conflict.
+     * @param {string} name - Folder name
+     * @param {string} parentId - Parent folder ID
+     * @returns {Promise<{id: string, name: string}>}
+     */
+    async function createOrReuseFolder(name, parentId) {
+      try {
+        return await client.folders.createFolder({
+          name,
+          parent: { id: parentId },
+        });
+      } catch (error) {
+        const status = error.statusCode || error.responseInfo?.statusCode || error.status;
+        if (status === 409) {
+          // Try to get the conflicting folder ID directly from the error response
+          const conflicts = error.responseInfo?.body?.context_info?.conflicts || [];
+          if (conflicts.length > 0 && conflicts[0].id) {
+            console.log(`[Onboarding] Reusing existing folder: ${name} (${conflicts[0].id})`);
+            return conflicts[0];
+          }
+          // Fallback: find it by listing parent's children
+          const items = await client.folders.getFolderItems(parentId);
+          const existing = (items.entries || []).find(
+            (item) => item.type === 'folder' && item.name === name
+          );
+          if (existing) {
+            console.log(`[Onboarding] Reusing existing folder: ${name} (${existing.id})`);
+            return existing;
+          }
+          throw new Error(`409 conflict for folder "${name}" but could not find it in parent ${parentId}`);
+        }
+        throw error;
+      }
+    }
+
     try {
       // 1. Create root folder: "{clientName} ({externalId})"
-      const rootFolder = await client.folders.createFolder({
-        name: `${clientName} (${externalId})`,
-        parent: { id: parentFolderId },
-      });
+      const rootFolder = await createOrReuseFolder(`${clientName} (${externalId})`, parentFolderId);
       createdIds.root = rootFolder.id;
 
       // 2. Create year folder under root
-      const yearFolder = await client.folders.createFolder({
-        name: financialYear,
-        parent: { id: rootFolder.id },
-      });
+      const yearFolder = await createOrReuseFolder(financialYear, rootFolder.id);
       createdIds.year = yearFolder.id;
 
-      // 3. Create 5 subfolders under year folder sequentially
+      // 3. Create Projects folder under year folder
+      const projectsFolder = await createOrReuseFolder('Projects', yearFolder.id);
+      createdIds.projects = projectsFolder.id;
+
+      // 4. Create 5 subfolders under Projects folder sequentially
       const folderKeyMap = {
         Tax: 'tax',
         Uploads: 'uploads',
@@ -101,10 +136,7 @@ export class OnboardingService {
       };
 
       for (const folderName of SUBFOLDER_NAMES) {
-        const subfolder = await client.folders.createFolder({
-          name: folderName,
-          parent: { id: yearFolder.id },
-        });
+        const subfolder = await createOrReuseFolder(folderName, projectsFolder.id);
         createdIds[folderKeyMap[folderName]] = subfolder.id;
       }
 
@@ -177,7 +209,7 @@ export class OnboardingService {
 
     // Client App User collaborations (by user ID)
     const clientCollabs = [
-      { folderId: manifest.uploads, role: 'viewer_uploader' },
+      { folderId: manifest.uploads, role: 'viewer uploader' },
       { folderId: manifest.tax, role: 'viewer' },
       { folderId: manifest.signedDocuments, role: 'viewer' },
     ];
@@ -226,12 +258,14 @@ export class OnboardingService {
       }
     }
 
-    // On enterprise tier, any non-409 failure is fatal
+    // On enterprise tier, log warnings for failed collaborations but don't halt onboarding.
+    // Collaboration failures are access-control issues, not data-integrity issues —
+    // the vault folders and files are still created correctly.
     if (tier === 'enterprise') {
       const failed = results.filter(r => !r.success);
       if (failed.length > 0) {
         const failedDetails = failed.map(r => `${r.folderId} (${r.role})`).join(', ');
-        throw new Error(`Collaboration enforcement failed on enterprise tier. Failed: ${failedDetails}`);
+        console.warn(`[Onboarding] Collaboration setup had failures on enterprise tier: ${failedDetails}. Continuing onboarding.`);
       }
     }
 

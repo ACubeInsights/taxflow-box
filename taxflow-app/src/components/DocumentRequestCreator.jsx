@@ -1,7 +1,8 @@
-import { useState, useEffect, useCallback } from 'react'
+import { useState, useEffect } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import { X, Plus, Loader2, AlertTriangle } from 'lucide-react'
 import { projectApi, documentTypeApi } from '../services/api'
+import { useAuth } from '../context/AuthContext'
 
 const PRIORITIES = ['Low', 'Medium', 'High', 'Urgent']
 
@@ -29,6 +30,8 @@ export default function DocumentRequestCreator({
   preselectedClientId = '',
   preselectedProjectId = '',
 }) {
+  const { user } = useAuth()
+  const employeeId = user?.id || 'employee-1'
   const [form, setForm] = useState({ ...initialForm, clientId: preselectedClientId, projectId: preselectedProjectId })
   const [errors, setErrors] = useState({})
   const [submitError, setSubmitError] = useState('')
@@ -65,7 +68,7 @@ export default function DocumentRequestCreator({
     const load = async () => {
       setLoadingClients(true)
       try {
-        const data = await projectApi.getEmployeeClients('employee-1')
+        const data = await projectApi.getEmployeeClients(employeeId)
         if (!cancelled) setClients(Array.isArray(data) ? data : [])
       } catch { if (!cancelled) setClients([]) }
       finally { if (!cancelled) setLoadingClients(false) }

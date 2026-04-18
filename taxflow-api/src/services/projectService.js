@@ -1,16 +1,12 @@
 /**
- * ProjectService — Client → Project → Document hierarchy with in-memory stores.
+ * ProjectService — Client → Project → Document hierarchy.
  *
- * - getEmployeeClients: Assigned clients with search/filter
- * - getClientProjects: Projects for a client with progress percentages
- * - getProjectDetail: Project detail with document list
- * - getProjectDocuments: Documents for a project with optional status filter
- * - createDocumentRequest: Create document request with version tracking
- * - checkDuplicate: Duplicate detection by projectId + documentType
- * - getEmployeeActivity: Last N actions sorted descending
- * - getEmployeeSummary: Summary metrics (activeClients, pendingReviews, overdueDocuments, awaitingClientAction)
+ * Supports two modes:
+ *   1. DB-backed: Uses ClientRepository, ProjectRepository, DocumentRequestRepository,
+ *      ActivityLogRepository, EmployeeClientRepository
+ *   2. In-memory fallback: Uses Maps/Arrays (for tests or when DB is not initialized)
  *
- * Requirements: 2.1, 2.2, 2.5, 3.1, 3.2, 3.3, 3.4, 4.3, 4.4, 4.5, 5.1, 5.3, 7.1, 7.4, 7.5, 13.1
+ * Requirements: 16.3, 16.7
  */
 
 const DOCUMENT_STATUSES = ['Not_Requested', 'Uploaded', 'Under_Review', 'Revision_Requested', 'Approved', 'Waived'];
@@ -43,7 +39,26 @@ export class ProjectService {
     this._documentIdCounter = 0;
     this._activityIdCounter = 0;
 
+    // Repository references (null until setRepositories is called)
+    this._clientRepo = null;
+    this._projectRepo = null;
+    this._docRepo = null;
+    this._activityRepo = null;
+    this._empClientRepo = null;
+
     this._seed();
+  }
+
+  /**
+   * Injects repository dependencies. Called after DB initialization.
+   * @param {{ clientRepo?: object, projectRepo?: object, docRequestRepo?: object, activityRepo?: object, empClientRepo?: object }} repos
+   */
+  setRepositories({ clientRepo, projectRepo, docRequestRepo, activityRepo, empClientRepo } = {}) {
+    if (clientRepo) this._clientRepo = clientRepo;
+    if (projectRepo) this._projectRepo = projectRepo;
+    if (docRequestRepo) this._docRepo = docRequestRepo;
+    if (activityRepo) this._activityRepo = activityRepo;
+    if (empClientRepo) this._empClientRepo = empClientRepo;
   }
 
   /**
@@ -79,12 +94,76 @@ export class ProjectService {
   /**
    * Registers a newly onboarded client into the project service.
    * Called after Box onboarding completes.
-   *
-   * @param {{ name: string, email: string, externalId: string, entityType?: string, boxFolderId: string, boxUserId: string }} data
-   * @param {string} employeeId - The employee who onboarded this client
-   * @returns {object} The created client record
    */
-  registerOnboardedClient(data, employeeId) {
+  async registerOnboardedClient(data, employeeId) {
+    if (this._clientRepo) {
+      return this._registerOnboardedClientDb(data, employeeId);
+    }
+    return this._registerOnboardedClientMem(data, employeeId);
+  }
+
+  /** @private DB-backed registerOnboardedClient — wrapped in a transaction */
+  async _registerOnboardedClientDb(data, employeeId) {
+    // Use a transaction so client + project + assignment + activity are atomic
+    const db = this._clientRepo.db;
+    return db.transaction(async (trx) => {
+      const client = await this._clientRepo.create({
+        name: data.name,
+        email: data.email,
+        entity_type: data.entityType || 'Individual',
+        engagement_status: 'Active',
+        box_folder_id: data.boxFolderId,
+        box_user_id: data.boxUserId,
+        external_id: data.externalId,
+      }, trx);
+
+      // Assign to the employee
+      try {
+        await this._empClientRepo.assign(employeeId, client.id, trx);
+      } catch (err) {
+        // Ignore duplicate assignment errors
+        if (!err.message?.includes('UNIQUE constraint')) throw err;
+      }
+
+      // Create a default project for the new client
+      const year = new Date().getFullYear();
+      const project = await this._projectRepo.create({
+        client_id: client.id,
+        name: `${year} Tax Return`,
+        description: `Tax filing for ${data.name}`,
+        status: 'Active',
+      }, trx);
+
+      await this._activityRepo.insert({
+        type: 'client_onboarded',
+        actor_id: employeeId,
+        actor_name: 'Employee',
+        document_id: null,
+        document_name: null,
+        client_id: client.id,
+        client_name: data.name,
+        description: `Onboarded new client ${data.name}`,
+        timestamp: new Date().toISOString(),
+      }, trx);
+
+      return {
+        id: client.id,
+        name: client.name,
+        email: client.email,
+        entityType: client.entity_type,
+        engagementStatus: client.engagement_status,
+        activeProjects: 0,
+        pendingActions: 0,
+        boxFolderId: client.box_folder_id,
+        boxUserId: client.box_user_id,
+        externalId: client.external_id,
+        projectId: project.id,
+      };
+    });
+  }
+
+  /** @private In-memory registerOnboardedClient */
+  _registerOnboardedClientMem(data, employeeId) {
     const id = `c${++this._clientIdCounter}`;
     const client = {
       id,
@@ -101,13 +180,11 @@ export class ProjectService {
 
     this._clients.set(id, client);
 
-    // Assign to the employee
     const existing = this._employeeClients.get(employeeId) || [];
     if (!existing.includes(id)) {
       this._employeeClients.set(employeeId, [...existing, id]);
     }
 
-    // Create a default project for the new client
     const projectId = `p${++this._projectIdCounter}`;
     const year = new Date().getFullYear();
     this._projects.set(projectId, {
@@ -137,10 +214,19 @@ export class ProjectService {
 
   /**
    * Returns ALL clients (for super admin). No employee filter.
-   *
-   * @returns {object[]} ClientSummary[]
    */
-  getAllClients() {
+  async getAllClients() {
+    if (this._clientRepo) {
+      const clients = await this._clientRepo.findAll();
+      const results = [];
+      for (const c of clients) {
+        const activeProjects = await this._projectRepo.countActiveByClientId(c.id);
+        const pendingActions = await this._docRepo.countPendingByClientId(c.id);
+        results.push(this._mapClientFromDb(c, activeProjects, pendingActions));
+      }
+      return results;
+    }
+
     return Array.from(this._clients.values()).map((c) => ({
       ...c,
       activeProjects: this._countActiveProjects(c.id),
@@ -150,19 +236,34 @@ export class ProjectService {
 
   /**
    * Returns clients assigned to an employee with optional search/filter.
-   * Only returns clients assigned to the given employee. (Reqs 3.1, 3.2, 3.4, 13.1)
-   *
-   * @param {string} employeeId
-   * @param {{ search?: string, status?: string, entityType?: string }} [filters]
-   * @returns {object[]} ClientSummary[]
    */
-  getEmployeeClients(employeeId, { search, status, entityType } = {}) {
+  async getEmployeeClients(employeeId, { search, status, entityType } = {}) {
+    if (this._empClientRepo) {
+      const clientIds = await this._empClientRepo.findClientIdsByEmployee(employeeId);
+      if (clientIds.length === 0) return [];
+
+      const filters = { search, status, entityType };
+      const allFiltered = await this._clientRepo.findByFilters(filters);
+
+      // Intersect with assigned client IDs
+      const assignedSet = new Set(clientIds);
+      const clients = allFiltered.filter((c) => assignedSet.has(c.id));
+
+      const results = [];
+      for (const c of clients) {
+        const activeProjects = await this._projectRepo.countActiveByClientId(c.id);
+        const pendingActions = await this._docRepo.countPendingByClientId(c.id);
+        results.push(this._mapClientFromDb(c, activeProjects, pendingActions));
+      }
+      return results;
+    }
+
+    // In-memory fallback
     const assignedIds = this._employeeClients.get(employeeId) || [];
     let clients = assignedIds
       .map((id) => this._clients.get(id))
       .filter(Boolean);
 
-    // Recompute dynamic fields from current data
     clients = clients.map((c) => ({
       ...c,
       activeProjects: this._countActiveProjects(c.id),
@@ -188,12 +289,22 @@ export class ProjectService {
   }
 
   /**
-   * Returns projects for a client with computed progress percentages. (Req 4.3)
-   *
-   * @param {string} clientId
-   * @returns {object[]} Project[]
+   * Returns projects for a client with computed progress percentages.
    */
-  getClientProjects(clientId) {
+  async getClientProjects(clientId) {
+    if (this._projectRepo) {
+      const projects = await this._projectRepo.findByClientId(clientId);
+      const results = [];
+      for (const p of projects) {
+        const stats = await this._docRepo.computeProjectStats(p.id);
+        results.push({
+          ...this._mapProjectFromDb(p),
+          ...stats,
+        });
+      }
+      return results;
+    }
+
     const projects = [];
     for (const p of this._projects.values()) {
       if (p.clientId === clientId) {
@@ -207,17 +318,27 @@ export class ProjectService {
   }
 
   /**
-   * Returns project detail with document list. (Req 4.3, 5.1)
-   *
-   * @param {string} projectId
-   * @param {{ statusFilter?: string | string[] }} [options]
-   * @returns {object | null} Project with documents, or null if not found
+   * Returns project detail with document list.
    */
-  getProjectDetail(projectId, { statusFilter } = {}) {
+  async getProjectDetail(projectId, { statusFilter } = {}) {
+    if (this._projectRepo) {
+      const project = await this._projectRepo.findById(projectId);
+      if (!project) return null;
+
+      const documents = await this.getProjectDocuments(projectId, { status: statusFilter });
+      const stats = await this._docRepo.computeProjectStats(projectId);
+
+      return {
+        ...this._mapProjectFromDb(project),
+        ...stats,
+        documents,
+      };
+    }
+
     const project = this._projects.get(projectId);
     if (!project) return null;
 
-    const documents = this.getProjectDocuments(projectId, { status: statusFilter });
+    const documents = await this.getProjectDocuments(projectId, { status: statusFilter });
     const stats = this._computeProjectStats(projectId);
 
     return {
@@ -228,13 +349,14 @@ export class ProjectService {
   }
 
   /**
-   * Returns documents for a project with optional status filter. (Reqs 5.1, 5.3)
-   *
-   * @param {string} projectId
-   * @param {{ status?: string | string[] }} [options]
-   * @returns {object[]} DocumentRequest[]
+   * Returns documents for a project with optional status filter.
    */
-  getProjectDocuments(projectId, { status } = {}) {
+  async getProjectDocuments(projectId, { status } = {}) {
+    if (this._docRepo) {
+      const docs = await this._docRepo.findByProjectId(projectId, { status });
+      return docs.map((d) => this._mapDocFromDb(d));
+    }
+
     let docs = [];
     for (const d of this._documents.values()) {
       if (d.projectId === projectId) {
@@ -251,19 +373,10 @@ export class ProjectService {
   }
 
   /**
-   * Creates a document request within a project. (Reqs 7.1, 7.4, 7.5)
-   *
-   * @param {string} projectId
-   * @param {{ name: string, description: string, priority: string, dueDate: string, documentType: string, isDraft: boolean }} data
-   * @returns {object} Created DocumentRequest
+   * Creates a document request within a project.
    */
-  createDocumentRequest(projectId, { name, description, priority, dueDate, documentType, isDraft }) {
-    const project = this._projects.get(projectId);
-    if (!project) {
-      throw createHttpError('Project not found', 404);
-    }
-
-    // Validate required fields (Req 7.4)
+  async createDocumentRequest(projectId, { name, description, priority, dueDate, documentType, isDraft }) {
+    // Validate required fields
     if (!name || !name.trim()) {
       throw createHttpError('Missing required field: name', 400);
     }
@@ -272,6 +385,63 @@ export class ProjectService {
     }
     if (!dueDate || !dueDate.trim()) {
       throw createHttpError('Missing required field: dueDate', 400);
+    }
+
+    if (this._docRepo) {
+      const project = await this._projectRepo.findById(projectId);
+      if (!project) {
+        throw createHttpError('Project not found', 404);
+      }
+
+      const now = new Date().toISOString();
+      const doc = await this._docRepo.create({
+        project_id: projectId,
+        client_id: project.client_id,
+        name: name.trim(),
+        description: (description || '').trim(),
+        document_type: documentType.trim(),
+        due_date: dueDate,
+        priority: priority || 'Medium',
+        status: 'Not_Requested',
+        version: 1,
+        is_draft: isDraft !== undefined ? isDraft : false,
+        created_by: 'employee-1',
+      });
+
+      // Record activity
+      const client = await this._clientRepo.findById(project.client_id);
+      await this._activityRepo.insert({
+        type: 'request_created',
+        actor_id: doc.created_by,
+        actor_name: 'Employee',
+        document_id: doc.id,
+        document_name: doc.name,
+        client_id: project.client_id,
+        client_name: client?.name || '',
+        description: `Created document request for ${doc.name}`,
+        timestamp: now,
+      });
+
+      // Send email notification to client when publishing (not draft)
+      if (!doc.is_draft) {
+        if (client && client.email) {
+          notificationService.dispatch('request_published', client.email, {
+            fileId: doc.id,
+            fileName: doc.name,
+            clientId: project.client_id,
+          }).catch((err) => {
+            console.error(`Publish notification failed for document ${doc.id}:`, err.message);
+          });
+        }
+      }
+
+      return this._mapDocFromDb(doc);
+    }
+
+    // In-memory fallback
+    const project = this._projects.get(projectId);
+    if (!project) {
+      throw createHttpError('Project not found', 404);
     }
 
     const now = new Date().toISOString();
@@ -294,12 +464,11 @@ export class ProjectService {
       isDraft: isDraft !== undefined ? isDraft : false,
       createdAt: now,
       updatedAt: now,
-      createdBy: 'employee-1', // default; in real usage, passed from auth context
+      createdBy: 'employee-1',
     };
 
     this._documents.set(id, doc);
 
-    // Record activity (Req 15.7 — audit trail)
     this._addActivity({
       type: 'request_created',
       actorId: doc.createdBy,
@@ -311,7 +480,6 @@ export class ProjectService {
       description: `Created document request for ${doc.name}`,
     });
 
-    // Send email notification to client when publishing (not draft) (Req 12.3)
     if (!doc.isDraft) {
       const client = this._clients.get(project.clientId);
       if (client && client.email) {
@@ -329,13 +497,17 @@ export class ProjectService {
   }
 
   /**
-   * Checks for duplicate document requests in a project. (Req 7.5)
-   *
-   * @param {string} projectId
-   * @param {string} documentType
-   * @returns {{ isDuplicate: boolean, existingDocument?: object }}
+   * Checks for duplicate document requests in a project.
    */
-  checkDuplicate(projectId, documentType) {
+  async checkDuplicate(projectId, documentType) {
+    if (this._docRepo) {
+      const result = await this._docRepo.checkDuplicate(projectId, documentType);
+      if (result.isDuplicate && result.existingDocument) {
+        return { isDuplicate: true, existingDocument: this._mapDocFromDb(result.existingDocument) };
+      }
+      return { isDuplicate: false };
+    }
+
     for (const d of this._documents.values()) {
       if (d.projectId === projectId && d.documentType === documentType) {
         return { isDuplicate: true, existingDocument: { ...d } };
@@ -345,32 +517,66 @@ export class ProjectService {
   }
 
   /**
-   * Returns employee activity feed, last N actions sorted descending. (Req 4.5)
-   *
-   * @param {string} employeeId
-   * @param {number} [limit=10]
-   * @returns {object[]} ActivityEntry[]
+   * Returns employee activity feed, last N actions sorted descending.
    */
-  getEmployeeActivity(employeeId, limit = 10) {
-    // Get client IDs assigned to this employee
+  async getEmployeeActivity(employeeId, limit = 10) {
+    if (this._activityRepo && this._empClientRepo) {
+      const clientIds = await this._empClientRepo.findClientIdsByEmployee(employeeId);
+      if (clientIds.length === 0) return [];
+
+      const activities = await this._activityRepo.findByClientIds(clientIds, { limit });
+      return activities.map((a) => this._mapActivityFromDb(a));
+    }
+
+    // In-memory fallback
     const assignedClientIds = new Set(this._employeeClients.get(employeeId) || []);
-
-    // Filter activities to those related to assigned clients
     const relevant = this._activities.filter((a) => assignedClientIds.has(a.clientId));
-
-    // Sort descending by timestamp
     relevant.sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp));
-
     return relevant.slice(0, limit);
   }
 
   /**
-   * Returns employee summary metrics. (Req 2.1, 2.5)
-   *
-   * @param {string} employeeId
-   * @returns {{ activeClients: number, pendingReviews: number, overdueDocuments: number, awaitingClientAction: number }}
+   * Returns employee summary metrics.
    */
-  getEmployeeSummary(employeeId) {
+  async getEmployeeSummary(employeeId) {
+    if (this._empClientRepo && this._clientRepo && this._docRepo) {
+      const clientIds = await this._empClientRepo.findClientIdsByEmployee(employeeId);
+      if (clientIds.length === 0) {
+        return { activeClients: 0, pendingReviews: 0, overdueDocuments: 0, awaitingClientAction: 0 };
+      }
+
+      let activeClients = 0;
+      for (const cid of clientIds) {
+        const client = await this._clientRepo.findById(cid);
+        if (client && client.engagement_status === 'Active') activeClients++;
+      }
+
+      // Get all documents for assigned clients
+      let pendingReviews = 0;
+      let overdueDocuments = 0;
+      let awaitingClientAction = 0;
+      const now = new Date();
+
+      for (const cid of clientIds) {
+        const docs = await this._docRepo.findByClientId(cid);
+        for (const doc of docs) {
+          if (doc.status === 'Uploaded' || doc.status === 'Under_Review') {
+            pendingReviews++;
+          }
+          if (doc.due_date && doc.status !== 'Approved' && doc.status !== 'Waived') {
+            const due = new Date(doc.due_date);
+            if (due < now) overdueDocuments++;
+          }
+          if (doc.status === 'Revision_Requested' || (doc.status === 'Not_Requested' && !doc.is_draft)) {
+            awaitingClientAction++;
+          }
+        }
+      }
+
+      return { activeClients, pendingReviews, overdueDocuments, awaitingClientAction };
+    }
+
+    // In-memory fallback
     const assignedIds = this._employeeClients.get(employeeId) || [];
     const assignedSet = new Set(assignedIds);
 
@@ -379,7 +585,6 @@ export class ProjectService {
     let overdueDocuments = 0;
     let awaitingClientAction = 0;
 
-    // Count active clients
     for (const cid of assignedIds) {
       const client = this._clients.get(cid);
       if (client && client.engagementStatus === 'Active') {
@@ -389,16 +594,13 @@ export class ProjectService {
 
     const now = new Date();
 
-    // Iterate documents for assigned clients
     for (const doc of this._documents.values()) {
       if (!assignedSet.has(doc.clientId)) continue;
 
-      // Pending reviews: documents in Uploaded or Under_Review status
       if (doc.status === 'Uploaded' || doc.status === 'Under_Review') {
         pendingReviews++;
       }
 
-      // Overdue: documents past due date that are not Approved or Waived
       if (doc.dueDate && doc.status !== 'Approved' && doc.status !== 'Waived') {
         const due = new Date(doc.dueDate);
         if (due < now) {
@@ -406,7 +608,6 @@ export class ProjectService {
         }
       }
 
-      // Awaiting client action: Revision_Requested or Not_Requested (published)
       if (doc.status === 'Revision_Requested' || (doc.status === 'Not_Requested' && !doc.isDraft)) {
         awaitingClientAction++;
       }
@@ -416,27 +617,42 @@ export class ProjectService {
   }
 
   /**
-   * Returns a single document by ID, or null if not found. (Req 12.1)
-   *
-   * @param {string} documentId
-   * @returns {object|null} DocumentRequest or null
+   * Returns a single document by ID, or null if not found.
    */
-  getDocument(documentId) {
+  async getDocument(documentId) {
+    if (this._docRepo) {
+      const doc = await this._docRepo.findById(documentId);
+      return doc ? this._mapDocFromDb(doc) : null;
+    }
+
     const doc = this._documents.get(documentId);
     return doc ? { ...doc } : null;
   }
 
   /**
-   * Updates a document's status with optimistic concurrency control. (Req 12.1)
-   * Increments version and sets updatedAt timestamp.
-   *
-   * @param {string} documentId
-   * @param {string} status - New status value
-   * @param {number} [version] - Expected version for concurrency check
-   * @param {object} [extra] - Additional fields to set (e.g., revisionComments)
-   * @returns {object} Updated document (copy)
+   * Updates a document's status with optimistic concurrency control.
    */
-  updateDocumentStatus(documentId, status, version, extra) {
+  async updateDocumentStatus(documentId, status, version, extra) {
+    if (this._docRepo) {
+      const dbExtra = {};
+      if (extra) {
+        if (extra.revisionComments !== undefined) dbExtra.revision_comments = extra.revisionComments;
+        if (extra.uploadedFileName !== undefined) dbExtra.uploaded_file_name = extra.uploadedFileName;
+        if (extra.fileId !== undefined) dbExtra.box_file_id = extra.fileId;
+      }
+
+      try {
+        const updated = await this._docRepo.updateStatus(documentId, status, version, dbExtra);
+        return this._mapDocFromDb(updated);
+      } catch (err) {
+        if (err.status === 409 || err.code === 'VERSION_CONFLICT') {
+          throw createHttpError('Version conflict: document has been modified by another user', 409);
+        }
+        throw err;
+      }
+    }
+
+    // In-memory fallback
     const doc = this._documents.get(documentId);
     if (!doc) {
       throw createHttpError('Document not found', 404);
@@ -458,32 +674,112 @@ export class ProjectService {
   }
 
   /**
-   * Returns a single client by ID, or null if not found. (Req 12.1)
-   *
-   * @param {string} clientId
-   * @returns {object|null} ClientSummary or null
+   * Returns a single client by ID, or null if not found.
    */
-  getClient(clientId) {
+  async getClient(clientId) {
+    if (this._clientRepo) {
+      const client = await this._clientRepo.findById(clientId);
+      return client ? this._mapClientFromDb(client) : null;
+    }
+
     const client = this._clients.get(clientId);
     return client ? { ...client } : null;
   }
 
   /**
-   * Records an activity entry. Public wrapper for internal _addActivity. (Req 12.1)
-   *
-   * @param {object} entry - Partial ActivityEntry (without id/timestamp)
-   * @returns {void}
+   * Records an activity entry. Public wrapper for internal _addActivity.
    */
-  addActivity(entry) {
+  async addActivity(entry) {
+    if (this._activityRepo) {
+      await this._activityRepo.insert({
+        type: entry.type,
+        actor_id: entry.actorId,
+        actor_name: entry.actorName,
+        document_id: entry.documentId,
+        document_name: entry.documentName,
+        client_id: entry.clientId,
+        client_name: entry.clientName,
+        description: entry.description,
+        timestamp: entry.timestamp || new Date().toISOString(),
+      });
+      return;
+    }
+
     this._addActivity(entry);
   }
 
-  // ─── Internal helpers ─────────────────────────────────────────────────
+  // ─── DB → App mapping helpers ─────────────────────────────────────
 
-  /**
-   * Adds an activity entry with auto-generated ID and timestamp.
-   * @param {object} entry - Partial ActivityEntry (without id/timestamp)
-   */
+  /** Maps a DB client row to the app-level client shape */
+  _mapClientFromDb(c, activeProjects = 0, pendingActions = 0) {
+    return {
+      id: c.id,
+      name: c.name,
+      email: c.email,
+      entityType: c.entity_type,
+      engagementStatus: c.engagement_status,
+      activeProjects,
+      pendingActions,
+      boxFolderId: c.box_folder_id,
+      boxUserId: c.box_user_id,
+      externalId: c.external_id,
+    };
+  }
+
+  /** Maps a DB project row to the app-level project shape */
+  _mapProjectFromDb(p) {
+    return {
+      id: p.id,
+      clientId: p.client_id,
+      name: p.name,
+      description: p.description,
+      status: p.status,
+      createdAt: p.created_at,
+      updatedAt: p.updated_at,
+    };
+  }
+
+  /** Maps a DB document row to the app-level document shape */
+  _mapDocFromDb(d) {
+    return {
+      id: d.id,
+      name: d.name,
+      description: d.description,
+      dueDate: d.due_date,
+      priority: d.priority,
+      status: d.status,
+      revisionComments: d.revision_comments,
+      uploadedFileName: d.uploaded_file_name,
+      fileId: d.box_file_id,
+      clientId: d.client_id,
+      projectId: d.project_id,
+      documentType: d.document_type,
+      version: d.version,
+      isDraft: d.is_draft,
+      createdAt: d.created_at,
+      updatedAt: d.updated_at,
+      createdBy: d.created_by,
+    };
+  }
+
+  /** Maps a DB activity row to the app-level activity shape */
+  _mapActivityFromDb(a) {
+    return {
+      id: a.id,
+      type: a.type,
+      actorId: a.actor_id,
+      actorName: a.actor_name,
+      documentId: a.document_id,
+      documentName: a.document_name,
+      clientId: a.client_id,
+      clientName: a.client_name,
+      description: a.description,
+      timestamp: a.timestamp,
+    };
+  }
+
+  // ─── Internal helpers (in-memory fallback) ────────────────────────
+
   _addActivity(entry) {
     this._activities.push({
       id: `a${++this._activityIdCounter}`,
@@ -492,11 +788,6 @@ export class ProjectService {
     });
   }
 
-  /**
-   * Counts active projects for a client.
-   * @param {string} clientId
-   * @returns {number}
-   */
   _countActiveProjects(clientId) {
     let count = 0;
     for (const p of this._projects.values()) {
@@ -505,11 +796,6 @@ export class ProjectService {
     return count;
   }
 
-  /**
-   * Counts pending actions for a client (documents needing employee attention).
-   * @param {string} clientId
-   * @returns {number}
-   */
   _countPendingActions(clientId) {
     let count = 0;
     for (const d of this._documents.values()) {
@@ -520,12 +806,6 @@ export class ProjectService {
     return count;
   }
 
-  /**
-   * Computes document count and progress percentage for a project.
-   * Progress = (Approved + Waived) / total * 100
-   * @param {string} projectId
-   * @returns {{ documentCount: number, progressPercentage: number }}
-   */
   _computeProjectStats(projectId) {
     let total = 0;
     let completed = 0;

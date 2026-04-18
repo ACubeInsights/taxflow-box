@@ -3,6 +3,7 @@ import { Users, Clock, AlertTriangle, FileText, RefreshCw } from 'lucide-react'
 import { motion } from 'framer-motion'
 import { StatCard, GlassPanel } from './ui'
 import { portalApi } from '../services/api'
+import { useAuth } from '../context/AuthContext'
 
 const STAT_CONFIG = [
   { key: 'activeClients', label: 'Active Clients', icon: Users, color: '#06b6d4' },
@@ -12,6 +13,8 @@ const STAT_CONFIG = [
 ]
 
 export default function SummaryBar() {
+  const { user } = useAuth()
+  const employeeId = user?.id || 'employee-1'
   const [summary, setSummary] = useState(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState(null)
@@ -20,14 +23,14 @@ export default function SummaryBar() {
     setLoading(true)
     setError(null)
     try {
-      const data = await portalApi.getEmployeeSummary('employee-1')
+      const data = await portalApi.getEmployeeSummary(employeeId)
       setSummary(data)
     } catch (err) {
       setError(err.message || 'Failed to load summary')
     } finally {
       setLoading(false)
     }
-  }, [])
+  }, [employeeId])
 
   useEffect(() => {
     fetchSummary()

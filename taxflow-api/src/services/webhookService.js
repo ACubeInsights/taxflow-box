@@ -1,11 +1,11 @@
 /**
  * WebhookService — Registers, verifies, and routes Box webhook events.
  *
- * - registerWebhook: POST /webhooks on a folder with FILE.UPLOADED, FILE.DELETED, FILE.MOVED triggers
- * - verifySignature: HMAC-SHA256 with constant-time comparison (primary then secondary)
- * - processEvent: Routes verified events to appropriate handlers
+ * Supports two modes:
+ *   1. DB-backed: Uses WebhookKeyRepository for persistence, in-memory Map as cache
+ *   2. In-memory only: Uses Map (for tests or when DB is not initialized)
  *
- * Requirements: 7.1, 7.2, 7.3, 7.4, 7.5, 8.1, 8.2, 8.3, 8.4, 8.5, 8.6
+ * Requirements: 13.2, 13.3, 16.7, 7.1-7.5, 8.1-8.6
  */
 
 import crypto from 'crypto';
@@ -22,15 +22,39 @@ export class WebhookService {
 
     /** @type {Map<string, (event: object) => Promise<void>>} */
     this._eventHandlers = new Map();
+
+    /** @type {import('../db/repositories/WebhookKeyRepository.js').WebhookKeyRepository | null} */
+    this._webhookKeyRepo = null;
+  }
+
+  /**
+   * Injects repository dependencies. Called after DB initialization.
+   * @param {{ webhookKeyRepo?: object }} repos
+   */
+  setRepositories({ webhookKeyRepo } = {}) {
+    if (webhookKeyRepo) this._webhookKeyRepo = webhookKeyRepo;
+  }
+
+  /**
+   * Loads all webhook keys from DB into the in-memory cache.
+   * Called during server startup after DB initialization.
+   */
+  async loadFromDb() {
+    if (!this._webhookKeyRepo) return;
+
+    const rows = await this._webhookKeyRepo.findAll();
+    for (const row of rows) {
+      this._webhookStore.set(row.folder_id, {
+        webhookId: row.webhook_id,
+        primaryKey: row.primary_key,
+        secondaryKey: row.secondary_key,
+      });
+    }
   }
 
   /**
    * Registers a webhook on a folder for file events.
    * Handles 409 conflict by treating it as success.
-   *
-   * @param {string} folderId - Box folder ID to watch
-   * @param {string[]} [triggers] - Event triggers (defaults to FILE.UPLOADED, FILE.DELETED, FILE.MOVED)
-   * @returns {Promise<{ webhookId: string, primaryKey: string, secondaryKey: string, address: string, triggers: string[] }>}
    */
   async registerWebhook(folderId, triggers = DEFAULT_TRIGGERS) {
     const client = boxService.getBoxClient();
@@ -51,16 +75,25 @@ export class WebhookService {
         triggers,
       };
 
-      // Store keys for signature verification (Req 7.2)
+      // Store keys in cache and DB
       this._webhookStore.set(folderId, {
         webhookId: registration.webhookId,
         primaryKey: registration.primaryKey,
         secondaryKey: registration.secondaryKey,
       });
 
+      if (this._webhookKeyRepo) {
+        await this._webhookKeyRepo.upsert(folderId, {
+          webhookId: registration.webhookId,
+          primaryKey: registration.primaryKey,
+          secondaryKey: registration.secondaryKey,
+        }).catch((err) => {
+          console.error(`Failed to persist webhook keys for folder ${folderId}:`, err.message);
+        });
+      }
+
       return registration;
     } catch (error) {
-      // Handle 409 conflict — webhook already exists (Req 7.4)
       if (error.statusCode === 409 || error.status === 409) {
         const existing = await this._getExistingWebhook(folderId);
         if (existing) {
@@ -68,12 +101,9 @@ export class WebhookService {
         }
       }
 
-      // Non-409 error — permanent client errors throw immediately,
-      // transient server errors get one retry via rateLimiter (Req 7.5)
       const statusCode = error.statusCode || error.status;
       console.error(`Webhook registration failed for folder ${folderId}: ${statusCode || 'unknown'} — ${error.message}`);
 
-      // Only retry on 5xx server errors or 429 rate limits
       if (statusCode >= 500 || statusCode === 429) {
         try {
           return await rateLimiter.enqueue(
@@ -89,10 +119,7 @@ export class WebhookService {
     }
   }
 
-  /**
-   * Single-attempt webhook registration (no retry). Used by the retry path.
-   * @private
-   */
+  /** @private */
   async _registerWebhookOnce(folderId, triggers = DEFAULT_TRIGGERS) {
     const client = boxService.getBoxClient();
     const address = config.webhookEndpointUrl;
@@ -113,14 +140,21 @@ export class WebhookService {
       primaryKey: registration.primaryKey,
       secondaryKey: registration.secondaryKey,
     });
+
+    if (this._webhookKeyRepo) {
+      await this._webhookKeyRepo.upsert(folderId, {
+        webhookId: registration.webhookId,
+        primaryKey: registration.primaryKey,
+        secondaryKey: registration.secondaryKey,
+      }).catch((err) => {
+        console.error(`Failed to persist webhook keys for folder ${folderId}:`, err.message);
+      });
+    }
+
     return registration;
   }
 
-  /**
-   * Retrieves an existing webhook for a folder.
-   * @param {string} folderId
-   * @returns {Promise<{ webhookId: string, primaryKey: string, secondaryKey: string, address: string, triggers: string[] } | null>}
-   */
+  /** @private */
   async _getExistingWebhook(folderId) {
     try {
       const client = boxService.getBoxClient();
@@ -146,6 +180,16 @@ export class WebhookService {
           secondaryKey: registration.secondaryKey,
         });
 
+        if (this._webhookKeyRepo) {
+          await this._webhookKeyRepo.upsert(folderId, {
+            webhookId: registration.webhookId,
+            primaryKey: registration.primaryKey,
+            secondaryKey: registration.secondaryKey,
+          }).catch((err) => {
+            console.error(`Failed to persist webhook keys for folder ${folderId}:`, err.message);
+          });
+        }
+
         return registration;
       }
     } catch (err) {
@@ -156,17 +200,8 @@ export class WebhookService {
 
   /**
    * Verifies webhook payload using HMAC-SHA256 with constant-time comparison.
-   * Checks primary key first, falls back to secondary. (Reqs 8.2, 8.3, 8.4, 8.6)
-   *
-   * @param {Buffer} body - Raw request body
-   * @param {string} primarySignature - BOX-SIGNATURE-PRIMARY header value
-   * @param {string} secondarySignature - BOX-SIGNATURE-SECONDARY header value
-   * @param {string} primaryKey - Stored primary signature key
-   * @param {string} secondaryKey - Stored secondary signature key
-   * @returns {boolean} true if signature is valid
    */
   verifySignature(body, primarySignature, secondarySignature, primaryKey, secondaryKey) {
-    // Check primary key first (Req 8.3)
     if (primaryKey && primarySignature) {
       const computedPrimary = crypto
         .createHmac('sha256', primaryKey)
@@ -178,7 +213,6 @@ export class WebhookService {
       }
     }
 
-    // Fall back to secondary key (Req 8.4)
     if (secondaryKey && secondarySignature) {
       const computedSecondary = crypto
         .createHmac('sha256', secondaryKey)
@@ -193,18 +227,12 @@ export class WebhookService {
     return false;
   }
 
-  /**
-   * Constant-time string comparison to prevent timing attacks. (Req 8.6)
-   * @param {string} a
-   * @param {string} b
-   * @returns {boolean}
-   */
+  /** @private */
   _timingSafeCompare(a, b) {
     const bufA = Buffer.from(a, 'utf8');
     const bufB = Buffer.from(b, 'utf8');
 
     if (bufA.length !== bufB.length) {
-      // Still do a comparison to avoid leaking length info via timing
       const dummy = Buffer.alloc(bufA.length);
       crypto.timingSafeEqual(bufA, dummy);
       return false;
@@ -215,8 +243,6 @@ export class WebhookService {
 
   /**
    * Registers an event handler for a specific event type.
-   * @param {string} eventType - e.g. 'FILE.UPLOADED', 'SIGN_REQUEST.COMPLETED'
-   * @param {(event: object) => Promise<void>} handler
    */
   registerHandler(eventType, handler) {
     this._eventHandlers.set(eventType, handler);
@@ -224,10 +250,6 @@ export class WebhookService {
 
   /**
    * Routes verified webhook events to appropriate handlers.
-   * FILE.UPLOADED → postUploadPipeline
-   * SIGN_REQUEST.* → signService (when available)
-   *
-   * @param {object} event - Parsed webhook event payload
    */
   async processEvent(event) {
     const eventType = event.trigger || event.type;
@@ -237,14 +259,12 @@ export class WebhookService {
       return;
     }
 
-    // Check for exact match first
     const handler = this._eventHandlers.get(eventType);
     if (handler) {
       await handler(event);
       return;
     }
 
-    // Check for wildcard prefix match (e.g. SIGN_REQUEST.* matches SIGN_REQUEST.COMPLETED)
     for (const [pattern, wildcardHandler] of this._eventHandlers) {
       if (pattern.endsWith('.*')) {
         const prefix = pattern.slice(0, -2);
@@ -260,16 +280,13 @@ export class WebhookService {
 
   /**
    * Retrieves stored webhook keys for a folder.
-   * @param {string} folderId
-   * @returns {{ webhookId: string, primaryKey: string, secondaryKey: string } | undefined}
    */
   getWebhookKeys(folderId) {
     return this._webhookStore.get(folderId);
   }
 
   /**
-   * Retrieves all stored webhook keys (for signature verification when folder ID is unknown).
-   * @returns {Array<{ folderId: string, webhookId: string, primaryKey: string, secondaryKey: string }>}
+   * Retrieves all stored webhook keys.
    */
   getAllWebhookKeys() {
     const keys = [];
@@ -281,11 +298,19 @@ export class WebhookService {
 
   /**
    * Stores webhook keys directly (e.g. loaded from config or onboarding result).
-   * @param {string} folderId
-   * @param {{ webhookId: string, primaryKey: string, secondaryKey: string }} keys
    */
-  storeWebhookKeys(folderId, keys) {
+  async storeWebhookKeys(folderId, keys) {
     this._webhookStore.set(folderId, keys);
+
+    if (this._webhookKeyRepo) {
+      await this._webhookKeyRepo.upsert(folderId, {
+        webhookId: keys.webhookId,
+        primaryKey: keys.primaryKey,
+        secondaryKey: keys.secondaryKey,
+      }).catch((err) => {
+        console.error(`Failed to persist webhook keys for folder ${folderId}:`, err.message);
+      });
+    }
   }
 }
 

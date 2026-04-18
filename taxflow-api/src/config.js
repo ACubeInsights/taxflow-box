@@ -61,4 +61,10 @@ export const config = {
   smtpUser: process.env.SMTP_USER || '',
   smtpPass: process.env.SMTP_PASS || '',
   smtpFrom: process.env.SMTP_FROM || process.env.EMAIL_FROM || 'noreply@taxflowpro.com',
+
+  // Database
+  dbDialect: process.env.DB_DIALECT || 'sqlite',
+  databaseUrl: process.env.DATABASE_URL || './data/taxflow.db',
+  dbPoolMin: parseInt(process.env.DB_POOL_MIN || '2'),
+  dbPoolMax: parseInt(process.env.DB_POOL_MAX || '10'),
 };

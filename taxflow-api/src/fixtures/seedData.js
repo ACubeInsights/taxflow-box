@@ -11,7 +11,7 @@ export const clients = [
   {
     id: 'c1',
     name: 'Acme Industries',
-    email: 'sageastral14@gmail.com',
+    email: 'acme@example.com',
     entityType: 'Business',
     engagementStatus: 'Active',
     activeProjects: 2,
@@ -21,7 +21,7 @@ export const clients = [
   {
     id: 'c2',
     name: 'Jane Smith',
-    email: 'sageastral14@gmail.com',
+    email: 'jane.smith@example.com',
     entityType: 'Individual',
     engagementStatus: 'Active',
     activeProjects: 1,
@@ -31,7 +31,7 @@ export const clients = [
   {
     id: 'c3',
     name: 'Greenfield Trust',
-    email: 'sageastral14@gmail.com',
+    email: 'greenfield@example.com',
     entityType: 'Trust',
     engagementStatus: 'On_Hold',
     activeProjects: 1,
@@ -41,7 +41,7 @@ export const clients = [
   {
     id: 'c4',
     name: 'Stellare Software Inc.',
-    email: 'sageastral14@gmail.com',
+    email: 'stellare@example.com',
     entityType: 'S-Corp',
     engagementStatus: 'Active',
     activeProjects: 1,
@@ -51,7 +51,7 @@ export const clients = [
   {
     id: 'c5',
     name: 'Ray Kowalski',
-    email: 'sageastral14@gmail.com',
+    email: 'ray.kowalski@example.com',
     entityType: 'Individual',
     engagementStatus: 'Active',
     activeProjects: 1,
@@ -61,7 +61,7 @@ export const clients = [
   {
     id: 'c6',
     name: 'Blue Horizon Partners',
-    email: 'sageastral14@gmail.com',
+    email: 'bluehorizon@example.com',
     entityType: 'Partnership',
     engagementStatus: 'Active',
     activeProjects: 1,
@@ -71,7 +71,7 @@ export const clients = [
   {
     id: 'c7',
     name: 'Maria & Carlos Reyes',
-    email: 'sageastral14@gmail.com',
+    email: 'reyes.family@example.com',
     entityType: 'Individual',
     engagementStatus: 'Complete',
     activeProjects: 0,

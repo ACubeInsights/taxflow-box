@@ -15,7 +15,7 @@ const router = express.Router();
  */
 router.get('/admin/clients', async (req, res, next) => {
   try {
-    const clients = projectService.getAllClients();
+    const clients = await projectService.getAllClients();
     res.json(clients);
   } catch (error) {
     next(error);
@@ -30,7 +30,7 @@ router.get('/employee/:employeeId/clients', async (req, res, next) => {
   try {
     const { employeeId } = req.params;
     const { search, status, entityType } = req.query;
-    const clients = projectService.getEmployeeClients(employeeId, { search, status, entityType });
+    const clients = await projectService.getEmployeeClients(employeeId, { search, status, entityType });
     res.json(clients);
   } catch (error) {
     next(error);
@@ -44,7 +44,7 @@ router.get('/employee/:employeeId/clients', async (req, res, next) => {
 router.get('/clients/:clientId/projects', async (req, res, next) => {
   try {
     const { clientId } = req.params;
-    const projects = projectService.getClientProjects(clientId);
+    const projects = await projectService.getClientProjects(clientId);
     res.json(projects);
   } catch (error) {
     next(error);
@@ -58,7 +58,7 @@ router.get('/clients/:clientId/projects', async (req, res, next) => {
 router.get('/projects/:projectId', async (req, res, next) => {
   try {
     const { projectId } = req.params;
-    const project = projectService.getProjectDetail(projectId);
+    const project = await projectService.getProjectDetail(projectId);
     if (!project) {
       return res.status(404).json({ error: 'Project not found' });
     }
@@ -81,7 +81,7 @@ router.get('/projects/:projectId/documents', async (req, res, next) => {
     if (status) {
       statusFilter = status.includes(',') ? status.split(',').map((s) => s.trim()) : status;
     }
-    const documents = projectService.getProjectDocuments(projectId, { status: statusFilter });
+    const documents = await projectService.getProjectDocuments(projectId, { status: statusFilter });
     res.json(documents);
   } catch (error) {
     next(error);
@@ -106,7 +106,7 @@ router.post('/projects/:projectId/documents', async (req, res, next) => {
       return res.status(400).json({ error: `Missing required fields: ${missing.join(', ')}` });
     }
 
-    const doc = projectService.createDocumentRequest(projectId, {
+    const doc = await projectService.createDocumentRequest(projectId, {
       name, description, priority, dueDate, documentType, isDraft,
     });
     res.status(201).json(doc);
@@ -134,7 +134,7 @@ router.post('/projects/:projectId/documents/check-duplicate', async (req, res, n
       return res.status(400).json({ error: 'Missing required field: documentType' });
     }
 
-    const result = projectService.checkDuplicate(projectId, documentType);
+    const result = await projectService.checkDuplicate(projectId, documentType);
     res.json(result);
   } catch (error) {
     next(error);

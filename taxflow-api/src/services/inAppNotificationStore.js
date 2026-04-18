@@ -1,14 +1,11 @@
 /**
- * InAppNotificationStore — In-memory notification storage and retrieval.
+ * InAppNotificationStore — Notification storage and retrieval.
  *
- * Manages ephemeral in-app notifications keyed by recipientId.
- * Notifications are stored in memory and reset on server restart.
+ * Supports two modes:
+ *   1. DB-backed: Uses NotificationRepository
+ *   2. In-memory fallback: Uses Map (for tests or when DB is not initialized)
  *
- * Exports:
- * - InAppNotificationStore (named): class for fresh instances in tests
- * - default: singleton instance
- *
- * Requirements: 28.6, 4.5
+ * Requirements: 16.5, 16.7, 28.6, 4.5
  */
 
 export class InAppNotificationStore {
@@ -16,11 +13,21 @@ export class InAppNotificationStore {
     /** @type {Map<string, Array<object>>} In-memory notification store keyed by recipientId */
     this._notifications = new Map();
     this._idCounter = 0;
+
+    /** @type {import('../db/repositories/NotificationRepository.js').NotificationRepository | null} */
+    this._notificationRepo = null;
+  }
+
+  /**
+   * Injects repository dependencies. Called after DB initialization.
+   * @param {{ notificationRepo?: object }} repos
+   */
+  setRepositories({ notificationRepo } = {}) {
+    if (notificationRepo) this._notificationRepo = notificationRepo;
   }
 
   /**
    * Generates the next unique notification ID.
-   *
    * @returns {string} A unique ID string
    */
   nextId() {
@@ -28,13 +35,25 @@ export class InAppNotificationStore {
   }
 
   /**
-   * Stores an in-app notification in memory keyed by recipientId. (Req 28.6)
-   * Notifications are ephemeral and reset on server restart.
-   *
+   * Stores an in-app notification.
    * @param {object} notification
    * @returns {Promise<void>}
    */
   async storeInAppNotification(notification) {
+    if (this._notificationRepo) {
+      await this._notificationRepo.create({
+        recipient_id: notification.recipientId,
+        event_type: notification.eventType,
+        message: notification.message,
+        document_id: notification.documentId || notification.documentReference?.fileId || null,
+        comment_id: notification.commentId || null,
+        deep_link_url: notification.deepLinkUrl || null,
+        read: notification.read !== undefined ? notification.read : false,
+      });
+      return;
+    }
+
+    // In-memory fallback
     const recipientId = notification.recipientId;
     if (!this._notifications.has(recipientId)) {
       this._notifications.set(recipientId, []);
@@ -44,11 +63,25 @@ export class InAppNotificationStore {
 
   /**
    * Retrieves in-app notifications for a recipient.
-   *
    * @param {string} recipientId
-   * @returns {Array<object>}
+   * @returns {Promise<Array<object>>}
    */
-  getNotifications(recipientId) {
+  async getNotifications(recipientId) {
+    if (this._notificationRepo) {
+      const rows = await this._notificationRepo.findByRecipientId(recipientId);
+      return rows.map((r) => ({
+        id: r.id,
+        recipientId: r.recipient_id,
+        eventType: r.event_type,
+        message: r.message,
+        documentId: r.document_id,
+        commentId: r.comment_id,
+        deepLinkUrl: r.deep_link_url,
+        read: !!r.read,
+        createdAt: r.created_at,
+      }));
+    }
+
     return this._notifications.get(recipientId) || [];
   }
 }

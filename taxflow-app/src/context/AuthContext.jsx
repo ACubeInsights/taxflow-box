@@ -138,7 +138,11 @@ export function AuthProvider({ children }) {
       setToken(result.sessionToken)
       setTokenExpiresAt(result.expiresAt)
       setAuthToken(result.sessionToken)
-      setUser(result.user)
+      setUser({
+        ...result.user,
+        vault: result.vault || null,
+        externalId: result.user.externalId || null,
+      })
       lastActivityRef.current = Date.now()
     } catch (err) {
       setTokenError(err.message || 'Login failed')
@@ -162,7 +166,7 @@ export function AuthProvider({ children }) {
         const mockToken = `mock-token-${role}-${Date.now()}`
         const expiresAt = new Date(Date.now() + 60 * 60 * 1000).toISOString()
 
-        setUser({ id: `demo-${role}`, email: `${role}@demo.taxflow`, name: `Demo ${role}`, role })
+        setUser({ id: `demo-${role}`, email: `${role}@demo.taxflow`, name: `Demo ${role}`, role, vault: null, externalId: `demo-${role}` })
         setToken(mockToken)
         setTokenExpiresAt(expiresAt)
         setAuthToken(mockToken)

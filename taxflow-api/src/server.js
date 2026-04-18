@@ -4,6 +4,8 @@ dotenv.config();
 import express from 'express';
 import cors from 'cors';
 import { config } from './config.js';
+import { initDatabase, shutdownDatabase } from './db/db.js';
+import { initRepositories, injectRepositories } from './db/repositories/index.js';
 import clientRoutes from './routes/clients.js';
 import documentRoutes from './routes/documents.js';
 import vaultRoutes from './routes/vaults.js';
@@ -63,8 +65,23 @@ app.use((req, res) => {
   res.status(404).json({ error: 'Route not found' });
 });
 
+process.on('SIGTERM', async () => {
+  console.log('SIGTERM received, shutting down...');
+  await shutdownDatabase();
+  process.exit(0);
+});
+process.on('SIGINT', async () => {
+  console.log('SIGINT received, shutting down...');
+  await shutdownDatabase();
+  process.exit(0);
+});
+
 async function startServer() {
   try {
+    const db = await initDatabase();
+    const repos = initRepositories(db);
+    injectRepositories(repos);
+
     await boxService.initialize();
 
     // Sync taxflow_document metadata template (non-fatal)

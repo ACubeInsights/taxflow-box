@@ -139,9 +139,9 @@ export class NotificationService {
    * Delegates to inAppNotificationStore.
    *
    * @param {string} recipientId
-   * @returns {Array<object>}
+   * @returns {Promise<Array<object>>}
    */
-  getNotifications(recipientId) {
+  async getNotifications(recipientId) {
     return this._store.getNotifications(recipientId);
   }
 

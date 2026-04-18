@@ -60,9 +60,9 @@ describe('StatusTransitionService', () => {
   // ─── transitionStatus ───────────────────────────────────────────────
 
   describe('transitionStatus', () => {
-    it('transitions Uploaded → Under_Review successfully', () => {
+    it('transitions Uploaded → Under_Review successfully', async () => {
       // d2 is Uploaded, version 1
-      const result = service.transitionStatus('d2', {
+      const result = await service.transitionStatus('d2', {
         fromStatus: 'Uploaded',
         toStatus: 'Under_Review',
         employeeId: 'emp1',
@@ -76,9 +76,9 @@ describe('StatusTransitionService', () => {
       expect(result.auditEntry.actor).toBe('emp1');
     });
 
-    it('transitions Under_Review → Approved and stores approvedAt', () => {
+    it('transitions Under_Review → Approved and stores approvedAt', async () => {
       // d6 is Under_Review, version 1
-      const result = service.transitionStatus('d6', {
+      const result = await service.transitionStatus('d6', {
         fromStatus: 'Under_Review',
         toStatus: 'Approved',
         employeeId: 'emp1',
@@ -89,8 +89,8 @@ describe('StatusTransitionService', () => {
       expect(service._approvedAtMap.has('d6')).toBe(true);
     });
 
-    it('transitions Under_Review → Revision_Requested with valid comment', () => {
-      const result = service.transitionStatus('d6', {
+    it('transitions Under_Review → Revision_Requested with valid comment', async () => {
+      const result = await service.transitionStatus('d6', {
         fromStatus: 'Under_Review',
         toStatus: 'Revision_Requested',
         employeeId: 'emp1',
@@ -99,12 +99,12 @@ describe('StatusTransitionService', () => {
       });
 
       expect(result.status).toBe('Revision_Requested');
-      const doc = projService.getDocument('d6');
+      const doc = await projService.getDocument('d6');
       expect(doc.revisionComments).toBe('Please fix the amounts on page 2, they do not match.');
     });
 
-    it('transitions Under_Review → Waived', () => {
-      const result = service.transitionStatus('d6', {
+    it('transitions Under_Review → Waived', async () => {
+      const result = await service.transitionStatus('d6', {
         fromStatus: 'Under_Review',
         toStatus: 'Waived',
         employeeId: 'emp1',
@@ -114,15 +114,15 @@ describe('StatusTransitionService', () => {
       expect(result.status).toBe('Waived');
     });
 
-    it('throws 404 for non-existent document', () => {
-      expect(() =>
+    it('throws 404 for non-existent document', async () => {
+      await expect(
         service.transitionStatus('nonexistent', {
           fromStatus: 'Uploaded', toStatus: 'Under_Review', employeeId: 'emp1', version: 1,
         })
-      ).toThrow('Document not found');
+      ).rejects.toThrow('Document not found');
 
       try {
-        service.transitionStatus('nonexistent', {
+        await service.transitionStatus('nonexistent', {
           fromStatus: 'Uploaded', toStatus: 'Under_Review', employeeId: 'emp1', version: 1,
         });
       } catch (err) {
@@ -130,15 +130,15 @@ describe('StatusTransitionService', () => {
       }
     });
 
-    it('throws 400 for invalid transition (Uploaded → Approved)', () => {
-      expect(() =>
+    it('throws 400 for invalid transition (Uploaded → Approved)', async () => {
+      await expect(
         service.transitionStatus('d2', {
           fromStatus: 'Uploaded', toStatus: 'Approved', employeeId: 'emp1', version: 1,
         })
-      ).toThrow('Invalid transition');
+      ).rejects.toThrow('Invalid transition');
 
       try {
-        service.transitionStatus('d2', {
+        await service.transitionStatus('d2', {
           fromStatus: 'Uploaded', toStatus: 'Approved', employeeId: 'emp1', version: 1,
         });
       } catch (err) {
@@ -146,24 +146,24 @@ describe('StatusTransitionService', () => {
       }
     });
 
-    it('throws 400 for transition from terminal Waived status', () => {
+    it('throws 400 for transition from terminal Waived status', async () => {
       // d9 is Waived
-      expect(() =>
+      await expect(
         service.transitionStatus('d9', {
           fromStatus: 'Waived', toStatus: 'Under_Review', employeeId: 'emp1', version: 2,
         })
-      ).toThrow('Invalid transition');
+      ).rejects.toThrow('Invalid transition');
     });
 
-    it('throws 409 on version mismatch', () => {
-      expect(() =>
+    it('throws 409 on version mismatch', async () => {
+      await expect(
         service.transitionStatus('d2', {
           fromStatus: 'Uploaded', toStatus: 'Under_Review', employeeId: 'emp1', version: 99,
         })
-      ).toThrow('Version conflict');
+      ).rejects.toThrow('Version conflict');
 
       try {
-        service.transitionStatus('d2', {
+        await service.transitionStatus('d2', {
           fromStatus: 'Uploaded', toStatus: 'Under_Review', employeeId: 'emp1', version: 99,
         });
       } catch (err) {
@@ -171,53 +171,53 @@ describe('StatusTransitionService', () => {
       }
     });
 
-    it('throws 400 for Revision_Requested without comment', () => {
-      expect(() =>
+    it('throws 400 for Revision_Requested without comment', async () => {
+      await expect(
         service.transitionStatus('d6', {
           fromStatus: 'Under_Review', toStatus: 'Revision_Requested', employeeId: 'emp1', version: 1,
         })
-      ).toThrow('Revision comment must be between 10 and 1000 characters');
+      ).rejects.toThrow('Revision comment must be between 10 and 1000 characters');
     });
 
-    it('throws 400 for Revision_Requested with too-short comment', () => {
-      expect(() =>
+    it('throws 400 for Revision_Requested with too-short comment', async () => {
+      await expect(
         service.transitionStatus('d6', {
           fromStatus: 'Under_Review', toStatus: 'Revision_Requested', employeeId: 'emp1', version: 1, comment: 'short',
         })
-      ).toThrow('Revision comment must be between 10 and 1000 characters');
+      ).rejects.toThrow('Revision comment must be between 10 and 1000 characters');
     });
 
-    it('increments version on successful transition', () => {
-      const docBefore = projService.getDocument('d2');
+    it('increments version on successful transition', async () => {
+      const docBefore = await projService.getDocument('d2');
       const versionBefore = docBefore.version;
 
-      service.transitionStatus('d2', {
+      await service.transitionStatus('d2', {
         fromStatus: 'Uploaded', toStatus: 'Under_Review', employeeId: 'emp1', version: versionBefore,
       });
 
-      expect(projService.getDocument('d2').version).toBe(versionBefore + 1);
+      expect((await projService.getDocument('d2')).version).toBe(versionBefore + 1);
     });
 
-    it('records activity entry on transition', () => {
-      const activitiesBefore = projService.getEmployeeActivity('employee-1', 100).length;
+    it('records activity entry on transition', async () => {
+      const activitiesBefore = (await projService.getEmployeeActivity('employee-1', 100)).length;
 
-      service.transitionStatus('d2', {
+      await service.transitionStatus('d2', {
         fromStatus: 'Uploaded', toStatus: 'Under_Review', employeeId: 'emp1', version: 1,
       });
 
-      const activitiesAfter = projService.getEmployeeActivity('employee-1', 100);
+      const activitiesAfter = await projService.getEmployeeActivity('employee-1', 100);
       expect(activitiesAfter.length).toBe(activitiesBefore + 1);
       const lastActivity = activitiesAfter[0]; // sorted descending by timestamp
       expect(lastActivity.type).toBe('status_change');
       expect(lastActivity.documentId).toBe('d2');
     });
 
-    it('generates system comment on transition', () => {
-      service.transitionStatus('d2', {
+    it('generates system comment on transition', async () => {
+      await service.transitionStatus('d2', {
         fromStatus: 'Uploaded', toStatus: 'Under_Review', employeeId: 'emp1', version: 1,
       });
 
-      const comments = cmtService.getComments('d2');
+      const comments = await cmtService.getComments('d2');
       expect(comments.length).toBeGreaterThanOrEqual(1);
       const systemComment = comments.find((c) => c.type === 'system');
       expect(systemComment).toBeDefined();
@@ -229,84 +229,84 @@ describe('StatusTransitionService', () => {
   // ─── undoApproval ───────────────────────────────────────────────────
 
   describe('undoApproval', () => {
-    it('reverts Approved → Under_Review within undo window', () => {
+    it('reverts Approved → Under_Review within undo window', async () => {
       // First approve d6 (Under_Review → Approved)
-      service.transitionStatus('d6', {
+      await service.transitionStatus('d6', {
         fromStatus: 'Under_Review', toStatus: 'Approved', employeeId: 'emp1', version: 1,
       });
 
-      const approvedDoc = projService.getDocument('d6');
+      const approvedDoc = await projService.getDocument('d6');
       expect(approvedDoc.status).toBe('Approved');
       const versionAfterApprove = approvedDoc.version;
 
       // Now undo
-      const result = service.undoApproval('d6', 'emp1', versionAfterApprove);
+      const result = await service.undoApproval('d6', 'emp1', versionAfterApprove);
 
       expect(result.status).toBe('Under_Review');
       expect(result.version).toBe(versionAfterApprove + 1);
-      expect(projService.getDocument('d6').status).toBe('Under_Review');
+      expect((await projService.getDocument('d6')).status).toBe('Under_Review');
     });
 
-    it('clears approvedAt entry after undo', () => {
-      service.transitionStatus('d6', {
+    it('clears approvedAt entry after undo', async () => {
+      await service.transitionStatus('d6', {
         fromStatus: 'Under_Review', toStatus: 'Approved', employeeId: 'emp1', version: 1,
       });
       expect(service._approvedAtMap.has('d6')).toBe(true);
 
-      const doc = projService.getDocument('d6');
-      service.undoApproval('d6', 'emp1', doc.version);
+      const doc = await projService.getDocument('d6');
+      await service.undoApproval('d6', 'emp1', doc.version);
       expect(service._approvedAtMap.has('d6')).toBe(false);
     });
 
-    it('throws 404 for non-existent document', () => {
-      expect(() => service.undoApproval('nonexistent', 'emp1', 1)).toThrow('Document not found');
+    it('throws 404 for non-existent document', async () => {
+      await expect(service.undoApproval('nonexistent', 'emp1', 1)).rejects.toThrow('Document not found');
     });
 
-    it('throws 400 if document is not Approved', () => {
+    it('throws 400 if document is not Approved', async () => {
       // d2 is Uploaded
-      expect(() => service.undoApproval('d2', 'emp1', 1)).toThrow('Document is not in Approved status');
+      await expect(service.undoApproval('d2', 'emp1', 1)).rejects.toThrow('Document is not in Approved status');
     });
 
-    it('throws 400 if no approval timestamp exists', () => {
+    it('throws 400 if no approval timestamp exists', async () => {
       // d1 is Approved in seed data but has no _approvedAtMap entry
-      expect(() => service.undoApproval('d1', 'emp1', 2)).toThrow('No approval timestamp found');
+      await expect(service.undoApproval('d1', 'emp1', 2)).rejects.toThrow('No approval timestamp found');
     });
 
-    it('throws 422 if undo window has expired', () => {
-      service.transitionStatus('d6', {
+    it('throws 422 if undo window has expired', async () => {
+      await service.transitionStatus('d6', {
         fromStatus: 'Under_Review', toStatus: 'Approved', employeeId: 'emp1', version: 1,
       });
 
       // Manually set approvedAt to 11 minutes ago
       service._approvedAtMap.set('d6', Date.now() - 11 * 60 * 1000);
 
-      const doc = projService.getDocument('d6');
-      expect(() => service.undoApproval('d6', 'emp1', doc.version)).toThrow('Undo window has expired');
+      const doc = await projService.getDocument('d6');
+      await expect(service.undoApproval('d6', 'emp1', doc.version)).rejects.toThrow('Undo window has expired');
 
       try {
-        service.undoApproval('d6', 'emp1', doc.version);
+        await service.undoApproval('d6', 'emp1', doc.version);
       } catch (err) {
         expect(err.statusCode).toBe(422);
       }
     });
 
-    it('throws 409 on version mismatch', () => {
-      service.transitionStatus('d6', {
+    it('throws 409 on version mismatch', async () => {
+      await service.transitionStatus('d6', {
         fromStatus: 'Under_Review', toStatus: 'Approved', employeeId: 'emp1', version: 1,
       });
 
-      expect(() => service.undoApproval('d6', 'emp1', 999)).toThrow('Version conflict');
+      await expect(service.undoApproval('d6', 'emp1', 999)).rejects.toThrow('Version conflict');
     });
 
-    it('generates system comment on undo', () => {
-      service.transitionStatus('d6', {
+    it('generates system comment on undo', async () => {
+      await service.transitionStatus('d6', {
         fromStatus: 'Under_Review', toStatus: 'Approved', employeeId: 'emp1', version: 1,
       });
 
-      const doc = projService.getDocument('d6');
-      service.undoApproval('d6', 'emp1', doc.version);
+      const doc = await projService.getDocument('d6');
+      await service.undoApproval('d6', 'emp1', doc.version);
 
-      const comments = cmtService.getComments('d6');
+      const comments = await cmtService.getComments('d6');
       const undoComment = comments.find((c) => c.type === 'system' && c.text.includes('Approved') && c.text.includes('Under_Review'));
       expect(undoComment).toBeDefined();
     });
@@ -315,9 +315,9 @@ describe('StatusTransitionService', () => {
   // ─── bulkTransition ─────────────────────────────────────────────────
 
   describe('bulkTransition', () => {
-    it('transitions only Uploaded documents to Under_Review', () => {
+    it('transitions only Uploaded documents to Under_Review', async () => {
       // d2 (Uploaded), d7 (Uploaded), d1 (Approved), d6 (Under_Review)
-      const result = service.bulkTransition(['d2', 'd7', 'd1', 'd6'], {
+      const result = await service.bulkTransition(['d2', 'd7', 'd1', 'd6'], {
         toStatus: 'Under_Review',
         employeeId: 'emp1',
       });
@@ -327,14 +327,14 @@ describe('StatusTransitionService', () => {
       expect(result.skipped).toBe(2);   // d1 (Approved) and d6 (Under_Review)
       expect(result.failed).toBe(0);
 
-      expect(projService.getDocument('d2').status).toBe('Under_Review');
-      expect(projService.getDocument('d7').status).toBe('Under_Review');
-      expect(projService.getDocument('d1').status).toBe('Approved');   // unchanged
-      expect(projService.getDocument('d6').status).toBe('Under_Review'); // was already Under_Review
+      expect((await projService.getDocument('d2')).status).toBe('Under_Review');
+      expect((await projService.getDocument('d7')).status).toBe('Under_Review');
+      expect((await projService.getDocument('d1')).status).toBe('Approved');   // unchanged
+      expect((await projService.getDocument('d6')).status).toBe('Under_Review'); // was already Under_Review
     });
 
-    it('returns failed count for non-existent documents', () => {
-      const result = service.bulkTransition(['nonexistent1', 'nonexistent2'], {
+    it('returns failed count for non-existent documents', async () => {
+      const result = await service.bulkTransition(['nonexistent1', 'nonexistent2'], {
         toStatus: 'Under_Review',
         employeeId: 'emp1',
       });
@@ -345,8 +345,8 @@ describe('StatusTransitionService', () => {
       expect(result.skipped).toBe(0);
     });
 
-    it('handles empty array', () => {
-      const result = service.bulkTransition([], {
+    it('handles empty array', async () => {
+      const result = await service.bulkTransition([], {
         toStatus: 'Under_Review',
         employeeId: 'emp1',
       });
@@ -357,9 +357,9 @@ describe('StatusTransitionService', () => {
       expect(result.skipped).toBe(0);
     });
 
-    it('skips Not_Requested, Revision_Requested, Approved, Waived documents', () => {
+    it('skips Not_Requested, Revision_Requested, Approved, Waived documents', async () => {
       // d4 (Not_Requested), d3 (Revision_Requested), d1 (Approved), d9 (Waived)
-      const result = service.bulkTransition(['d4', 'd3', 'd1', 'd9'], {
+      const result = await service.bulkTransition(['d4', 'd3', 'd1', 'd9'], {
         toStatus: 'Under_Review',
         employeeId: 'emp1',
       });
@@ -368,17 +368,17 @@ describe('StatusTransitionService', () => {
       expect(result.skipped).toBe(4);
     });
 
-    it('increments version for each transitioned document', () => {
-      const v2Before = projService.getDocument('d2').version;
-      const v7Before = projService.getDocument('d7').version;
+    it('increments version for each transitioned document', async () => {
+      const v2Before = (await projService.getDocument('d2')).version;
+      const v7Before = (await projService.getDocument('d7')).version;
 
-      service.bulkTransition(['d2', 'd7'], {
+      await service.bulkTransition(['d2', 'd7'], {
         toStatus: 'Under_Review',
         employeeId: 'emp1',
       });
 
-      expect(projService.getDocument('d2').version).toBe(v2Before + 1);
-      expect(projService.getDocument('d7').version).toBe(v7Before + 1);
+      expect((await projService.getDocument('d2')).version).toBe(v2Before + 1);
+      expect((await projService.getDocument('d7')).version).toBe(v7Before + 1);
     });
   });
 

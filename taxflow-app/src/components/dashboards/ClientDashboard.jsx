@@ -4,7 +4,7 @@ import { Upload, FileText, CheckCircle, Clock, MessageSquare, Shield, ChevronRig
 import { SectionHeader, GlassPanel, PanelTitle, ProgressBar, Badge, StatusBadge } from '../ui'
 import { useDocumentWorkflow } from '../../context/DocumentWorkflowContext'
 import { useAuth } from '../../context/AuthContext'
-import { portalApi } from '../../services/api'
+import { portalApi, clientApi } from '../../services/api'
 import ClientUploadView from '../ClientUploadView'
 import UploadDropzone from '../UploadDropzone'
 
@@ -73,13 +73,11 @@ export default function ClientDashboard() {
   const [dragging, setDragging] = useState(false)
   const [uploaded, setUploaded] = useState([])
   const [selectedRequest, setSelectedRequest] = useState(null)
-  const { requests, vault, vaultLoading, initializeVault, lookupVault } = useDocumentWorkflow()
+  const { requests, vault, vaultLoading, lookupVault } = useDocumentWorkflow()
   const { user } = useAuth() || {}
 
   // Derive client external ID from logged-in user
   const clientExternalId = user?.externalId || user?.id || 'client-1'
-  const clientName = user?.name || 'Client'
-  const clientEmail = user?.email || ''
 
   // API data state
   const [apiData, setApiData] = useState(null)
@@ -105,28 +103,24 @@ export default function ClientDashboard() {
     fetchProgress()
   }, [])
 
-  // Initialize vault on mount — try lookup first, then onboarding
+  // Resolve vault on mount — use login response vault, or call vault endpoint as fallback
   useEffect(() => {
-    const initVault = async () => {
+    const resolveVault = async () => {
+      if (user?.vault || vault) return // Already have vault data
       try {
-        // First try to look up existing vault by client's external ID
-        const existing = await lookupVault(clientExternalId)
-        if (existing) return
-
-        // If no vault found, try full initialization (requires employee auth)
-        await initializeVault(clientName, clientExternalId, clientEmail)
+        await lookupVault(clientExternalId)
       } catch (error) {
-        console.warn('Vault initialization failed (expected in demo mode):', error.message)
+        console.warn('Vault lookup failed (expected in demo mode):', error.message)
       }
     }
-    
-    if (!vault && !vaultLoading) {
-      initVault()
-    }
-  }, [vault, vaultLoading, initializeVault, lookupVault, clientExternalId, clientName, clientEmail])
 
-  // Fallback folder ID for uploads when vault is not available (demo/dev mode)
-  const uploadFolderId = vault?.root || vault?.uploads || vault?.id || '0'
+    if (!user?.vault && !vault && !vaultLoading) {
+      resolveVault()
+    }
+  }, [user?.vault, vault, vaultLoading, lookupVault, clientExternalId])
+
+  // Use vault uploads folder from login response first, then context vault, or null
+  const uploadFolderId = user?.vault?.uploads || vault?.uploads || null
 
   // Derive display data from API or fallback
   const TAX_STEPS = apiData ? deriveSteps(apiData.statusCounts) : TAX_STEPS_FALLBACK

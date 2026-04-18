@@ -7,6 +7,7 @@ import {
 import { GlassPanel, Badge, ProgressBar } from '../ui'
 import Breadcrumb from '../Breadcrumb'
 import { projectApi, portalApi, reviewApi } from '../../services/api'
+import { useAuth } from '../../context/AuthContext'
 
 const TABS = [
   { key: 'projects', label: 'Projects', icon: FolderOpen },
@@ -23,6 +24,8 @@ const STATUS_COLORS = {
 export default function ClientDetailView() {
   const { clientId } = useParams()
   const navigate = useNavigate()
+  const { user } = useAuth()
+  const employeeId = user?.id || 'employee-1'
   const [client, setClient] = useState(null)
   const [clientLoading, setClientLoading] = useState(true)
   const [clientError, setClientError] = useState(null)
@@ -35,7 +38,7 @@ export default function ClientDetailView() {
       // Try employee-specific clients first, then fall back to all clients
       let clients = []
       try {
-        const data = await projectApi.getEmployeeClients('employee-1')
+        const data = await projectApi.getEmployeeClients(employeeId)
         clients = data.clients || data || []
       } catch { /* ignore */ }
 
@@ -281,7 +284,7 @@ function ActivityTab({ clientId }) {
     setLoading(true)
     setError(null)
     try {
-      const data = await portalApi.getEmployeeActivity('employee-1', 20)
+      const data = await portalApi.getEmployeeActivity(employeeId, 20)
       const all = data.activities || data || []
       setActivities(all.filter((a) => a.clientId === clientId))
     } catch (err) {

@@ -10,6 +10,15 @@ vi.mock('../../services/onboardingService.js', () => {
   };
 });
 
+// Mock projectService to prevent real DB calls
+vi.mock('../../services/projectService.js', () => {
+  return {
+    default: {
+      registerOnboardedClient: vi.fn().mockResolvedValue({ id: 'c-new', projectId: 'p-new' }),
+    },
+  };
+});
+
 import onboardingService from '../../services/onboardingService.js';
 import onboardingRouter from '../onboarding.js';
 
@@ -35,7 +44,10 @@ async function request(app, method, path, body) {
   try {
     const res = await fetch(`http://127.0.0.1:${port}${path}`, {
       method,
-      headers: { 'Content-Type': 'application/json' },
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': 'Bearer mock-token-employee-1234567890',
+      },
       body: body ? JSON.stringify(body) : undefined,
     });
     const json = await res.json();
@@ -51,11 +63,12 @@ const validBody = {
   email: 'client@acme.com',
   employeeEmail: 'preparer@firm.com',
   financialYear: '2025',
+  password: 'TestPassword123!',
 };
 
 const mockResult = {
   appUser: { userId: 'u-1', login: 'client@acme.com', name: 'Acme Corp', isNew: true },
-  folders: { root: 'f-1', year: 'f-2', tax: 'f-3', uploads: 'f-4', supportingDocs: 'f-5', signedDocuments: 'f-6', internalNotes: 'f-7' },
+  folders: { root: 'f-1', year: 'f-2', projects: 'f-proj', tax: 'f-3', uploads: 'f-4', supportingDocs: 'f-5', signedDocuments: 'f-6', internalNotes: 'f-7' },
   locks: [{ folderId: 'f-1', lockId: 'l-1', success: true }],
   collaborations: [{ folderId: 'f-4', role: 'viewer_uploader', success: true }],
   webhookId: 'wh-1',
@@ -76,9 +89,11 @@ describe('POST /api/onboarding', () => {
     const res = await request(app, 'POST', '/api/onboarding', validBody);
 
     expect(res.status).toBe(201);
-    expect(res.body).toEqual(mockResult);
+    expect(res.body.appUser).toEqual(mockResult.appUser);
+    expect(res.body.folders).toEqual(mockResult.folders);
+    expect(res.body.folders.projects).toBe('f-proj');
     expect(onboardingService.onboardClient).toHaveBeenCalledWith(
-      'Acme Corp', 'ext-001', 'client@acme.com', 'preparer@firm.com', '2025'
+      'Acme Corp', 'ext-001', 'client@acme.com', 'preparer@firm.com', '2025', 'TestPassword123!'
     );
   });
 
@@ -90,7 +105,7 @@ describe('POST /api/onboarding', () => {
 
     expect(res.status).toBe(201);
     expect(onboardingService.onboardClient).toHaveBeenCalledWith(
-      'Acme Corp', 'ext-001', 'client@acme.com', 'preparer@firm.com', undefined
+      'Acme Corp', 'ext-001', 'client@acme.com', 'preparer@firm.com', undefined, 'TestPassword123!'
     );
   });
 
@@ -138,6 +153,7 @@ describe('POST /api/onboarding', () => {
     expect(res.body.error).toMatch(/externalId/);
     expect(res.body.error).toMatch(/email/);
     expect(res.body.error).toMatch(/employeeEmail/);
+    expect(res.body.error).toMatch(/password/);
     expect(onboardingService.onboardClient).not.toHaveBeenCalled();
   });
 

@@ -24,8 +24,23 @@ const ZIP_POLL_INTERVAL_MS = 1000;
 const ZIP_MAX_POLL_ATTEMPTS = 60;
 
 export class PortalService {
+  constructor() {
+    this._docRepo = null;
+    this._clientRepo = null;
+    this._projectRepo = null;
+  }
+
   /**
-   * Client progress via metadata query, cached 60s. (Reqs 19.1-19.5)
+   * Injects DB repositories for fallback when Box metadata queries are unavailable.
+   */
+  setRepositories({ docRepo, clientRepo, projectRepo } = {}) {
+    if (docRepo) this._docRepo = docRepo;
+    if (clientRepo) this._clientRepo = clientRepo;
+    if (projectRepo) this._projectRepo = projectRepo;
+  }
+
+  /**
+   * Client progress via metadata query, with DB fallback. Cached 60s. (Reqs 19.1-19.5)
    *
    * @param {string} clientId
    * @returns {Promise<{ clientId: string, documents: Array, statusCounts: object }>}
@@ -34,41 +49,78 @@ export class PortalService {
     const cacheKey = `portal:client:${clientId}`;
 
     return cacheLayer.getOrFetch(cacheKey, 60, async () => {
-      const client = boxService.getBoxClient();
+      // Try Box metadata query first
+      let documents = [];
+      try {
+        const client = boxService.getBoxClient();
+        const queryResult = await client.metadataQueries?.executeRead?.({
+          from: `${METADATA_SCOPE}_${METADATA_TEMPLATE}`,
+          query: 'client_id = :clientId',
+          queryParams: { clientId },
+          ancestorFolderId: config.boxRootFolderId,
+          fields: [
+            'id', 'name', 'metadata.enterprise.taxflow_document.document_type',
+            'metadata.enterprise.taxflow_document.status',
+            'metadata.enterprise.taxflow_document.priority',
+            'metadata.enterprise.taxflow_document.reviewed_at',
+            'metadata.enterprise.taxflow_document.review_comments',
+          ],
+        }) || { entries: [] };
 
-      // Metadata query filtering by client_id (Req 19.1)
-      const queryResult = await client.metadataQueries?.executeRead?.({
-        from: `${METADATA_SCOPE}_${METADATA_TEMPLATE}`,
-        query: 'client_id = :clientId',
-        queryParams: { clientId },
-        ancestorFolderId: config.boxRootFolderId,
-        fields: [
-          'id', 'name', 'metadata.enterprise.taxflow_document.document_type',
-          'metadata.enterprise.taxflow_document.status',
-          'metadata.enterprise.taxflow_document.priority',
-          'metadata.enterprise.taxflow_document.reviewed_at',
-          'metadata.enterprise.taxflow_document.review_comments',
-        ],
-      }) || { entries: [] };
+        const entries = queryResult.entries || [];
+        documents = entries.map((entry) => {
+          const meta = entry.metadata?.enterprise?.taxflow_document || {};
+          return {
+            fileId: entry.id,
+            fileName: entry.name,
+            name: entry.name,
+            documentType: meta.document_type || '',
+            status: meta.status || '',
+            priority: meta.priority || 'normal',
+            reviewedAt: meta.reviewed_at || undefined,
+            reviewComments: meta.status === 'revision_requested' ? (meta.review_comments || undefined) : undefined,
+          };
+        });
+      } catch (err) {
+        console.warn('Box metadata query failed for client progress, trying DB fallback:', err.message);
+      }
 
-      const entries = queryResult.entries || [];
-      const documents = entries.map((entry) => {
-        const meta = entry.metadata?.enterprise?.taxflow_document || {};
-        return {
-          fileId: entry.id,
-          fileName: entry.name,
-          documentType: meta.document_type || '',
-          status: meta.status || '',
-          priority: meta.priority || 'normal',
-          reviewedAt: meta.reviewed_at || undefined,
-          reviewComments: meta.status === 'revision_requested' ? (meta.review_comments || undefined) : undefined,
-        };
-      });
+      // DB fallback: if Box returned nothing, query local document_requests table
+      if (documents.length === 0 && this._docRepo && this._clientRepo) {
+        try {
+          // clientId could be a UUID (client.id) or an external_id
+          let dbClientId = clientId;
+          const clientRecord = await this._clientRepo.findById(clientId);
+          if (!clientRecord) {
+            const byExternal = await this._clientRepo.findByExternalId(clientId);
+            if (byExternal) dbClientId = byExternal.id;
+          }
 
-      // Group by status (Req 19.2)
+          const docs = await this._docRepo.findByClientId(dbClientId);
+          documents = (docs || [])
+            .filter(d => !d.is_draft)
+            .map(d => ({
+              fileId: d.box_file_id || d.id,
+              fileName: d.uploaded_file_name || d.name,
+              name: d.name,
+              description: d.description,
+              documentType: d.document_type || '',
+              status: d.status || 'Not_Requested',
+              priority: d.priority || 'Medium',
+              dueDate: d.due_date,
+              reviewedAt: undefined,
+              reviewComments: d.revision_comments || undefined,
+            }));
+        } catch (dbErr) {
+          console.warn('DB fallback for client progress failed:', dbErr.message);
+        }
+      }
+
+      // Group by status
       const statusCounts = {};
       for (const doc of documents) {
-        statusCounts[doc.status] = (statusCounts[doc.status] || 0) + 1;
+        const s = doc.status || 'unknown';
+        statusCounts[s] = (statusCounts[s] || 0) + 1;
       }
 
       return { clientId, documents, statusCounts };

@@ -40,7 +40,7 @@ export default function TopNav() {
 
     const fetchNotifications = async () => {
       try {
-        const data = await notificationApi.getNotifications('employee-1')
+        const data = await notificationApi.getNotifications(user?.id || 'employee-1')
         if (Array.isArray(data)) {
           setNotifications(data)
         }

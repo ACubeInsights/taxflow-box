@@ -9,6 +9,7 @@ import { projectApi, reviewApi, tokenApi } from '../../services/api'
 import Breadcrumb from '../Breadcrumb'
 import { GlassPanel, StatusBadge, Badge, ProgressBar } from '../ui'
 import CommentsThread from '../CommentsThread'
+import { useAuth } from '../../context/AuthContext'
 
 const PRIORITY_COLORS = {
   Urgent: '#ef4444',
@@ -85,6 +86,8 @@ function LoadingSkeleton() {
 export default function DocumentDetailView() {
   const { clientId, projectId, documentId } = useParams()
   const navigate = useNavigate()
+  const { user } = useAuth()
+  const employeeId = user?.id || 'employee-1'
 
   const [doc, setDoc] = useState(null)
   const [clientName, setClientName] = useState('')
@@ -124,7 +127,7 @@ export default function DocumentDetailView() {
     try {
       const [docsResult, clients, projects] = await Promise.all([
         projectApi.getProjectDocuments(projectId),
-        projectApi.getEmployeeClients('employee-1'),
+        projectApi.getEmployeeClients(employeeId),
         projectApi.getClientProjects(clientId),
       ])
 
@@ -170,7 +173,7 @@ export default function DocumentDetailView() {
       try {
         const result = await reviewApi.transitionStatus(documentId, {
           toStatus: 'Under_Review',
-          employeeId: 'employee-1',
+          employeeId,
           version: doc.version,
         })
         if (!cancelled) {
@@ -193,7 +196,7 @@ export default function DocumentDetailView() {
 
     const fetchToken = async () => {
       try {
-        const result = await tokenApi.getPreviewToken(doc.fileId, 'employee-1')
+        const result = await tokenApi.getPreviewToken(doc.fileId, employeeId)
         setPreviewToken(result)
         setPreviewError(null)
 
@@ -222,7 +225,7 @@ export default function DocumentDetailView() {
     try {
       const result = await reviewApi.transitionStatus(documentId, {
         toStatus,
-        employeeId: 'employee-1',
+        employeeId,
         version: doc.version,
         ...extra,
       })
@@ -287,7 +290,7 @@ export default function DocumentDetailView() {
     setActionError(null)
     setConflictError(false)
     try {
-      await reviewApi.undoApprove(documentId, 'employee-1', doc.version)
+      await reviewApi.undoApprove(documentId, employeeId, doc.version)
       setDoc((prev) => prev ? { ...prev, status: 'Under_Review', version: prev.version + 1 } : prev)
       setApprovedAt(null)
     } catch (err) {

@@ -116,7 +116,7 @@ router.post('/zip-download', async (req, res, next) => {
 router.get('/employee/:employeeId/summary', async (req, res, next) => {
   try {
     const { employeeId } = req.params;
-    const summary = projectService.getEmployeeSummary(employeeId);
+    const summary = await projectService.getEmployeeSummary(employeeId);
     res.json(summary);
   } catch (error) {
     next(error);
@@ -131,7 +131,7 @@ router.get('/employee/:employeeId/activity', async (req, res, next) => {
   try {
     const { employeeId } = req.params;
     const limit = req.query.limit ? parseInt(req.query.limit, 10) : undefined;
-    const activity = projectService.getEmployeeActivity(employeeId, limit);
+    const activity = await projectService.getEmployeeActivity(employeeId, limit);
     res.json(activity);
   } catch (error) {
     next(error);

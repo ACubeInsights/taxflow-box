@@ -7,6 +7,7 @@ import { saveFilters, loadFilters } from '../../services/sessionFilters'
 import Breadcrumb from '../Breadcrumb'
 import StatusFilterChips from '../StatusFilterChips'
 import { GlassPanel, StatusBadge, Badge, ProgressBar } from '../ui'
+import { useAuth } from '../../context/AuthContext'
 
 const PRIORITY_COLORS = {
   Urgent: '#ef4444',
@@ -42,6 +43,8 @@ function formatDate(dateStr) {
 
 export default function ProjectDetailView() {
   const { clientId, projectId } = useParams()
+  const { user } = useAuth()
+  const employeeId = user?.id || 'employee-1'
   const navigate = useNavigate()
 
   const [project, setProject] = useState(null)
@@ -64,7 +67,7 @@ export default function ProjectDetailView() {
     try {
       const [projectData, clients] = await Promise.all([
         projectApi.getProjectDetail(projectId),
-        projectApi.getEmployeeClients('employee-1'),
+        projectApi.getEmployeeClients(employeeId),
       ])
 
       if (!projectData) {
@@ -108,7 +111,7 @@ export default function ProjectDetailView() {
     try {
       await reviewApi.bulkTransition(uploadedDocIds, {
         toStatus: 'Under_Review',
-        employeeId: 'employee-1',
+        employeeId,
       })
       await fetchData()
     } catch (err) {

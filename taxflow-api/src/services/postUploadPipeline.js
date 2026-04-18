@@ -277,32 +277,37 @@ export class PostUploadPipeline {
       });
 
       const parentId = fileInfo.parent?.id;
-      if (parentId) {
-        // Get parent folder (should be a subfolder like "Uploads")
-        const parentFolder = await client.folders.getFolderById(parentId, {
-          fields: ['name', 'parent'],
-        });
+      if (!parentId) return { clientId, financialYear };
 
-        // Parent of "Uploads" should be the year folder
-        const yearFolderId = parentFolder.parent?.id;
-        if (yearFolderId) {
-          const yearFolder = await client.folders.getFolderById(yearFolderId, {
-            fields: ['name', 'parent'],
-          });
-          financialYear = yearFolder.name || financialYear;
+      // Level 1: subfolder (e.g., "Uploads")
+      const subFolder = await client.folders.getFolderById(parentId, {
+        fields: ['name', 'parent'],
+      });
 
-          // Parent of year folder is the client root
-          const rootFolderId = yearFolder.parent?.id;
-          if (rootFolderId) {
-            const rootFolder = await client.folders.getFolderById(rootFolderId, {
-              fields: ['name'],
-            });
-            // Extract externalId from "ClientName (externalId)" pattern
-            const match = rootFolder.name?.match(/\(([^)]+)\)$/);
-            clientId = match ? match[1] : rootFolder.name || '';
-          }
-        }
-      }
+      // Level 2: Projects folder
+      const projectsFolderId = subFolder.parent?.id;
+      if (!projectsFolderId) return { clientId, financialYear };
+      const projectsFolder = await client.folders.getFolderById(projectsFolderId, {
+        fields: ['name', 'parent'],
+      });
+
+      // Level 3: Year folder
+      const yearFolderId = projectsFolder.parent?.id;
+      if (!yearFolderId) return { clientId, financialYear };
+      const yearFolder = await client.folders.getFolderById(yearFolderId, {
+        fields: ['name', 'parent'],
+      });
+      financialYear = yearFolder.name || financialYear;
+
+      // Level 4: Client root folder
+      const rootFolderId = yearFolder.parent?.id;
+      if (!rootFolderId) return { clientId, financialYear };
+      const rootFolder = await client.folders.getFolderById(rootFolderId, {
+        fields: ['name'],
+      });
+      // Extract externalId from "ClientName (externalId)" pattern
+      const match = rootFolder.name?.match(/\(([^)]+)\)$/);
+      clientId = match ? match[1] : rootFolder.name || '';
     } catch (err) {
       console.error(`Context extraction failed for file ${fileId}:`, err.message);
     }

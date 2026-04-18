@@ -25,7 +25,7 @@ describe('NotificationService — new methods', () => {
     it('creates an in-app notification with eventType "mention"', async () => {
       await service.dispatchMentionNotification('emp42', 'Alice', 'doc-1', 'cmt-5');
 
-      const notifications = service.getNotifications('emp42');
+      const notifications = await service.getNotifications('emp42');
       expect(notifications).toHaveLength(1);
       expect(notifications[0].eventType).toBe('mention');
     });
@@ -33,21 +33,21 @@ describe('NotificationService — new methods', () => {
     it('includes mentioner name and document ID in message', async () => {
       await service.dispatchMentionNotification('emp42', 'Alice', 'doc-1', 'cmt-5');
 
-      const notifications = service.getNotifications('emp42');
+      const notifications = await service.getNotifications('emp42');
       expect(notifications[0].message).toBe('Alice mentioned you in a comment on document doc-1');
     });
 
     it('stores the correct recipientId', async () => {
       await service.dispatchMentionNotification('emp42', 'Bob', 'doc-2', 'cmt-10');
 
-      const notifications = service.getNotifications('emp42');
+      const notifications = await service.getNotifications('emp42');
       expect(notifications[0].recipientId).toBe('emp42');
     });
 
     it('stores commentId and documentId', async () => {
       await service.dispatchMentionNotification('emp42', 'Alice', 'doc-1', 'cmt-5');
 
-      const notifications = service.getNotifications('emp42');
+      const notifications = await service.getNotifications('emp42');
       expect(notifications[0].documentId).toBe('doc-1');
       expect(notifications[0].commentId).toBe('cmt-5');
     });
@@ -55,14 +55,14 @@ describe('NotificationService — new methods', () => {
     it('marks notification as unread', async () => {
       await service.dispatchMentionNotification('emp42', 'Alice', 'doc-1', 'cmt-5');
 
-      const notifications = service.getNotifications('emp42');
+      const notifications = await service.getNotifications('emp42');
       expect(notifications[0].read).toBe(false);
     });
 
     it('sets a valid createdAt ISO timestamp', async () => {
       await service.dispatchMentionNotification('emp42', 'Alice', 'doc-1', 'cmt-5');
 
-      const notifications = service.getNotifications('emp42');
+      const notifications = await service.getNotifications('emp42');
       expect(notifications[0].createdAt).toBeDefined();
       expect(new Date(notifications[0].createdAt).toISOString()).toBe(notifications[0].createdAt);
     });
@@ -74,7 +74,7 @@ describe('NotificationService — new methods', () => {
     it('creates an in-app notification with eventType "document_uploaded"', async () => {
       await service.dispatchUploadNotification('emp1', 'Acme Corp', 'W-2 Form');
 
-      const notifications = service.getNotifications('emp1');
+      const notifications = await service.getNotifications('emp1');
       expect(notifications).toHaveLength(1);
       expect(notifications[0].eventType).toBe('document_uploaded');
     });
@@ -82,21 +82,21 @@ describe('NotificationService — new methods', () => {
     it('includes client name and document name in message', async () => {
       await service.dispatchUploadNotification('emp1', 'Acme Corp', 'W-2 Form');
 
-      const notifications = service.getNotifications('emp1');
+      const notifications = await service.getNotifications('emp1');
       expect(notifications[0].message).toBe('Acme Corp uploaded a file for W-2 Form');
     });
 
     it('stores the correct recipientId', async () => {
       await service.dispatchUploadNotification('emp99', 'Jane Doe', '1099-DIV');
 
-      const notifications = service.getNotifications('emp99');
+      const notifications = await service.getNotifications('emp99');
       expect(notifications[0].recipientId).toBe('emp99');
     });
 
     it('marks notification as unread', async () => {
       await service.dispatchUploadNotification('emp1', 'Acme Corp', 'W-2 Form');
 
-      const notifications = service.getNotifications('emp1');
+      const notifications = await service.getNotifications('emp1');
       expect(notifications[0].read).toBe(false);
     });
   });
@@ -162,7 +162,7 @@ describe('NotificationService — new methods', () => {
 
       expect(sendEmailSpy).toHaveBeenCalledTimes(2);
       // No in-app notification since email eventually succeeded
-      const notifications = service.getNotifications('client@example.com');
+      const notifications = await service.getNotifications('client@example.com');
       expect(notifications).toHaveLength(0);
     });
 
@@ -179,7 +179,7 @@ describe('NotificationService — new methods', () => {
 
       expect(sendEmailSpy).toHaveBeenCalledTimes(3);
 
-      const notifications = service.getNotifications('client@example.com');
+      const notifications = await service.getNotifications('client@example.com');
       expect(notifications).toHaveLength(1);
       expect(notifications[0].eventType).toBe('email_failed');
       expect(notifications[0].message).toContain('client@example.com');
@@ -199,7 +199,7 @@ describe('NotificationService — new methods', () => {
       await vi.advanceTimersByTimeAsync(4000);
       await promise;
 
-      const notifications = service.getNotifications('client@example.com');
+      const notifications = await service.getNotifications('client@example.com');
       expect(notifications).toHaveLength(0);
     });
 

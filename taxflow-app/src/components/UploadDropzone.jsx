@@ -11,9 +11,11 @@ export default function UploadDropzone({ onUpload, disabled = false, folderId, r
   const [fileName, setFileName] = useState('')
   const fileInputRef = useRef(null)
 
+  const isValidFolderId = folderId && folderId !== '0' && folderId !== ''
+
   const startRealUpload = useCallback(async (file) => {
-    if (!folderId) {
-      console.error('No folderId provided for upload')
+    if (!isValidFolderId) {
+      console.error('No valid folderId provided for upload')
       return
     }
 
@@ -51,7 +53,7 @@ export default function UploadDropzone({ onUpload, disabled = false, folderId, r
       setFileName('')
       alert(`Upload failed: ${error.message}`)
     }
-  }, [folderId, requestId, onUpload])
+  }, [isValidFolderId, folderId, requestId, onUpload])
 
   const handleDragOver = useCallback((e) => {
     e.preventDefault()
@@ -89,7 +91,45 @@ export default function UploadDropzone({ onUpload, disabled = false, folderId, r
     fileInputRef.current?.click()
   }, [disabled, uploading])
 
-  const isDisabled = disabled || uploading
+  const isDisabled = disabled || uploading || !isValidFolderId
+
+  // When folder ID is invalid, show vault setup message
+  if (!isValidFolderId && !uploading && !complete) {
+    return (
+      <div
+        data-testid="upload-dropzone"
+        className="relative overflow-hidden rounded-[24px] border-2 border-dashed p-10 lg:p-14 text-center transition-all duration-300 ease-out flex flex-col items-center justify-center min-h-[300px] cursor-not-allowed border-[var(--color-outline-variant)] bg-[var(--color-surface-container)]/50 opacity-60"
+      >
+        <input
+          type="file"
+          ref={fileInputRef}
+          onChange={handleFileSelect}
+          className="hidden"
+          accept="*/*"
+        />
+        <div className="relative z-10 w-full flex flex-col items-center">
+          <div className="w-16 h-16 rounded-[20px] flex items-center justify-center mb-6 bg-[var(--color-surface-high)] border border-[var(--color-outline-variant)] shadow-sm">
+            <Shield size={28} className="text-[var(--color-on-surface-variant)]" strokeWidth={2} />
+          </div>
+          <div className="flex items-center gap-2 mb-3">
+            <Shield size={16} className="text-[var(--color-primary)]" />
+            <h3 className="m-0 text-[18px] font-extrabold text-[var(--color-on-surface)] tracking-tight">
+              Upload to Box Secure Vault
+            </h3>
+          </div>
+          <p className="m-0 mb-6 text-[14px] text-[var(--color-on-surface-variant)] leading-relaxed max-w-[300px]">
+            Your secure vault is being set up. Uploads will be available shortly.
+          </p>
+          <div className="mt-8 pt-6 border-t border-[var(--color-outline-variant)] w-full max-w-[280px]">
+            <p className="m-0 text-[10px] font-bold text-[var(--color-on-surface-variant)]/60 tracking-[0.15em] uppercase text-center flex items-center justify-center gap-2">
+              <Shield size={10} />
+              AES-256 Encrypted
+            </p>
+          </div>
+        </div>
+      </div>
+    )
+  }
 
   return (
     <div
