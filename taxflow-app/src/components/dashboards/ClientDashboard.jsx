@@ -7,6 +7,7 @@ import { useAuth } from '../../context/AuthContext'
 import { portalApi, clientApi } from '../../services/api'
 import ClientUploadView from '../ClientUploadView'
 import UploadDropzone from '../UploadDropzone'
+import VaultBrowser from '../VaultBrowser'
 
 const containerVariants = {
   hidden: { opacity: 0 },
@@ -208,76 +209,14 @@ export default function ClientDashboard() {
     >
       <motion.div
         variants={itemVariants}
-        className="mb-8 p-7 rounded-[24px] flex items-center gap-6 relative overflow-hidden"
-        style={{
-          background: 'linear-gradient(135deg, color-mix(in srgb, var(--color-primary) 10%, transparent), color-mix(in srgb, var(--color-primary-container) 8%, transparent))',
-          border: '1px solid color-mix(in srgb, var(--color-primary) 15%, transparent)',
-        }}
+        className="mb-6"
       >
-        <div className="absolute top-0 right-0 w-[400px] h-[400px] -translate-y-1/2 translate-x-1/3 rounded-full opacity-10 pointer-events-none" style={{ background: 'var(--color-primary)', filter: 'blur(80px)' }} />
-
-        <div className="relative z-10">
-          <h1 className="m-0 text-[28px] font-bold text-[var(--color-on-surface)] tracking-[-0.03em] leading-tight font-display mb-1.5">
-            Welcome back, Jordan.
-          </h1>
-          <p className="m-0 text-[14px] text-[var(--color-on-surface-variant)] tracking-wide">
-            Your 2024 tax return is in progress. Your preparer is reviewing your documents.
-          </p>
-        </div>
-        <div className="ml-auto text-right shrink-0 relative z-10">
-          <div className="text-[11px] font-bold text-[var(--color-on-surface-variant)] uppercase tracking-widest mb-1.5 opacity-70">Filing Status</div>
-          <Badge color="var(--color-tertiary)">In Review</Badge>
-        </div>
+        <h1 className="m-0 text-[24px] font-bold text-[var(--color-on-surface)] tracking-[-0.02em] leading-tight">
+          Welcome, {user?.name || 'there'}
+        </h1>
       </motion.div>
 
-      <motion.div variants={itemVariants} className="grid grid-cols-1 lg:grid-cols-[1.2fr_1fr] gap-5 mb-8">
-        {/* Progress tracker */}
-        <GlassPanel delay={100}>
-          <PanelTitle>Tax Year 2024 — Your Progress</PanelTitle>
-          <div className="py-2">
-            {TAX_STEPS.map((step, i) => (
-              <div key={step.label} className="flex items-start gap-4" style={{ marginBottom: i < TAX_STEPS.length - 1 ? 0 : 0 }}>
-                <div className="flex flex-col items-center">
-                  <div
-                    className="w-8 h-8 rounded-full flex items-center justify-center shrink-0 transition-all duration-300 relative z-10"
-                    style={{
-                      background: step.done ? 'var(--color-secondary)' : 'var(--color-surface-high)',
-                      border: `2px solid ${step.done ? 'var(--color-secondary)' : 'var(--color-outline-variant)'}`,
-                      boxShadow: step.done ? '0 0 16px color-mix(in srgb, var(--color-secondary) 40%, transparent)' : 'none',
-                    }}
-                  >
-                    {step.done
-                      ? <CheckCircle size={16} color="var(--color-surface-lowest)" strokeWidth={3} />
-                      : <span className="w-2.5 h-2.5 rounded-full bg-[var(--color-outline)] block" />
-                    }
-                  </div>
-                  {i < TAX_STEPS.length - 1 && (
-                    <div
-                      className="w-0.5 h-7 my-1 transition-colors duration-300"
-                      style={{
-                        background: step.done ? 'color-mix(in srgb, var(--color-secondary) 50%, transparent)' : 'var(--color-outline-variant)',
-                      }}
-                    />
-                  )}
-                </div>
-                <div className="pt-1.5">
-                  <p className="m-0 text-[14px]" style={{ fontWeight: step.done ? 700 : 500, color: step.done ? 'var(--color-on-surface)' : 'var(--color-on-surface-variant)' }}>
-                    {step.label}
-                  </p>
-                </div>
-              </div>
-            ))}
-          </div>
-
-          <div style={{ marginTop: 20 }}>
-            <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 8 }}>
-              <span style={{ fontSize: 12, color: 'rgba(255,255,255,0.4)', fontWeight: 500 }}>Overall completion</span>
-              <span style={{ fontSize: 12, fontWeight: 700, color: '#34d399' }}>{completionPct}%</span>
-            </div>
-            <ProgressBar value={completionPct} color="#34d399" />
-          </div>
-        </GlassPanel>
-
+      <motion.div variants={itemVariants} className="mb-8">
         {/* Preparer requests */}
         <GlassPanel delay={150}>
           <PanelTitle>Requests from Your Preparer</PanelTitle>
@@ -333,15 +272,9 @@ export default function ClientDashboard() {
         </GlassPanel>
       </motion.div>
 
-      {/* Upload dropzone */}
-      <motion.div variants={itemVariants}>
-        <UploadDropzone 
-          onUpload={(fileName, fileData) => {
-            setUploaded(prev => [...prev, fileName])
-          }}
-          disabled={false}
-          folderId={uploadFolderId}
-        />
+      {/* Vault Browser */}
+      <motion.div variants={itemVariants} className="mt-4">
+        <VaultBrowser />
       </motion.div>
 
       {/* Document Requests */}

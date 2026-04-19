@@ -136,7 +136,7 @@ export default function ReviewMode({ request, onApprove, onRequestRevision, onBa
             <div className="flex flex-col items-center justify-center rounded-2xl border border-white/[0.05] bg-white/[0.02] p-10">
               {previewToken && request.fileId ? (
                 <iframe
-                  src={`https://app.box.com/embed/preview/${request.fileId}?token=${previewToken.token}`}
+                  src={`https://app.box.com/embed/preview/${request.fileId}?token=${previewToken.accessToken || previewToken.token}`}
                   style={{ width: '100%', height: 400, border: 'none', borderRadius: 12 }}
                   title="Document Preview"
                   sandbox="allow-scripts allow-same-origin allow-popups"

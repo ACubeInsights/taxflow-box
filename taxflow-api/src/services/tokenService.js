@@ -205,12 +205,52 @@ export class TokenService {
     const cacheKey = `token:preview:${fileId}:${userId}`;
 
     return this._cache.getOrFetch(cacheKey, 0, async () => {
-      // First get an App User token to use as the parent
-      const appUserToken = await this.getAppUserToken(userId);
+      const result = await this._generateWithRetry(async () => {
+        // Get the service account's access token from the SDK auth
+        const client = this._boxService.getBoxClient();
+        const auth = client.auth;
+        
+        // Retrieve the current access token
+        let parentAccessToken;
+        if (typeof auth.retrieveToken === 'function') {
+          const tokenObj = await auth.retrieveToken();
+          parentAccessToken = tokenObj?.accessToken ?? tokenObj?.access_token;
+        } else if (typeof auth.downscopeToken === 'function') {
+          // Try SDK downscope with correct v10 signature
+          const tokenInfo = await auth.downscopeToken(
+            ['item_preview'],
+            resourceUrl
+          );
+          const accessToken = tokenInfo.accessToken ?? tokenInfo.access_token;
+          const expiresIn = tokenInfo.expiresIn ?? tokenInfo.expires_in ?? 3600;
+          return buildTokenResult(accessToken, expiresIn);
+        }
 
-      const result = await this._generateWithRetry(() =>
-        this._fetchDownscopedToken(appUserToken.accessToken, 'item_preview', resourceUrl)
-      );
+        if (!parentAccessToken) {
+          throw new Error('Could not retrieve service account access token');
+        }
+
+        // Use Box token exchange API directly
+        const response = await fetch('https://api.box.com/oauth2/token', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+          body: new URLSearchParams({
+            subject_token: parentAccessToken,
+            subject_token_type: 'urn:ietf:params:oauth:token-type:access_token',
+            scope: 'item_preview',
+            resource: resourceUrl,
+            grant_type: 'urn:ietf:params:oauth:grant-type:token-exchange',
+          }).toString(),
+        });
+
+        if (!response.ok) {
+          const errBody = await response.json().catch(() => ({}));
+          throw new Error(`${response.status}; ${JSON.stringify(errBody.error || errBody)}`);
+        }
+
+        const data = await response.json();
+        return buildTokenResult(data.access_token, data.expires_in || 3600);
+      });
 
       // Cap TTL at 60 minutes
       const cappedExpiresIn = Math.min(result.expiresIn, MAX_PREVIEW_TTL_SECONDS);

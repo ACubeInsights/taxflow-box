@@ -9,6 +9,8 @@ import onboardingService from '../services/onboardingService.js';
 import projectService from '../services/projectService.js';
 import { requireAuth, requireRole } from '../middleware/authMiddleware.js';
 import { getRepositories } from '../db/repositories/index.js';
+import boxService from '../services/boxService.js';
+import { extractOriginalEmail, extractRole } from '../utils/authUtils.js';
 
 const router = express.Router();
 
@@ -53,11 +55,87 @@ router.post('/', requireAuth, requireRole('employee', 'superadmin'), async (req,
     const result = await Promise.race([onboardPromise, timeoutPromise]);
 
     // Register the new client in the project service so it appears in dashboards.
-    // Assign to the logged-in employee (from auth session) and also to 'employee-1'
-    // (demo employee) so the seed-data dashboard works too.
+    // Resolve the target employee from the employeeEmail field (selected in the onboarding form).
+    // This is the employee the client should be assigned to — not necessarily the logged-in user.
     let registeredClient = null;
-    const loggedInEmployeeId = req.user?.userId || 'employee-1';
+    let targetEmployeeId = 'employee-1'; // fallback
+
+    console.log(`[Onboarding] Resolving employee for email: "${employeeEmail}"`);
     try {
+      const repos = getRepositories();
+      const hasRepos = !!(repos && repos.userRepo);
+      console.log(`[Onboarding] Repos available: ${hasRepos}`);
+
+      if (hasRepos && employeeEmail) {
+        // Find the employee by email in the users table
+        let empUser = await repos.userRepo.findByEmail(employeeEmail);
+        console.log(`[Onboarding] DB lookup result: ${empUser ? `found ${empUser.id} (${empUser.name})` : 'NOT FOUND'}`);
+
+        // Auto-sync: if the employee exists in Box but not in the local DB
+        // (e.g., they were created but never logged in), create a local record
+        // so the FK constraint on employee_clients is satisfied.
+        if (!empUser) {
+          console.log('[Onboarding] Employee not in DB, attempting Box auto-sync...');
+          try {
+            const boxClient = boxService.getBoxClient();
+            const allUsers = await boxClient.users.getUsers({
+              userType: 'all',
+              fields: ['id', 'name', 'external_app_user_id'],
+            });
+            const normalizedEmail = employeeEmail.toLowerCase();
+            console.log(`[Onboarding] Box returned ${allUsers.entries?.length || 0} users, searching for "${normalizedEmail}"`);
+            const boxUser = (allUsers.entries || []).find((u) => {
+              const extId = u.externalAppUserId || '';
+              const em = extractOriginalEmail(extId);
+              return em && em.toLowerCase() === normalizedEmail;
+            });
+            if (boxUser) {
+              const extId = boxUser.externalAppUserId || '';
+              const role = extractRole(extId);
+              console.log(`[Onboarding] Found Box user: ${boxUser.id} ${boxUser.name}, role=${role}`);
+              empUser = await repos.userRepo.create({
+                box_user_id: boxUser.id,
+                email: normalizedEmail,
+                name: boxUser.name,
+                role,
+                password_hash: extId,
+              });
+              console.log(`[Onboarding] Auto-synced employee ${normalizedEmail} to local DB (${empUser.id})`);
+            } else {
+              console.warn(`[Onboarding] Employee "${normalizedEmail}" NOT found in Box either!`);
+            }
+          } catch (syncErr) {
+            console.warn(`[Onboarding] Auto-sync error: ${syncErr.message}`);
+            // If auto-sync fails (e.g., UNIQUE constraint), try finding again
+            if (syncErr.message?.includes('UNIQUE constraint')) {
+              empUser = await repos.userRepo.findByEmail(employeeEmail);
+              console.log(`[Onboarding] Re-lookup after UNIQUE: ${empUser ? empUser.id : 'still not found'}`);
+            }
+          }
+        }
+
+        if (empUser) {
+          targetEmployeeId = empUser.id;
+          console.log(`[Onboarding] ✅ Resolved targetEmployeeId = ${targetEmployeeId}`);
+        } else {
+          console.warn(`[Onboarding] ⚠️ Could not resolve employee, using fallback: ${targetEmployeeId}`);
+        }
+      }
+    } catch (outerErr) {
+      console.error(`[Onboarding] ❌ Employee resolution FAILED: ${outerErr.message}`, outerErr.stack);
+      // Still use fallback
+    }
+    console.log(`[Onboarding] Final targetEmployeeId = ${targetEmployeeId}`);
+
+    // Also determine the logged-in user's ID for secondary assignment
+    let loggedInEmployeeId = req.user?.userId;
+    console.log(`[Onboarding] Logged-in user: ${loggedInEmployeeId}, targetEmployee: ${targetEmployeeId}`);
+    if (!loggedInEmployeeId || loggedInEmployeeId.startsWith('demo-')) {
+      loggedInEmployeeId = null; // don't try to assign to demo users
+    }
+
+    try {
+      console.log(`[Onboarding] Calling registerOnboardedClient with targetEmployeeId=${targetEmployeeId}`);
       registeredClient = await projectService.registerOnboardedClient(
         {
           name: clientName,
@@ -67,27 +145,38 @@ router.post('/', requireAuth, requireRole('employee', 'superadmin'), async (req,
           boxUserId: result.appUser?.userId || '',
           employeeEmail,
         },
-        loggedInEmployeeId
+        targetEmployeeId
       );
 
-      // Also assign to 'employee-1' if the logged-in user is different,
-      // so the demo dashboard always shows the client.
-      if (loggedInEmployeeId !== 'employee-1') {
+      // Also assign to the logged-in employee if they're different from the target
+      if (loggedInEmployeeId && loggedInEmployeeId !== targetEmployeeId) {
+        try {
+          const repos = getRepositories();
+          if (repos && repos.employeeClientRepo) {
+            await repos.employeeClientRepo.assign(loggedInEmployeeId, registeredClient.id);
+          }
+        } catch (assignErr) {
+          if (!assignErr.message?.includes('UNIQUE constraint')) {
+            console.warn('Secondary employee assignment failed:', assignErr.message);
+          }
+        }
+      }
+
+      // Also assign to employee-1 (seed data) if neither target nor logged-in is employee-1
+      if (targetEmployeeId !== 'employee-1' && loggedInEmployeeId !== 'employee-1') {
         try {
           const repos = getRepositories();
           if (repos && repos.employeeClientRepo) {
             await repos.employeeClientRepo.assign('employee-1', registeredClient.id);
           }
         } catch (assignErr) {
-          // Non-critical — ignore duplicate or missing employee-1
           if (!assignErr.message?.includes('UNIQUE constraint')) {
-            console.warn('Secondary employee assignment failed:', assignErr.message);
+            console.warn('employee-1 assignment failed:', assignErr.message);
           }
         }
       }
     } catch (regErr) {
       console.error('Project service registration failed:', regErr.message, regErr.stack);
-      // Don't swallow — propagate so the user knows onboarding partially failed
       throw new Error(`Client onboarding succeeded in Box but failed to register locally: ${regErr.message}`);
     }
 

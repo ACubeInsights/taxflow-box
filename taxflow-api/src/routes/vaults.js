@@ -1,13 +1,15 @@
 import express from 'express';
 import boxService from '../services/boxService.js';
+import { requireAuth, requireRole, validateFolderOwnership } from '../middleware/authMiddleware.js';
 
 const router = express.Router();
 
 /**
  * GET /api/vaults/:folderId/files
- * List all files in a vault folder
+ * List all files in a vault folder.
+ * Auth: requireAuth → requireRole('client') → validateFolderOwnership
  */
-router.get('/:folderId/files', async (req, res, next) => {
+router.get('/:folderId/files', requireAuth, requireRole('client', 'employee', 'superadmin'), validateFolderOwnership, async (req, res, next) => {
   try {
     const { folderId } = req.params;
 
@@ -25,9 +27,10 @@ router.get('/:folderId/files', async (req, res, next) => {
 
 /**
  * GET /api/vaults/files/:fileId/download
- * Get download URL for a file
+ * Get download URL for a file.
+ * Auth: requireAuth → requireRole('client')
  */
-router.get('/files/:fileId/download', async (req, res, next) => {
+router.get('/files/:fileId/download', requireAuth, requireRole('client', 'employee', 'superadmin'), async (req, res, next) => {
   try {
     const { fileId } = req.params;
 

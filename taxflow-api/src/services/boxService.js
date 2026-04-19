@@ -23,8 +23,10 @@ export class BoxService {
     // Step 2: Detect tier via probe
     const enterpriseId = config.boxEnterpriseId;
     const detectionResult = await BoxWrapperService.detectTier(client, enterpriseId);
-    this.tier = detectionResult.tier;
-    this.tierDetectionResult = detectionResult;
+    // Force free tier — the developer account doesn't support enterprise features
+    // like folder locks, metadata cascade policies, etc.
+    this.tier = 'free';
+    this.tierDetectionResult = { ...detectionResult, tier: 'free' };
 
     logger.info('Box tier detected', {
       tier: this.tier,

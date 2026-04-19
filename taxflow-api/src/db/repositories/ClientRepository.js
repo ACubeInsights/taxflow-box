@@ -72,6 +72,13 @@ export class ClientRepository extends BaseRepository {
       .first();
   }
 
+  async findByBoxUserId(boxUserId, trx) {
+    return this.query(trx)
+      .where('box_user_id', boxUserId)
+      .whereNull('deleted_at')
+      .first();
+  }
+
   async exists(trx) {
     const row = await this.query(trx).first();
     return !!row;

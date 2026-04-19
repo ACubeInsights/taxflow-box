@@ -173,6 +173,9 @@ export const vaultApi = {
   async listFiles(folderId) {
     return apiRequest(`/vaults/${folderId}/files`);
   },
+  async getDownloadUrl(fileId) {
+    return apiRequest(`/vaults/files/${fileId}/download`);
+  },
 };
 
 export const onboardingApi = {
