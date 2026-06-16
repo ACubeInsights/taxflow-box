@@ -11,26 +11,12 @@ const router = express.Router();
 
 /**
  * GET /api/admin/clients
- * Returns ALL clients (super admin only).
+ * Returns ALL clients with optional search/filter query params.
  */
 router.get('/admin/clients', async (req, res, next) => {
   try {
-    const clients = await projectService.getAllClients();
-    res.json(clients);
-  } catch (error) {
-    next(error);
-  }
-});
-
-/**
- * GET /api/employee/:employeeId/clients
- * Returns assigned clients with optional search/filter query params.
- */
-router.get('/employee/:employeeId/clients', async (req, res, next) => {
-  try {
-    const { employeeId } = req.params;
     const { search, status, entityType } = req.query;
-    const clients = await projectService.getEmployeeClients(employeeId, { search, status, entityType });
+    const clients = await projectService.getAllClients({ search, status, entityType });
     res.json(clients);
   } catch (error) {
     next(error);

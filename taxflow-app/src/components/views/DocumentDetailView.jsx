@@ -127,7 +127,7 @@ export default function DocumentDetailView() {
     try {
       const [docsResult, clients, projects] = await Promise.all([
         projectApi.getProjectDocuments(projectId),
-        projectApi.getEmployeeClients(employeeId),
+        projectApi.getAllClients(),
         projectApi.getClientProjects(clientId),
       ])
 

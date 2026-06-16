@@ -8,7 +8,7 @@ const router = express.Router();
  * GET /api/employees
  * Lists all employees (for dropdowns, assignment, etc.)
  */
-router.get('/', requireAuth, requireRole('superadmin', 'employee', 'cxo'), async (req, res, next) => {
+router.get('/', requireAuth, requireRole('superadmin', 'employee'), async (req, res, next) => {
   try {
     const employees = await employeeService.listEmployees();
     res.json(employees);
@@ -26,7 +26,7 @@ router.post('/', requireAuth, requireRole('superadmin'), async (req, res, next) 
     if (password.length < 6) {
       return res.status(400).json({ error: 'Password must be at least 6 characters' });
     }
-    const boxRole = role === 'cxo' ? 'coadmin' : 'user';
+    const boxRole = 'user';
     const result = await Promise.race([
       employeeService.createEmployee(name, email, boxRole, password),
       new Promise((_, reject) => setTimeout(() => reject(new Error('Timed out')), 30000)),

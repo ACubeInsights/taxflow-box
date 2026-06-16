@@ -1,4 +1,4 @@
-import { clients, projects, documents, activities, employeeClients } from '../../fixtures/seedData.js';
+import { clients, projects, documents, activities } from '../../fixtures/seedData.js';
 
 /**
  * Seed demo data migration.
@@ -117,20 +117,6 @@ export async function up(knex) {
       timestamp: a.timestamp,
     }))
   );
-
-  // --- Employee-Client Assignments ---
-  const ecRows = [];
-  for (const [employeeId, clientIds] of Object.entries(employeeClients)) {
-    for (const clientId of clientIds) {
-      ecRows.push({
-        id: `ec-${employeeId}-${clientId}`,
-        employee_id: employeeId,
-        client_id: clientId,
-        assigned_at: new Date().toISOString(),
-      });
-    }
-  }
-  await knex('employee_clients').insert(ecRows);
 }
 
 /**
@@ -140,10 +126,6 @@ export async function up(knex) {
  */
 export async function down(knex) {
   // Delete in reverse order to respect foreign key constraints
-  await knex('employee_clients')
-    .whereIn('employee_id', ['employee-1', 'employee-2'])
-    .del();
-
   await knex('activity_log')
     .whereIn('id', ['a1', 'a2', 'a3', 'a4', 'a5', 'a6', 'a7', 'a8', 'a9', 'a10', 'a11'])
     .del();

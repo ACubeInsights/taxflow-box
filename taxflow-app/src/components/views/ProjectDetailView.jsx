@@ -67,7 +67,7 @@ export default function ProjectDetailView() {
     try {
       const [projectData, clients] = await Promise.all([
         projectApi.getProjectDetail(projectId),
-        projectApi.getEmployeeClients(employeeId),
+        projectApi.getAllClients(),
       ])
 
       if (!projectData) {

@@ -393,8 +393,4 @@ export const activities = [
   },
 ];
 
-/** Employee → client ID assignments */
-export const employeeClients = {
-  'employee-1': ['c1', 'c2', 'c3', 'c4', 'c5'],
-  'employee-2': ['c3', 'c6', 'c7'],
-};
+

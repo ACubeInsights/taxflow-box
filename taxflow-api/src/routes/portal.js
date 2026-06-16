@@ -40,21 +40,6 @@ router.get('/employee/:employeeId/dashboard', async (req, res, next) => {
 });
 
 /**
- * GET /api/portal/cxo/portfolio
- * CXO portfolio: cross-client aggregation with pagination.
- */
-router.get('/cxo/portfolio', async (req, res, next) => {
-  try {
-    const { cursor, limit } = req.query;
-    const parsedLimit = limit ? parseInt(limit, 10) : undefined;
-    const result = await portalService.getCXOPortfolio(cursor, parsedLimit);
-    res.json(result);
-  } catch (error) {
-    next(error);
-  }
-});
-
-/**
  * GET /api/portal/inactive-clients
  * Detect clients with no activity within threshold.
  */

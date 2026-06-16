@@ -197,13 +197,6 @@ export const portalApi = {
   async getEmployeeDashboard(employeeId) {
     return apiRequest(`/portal/employee/${employeeId}/dashboard`);
   },
-  async getCXOPortfolio(cursor, limit) {
-    const params = new URLSearchParams();
-    if (cursor) params.set('cursor', cursor);
-    if (limit !== undefined && limit !== null) params.set('limit', String(limit));
-    const qs = params.toString();
-    return apiRequest(`/portal/cxo/portfolio${qs ? `?${qs}` : ''}`);
-  },
   async getInactiveClients(thresholdDays) {
     const params = new URLSearchParams();
     if (thresholdDays !== undefined && thresholdDays !== null) params.set('thresholdDays', String(thresholdDays));
@@ -321,16 +314,13 @@ export const complianceApi = {
  * Project API — Client → Project → Document hierarchy
  */
 export const projectApi = {
-  async getAllClients() {
-    return apiRequest('/admin/clients');
-  },
-  async getEmployeeClients(employeeId, filters = {}) {
+  async getAllClients(filters = {}) {
     const params = new URLSearchParams();
     if (filters.search) params.set('search', filters.search);
     if (filters.status) params.set('status', filters.status);
     if (filters.entityType) params.set('entityType', filters.entityType);
     const qs = params.toString();
-    return apiRequest(`/employee/${employeeId}/clients${qs ? `?${qs}` : ''}`);
+    return apiRequest(`/admin/clients${qs ? `?${qs}` : ''}`);
   },
   async getClientProjects(clientId) {
     return apiRequest(`/clients/${clientId}/projects`);

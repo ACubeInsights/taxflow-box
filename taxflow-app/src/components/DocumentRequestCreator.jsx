@@ -68,7 +68,7 @@ export default function DocumentRequestCreator({
     const load = async () => {
       setLoadingClients(true)
       try {
-        const data = await projectApi.getEmployeeClients(employeeId)
+        const data = await projectApi.getAllClients()
         if (!cancelled) setClients(Array.isArray(data) ? data : [])
       } catch { if (!cancelled) setClients([]) }
       finally { if (!cancelled) setLoadingClients(false) }

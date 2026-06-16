@@ -1,21 +1,17 @@
 /**
+ * This migration drops the employee_clients table.
+ * Employee-client assignment has been removed — all employees can now access all clients.
+ *
  * @param {import('knex').Knex} knex
  */
 export function up(knex) {
-  return knex.schema.createTable('employee_clients', (table) => {
-    table.text('id').primary();
-    table.text('employee_id').notNullable().references('id').inTable('users');
-    table.text('client_id').notNullable().references('id').inTable('clients');
-    table.datetime('assigned_at').notNullable();
-
-    table.unique(['employee_id', 'client_id']);
-    table.index('employee_id');
-  });
+  return knex.schema.dropTableIfExists('employee_clients');
 }
 
 /**
  * @param {import('knex').Knex} knex
  */
 export function down(knex) {
-  return knex.schema.dropTableIfExists('employee_clients');
+  // No-op: we no longer create this table
+  return Promise.resolve();
 }

@@ -19,7 +19,7 @@ export async function requireAuth(req, res, next) {
   const token = header.slice(7);
 
   // Support demo/mock tokens (format: mock-token-{role}-{timestamp})
-  const mockMatch = token.match(/^mock-token-(superadmin|cxo|employee|client)-/);
+  const mockMatch = token.match(/^mock-token-(superadmin|employee|client)-/);
   if (mockMatch) {
     req.user = {
       userId: `demo-${mockMatch[1]}`,

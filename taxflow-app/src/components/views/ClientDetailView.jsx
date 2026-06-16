@@ -11,8 +11,6 @@ import { useAuth } from '../../context/AuthContext'
 
 const TABS = [
   { key: 'projects', label: 'Projects', icon: FolderOpen },
-  { key: 'activity', label: 'Activity', icon: Activity },
-  { key: 'notes', label: 'Notes', icon: StickyNote },
 ]
 
 const STATUS_COLORS = {
@@ -35,23 +33,14 @@ export default function ClientDetailView() {
     setClientLoading(true)
     setClientError(null)
     try {
-      // Try employee-specific clients first, then fall back to all clients
+      // Fetch all clients
       let clients = []
       try {
-        const data = await projectApi.getEmployeeClients(employeeId)
+        const data = await projectApi.getAllClients()
         clients = data.clients || data || []
       } catch { /* ignore */ }
 
       let found = clients.find((c) => c.id === clientId)
-
-      // If not found, try all clients (super admin view)
-      if (!found) {
-        try {
-          const allData = await projectApi.getAllClients()
-          const allClients = allData.clients || allData || []
-          found = allClients.find((c) => c.id === clientId)
-        } catch { /* ignore */ }
-      }
 
       if (!found) {
         setClientError('not_found')

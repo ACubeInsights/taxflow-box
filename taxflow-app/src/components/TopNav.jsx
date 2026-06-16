@@ -14,7 +14,6 @@ const EVENT_TYPE_ICONS = {
 
 const ROLE_META = {
   superadmin: { label: 'Super Admin', color: 'var(--color-primary)', badge: 'SYSTEM' },
-  cxo: { label: 'CXO / Partner', color: 'var(--color-tertiary)', badge: 'EXECUTIVE' },
   employee: { label: 'Tax Preparer', color: 'var(--color-secondary)', badge: 'PREPARER' },
   client: { label: 'Client Portal', color: 'var(--color-on-surface-variant)', badge: 'CLIENT' },
 }

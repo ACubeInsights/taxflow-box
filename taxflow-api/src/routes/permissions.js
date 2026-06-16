@@ -6,6 +6,8 @@
 import express from 'express';
 import { requireAuth, requireRole } from '../middleware/authMiddleware.js';
 import permissionService from '../services/permissionService.js';
+import notificationService from '../services/notificationService.js';
+import projectService from '../services/projectService.js';
 
 const router = express.Router();
 
@@ -13,6 +15,7 @@ const router = express.Router();
  * POST /api/permissions
  * Set or update permission for a client on a resource.
  * Auth: employee or superadmin only.
+ * Sends email notification to the client about the permission change.
  */
 router.post('/', requireAuth, requireRole('employee', 'superadmin'), async (req, res, next) => {
   try {
@@ -28,6 +31,26 @@ router.post('/', requireAuth, requireRole('employee', 'superadmin'), async (req,
     const result = await permissionService.setPermission(
       clientId, resourceId, resourceType, accessLevel, grantedBy, resourceName
     );
+
+    // Send email notification to client about permission change
+    try {
+      const client = await projectService.getClient(clientId);
+      if (client && client.email) {
+        const displayName = resourceName || resourceId;
+        notificationService.dispatch('permission_updated', client.email, {
+          clientName: client.name,
+          resourceName: displayName,
+          resourceType,
+          accessLevel,
+          grantedBy: req.user.name || req.user.email || grantedBy,
+        }).catch((err) => {
+          console.error(`Permission notification failed for client ${clientId}:`, err.message);
+        });
+      }
+    } catch (notifErr) {
+      // Non-fatal — don't block the permission change if notification fails
+      console.error('Permission notification error:', notifErr.message);
+    }
 
     res.json(result);
   } catch (error) {

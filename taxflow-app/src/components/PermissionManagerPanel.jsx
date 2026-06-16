@@ -4,7 +4,7 @@ import {
   Shield, Folder, FolderOpen, FileText, ChevronRight, ChevronDown,
   Loader2, AlertCircle, Search, Check,
 } from 'lucide-react'
-import { GlassPanel, PanelTitle } from './ui'
+import { GlassPanel } from './ui'
 import { useAuth } from '../context/AuthContext'
 import { projectApi, vaultApi, permissionApi } from '../services/api'
 
@@ -148,16 +148,16 @@ export default function PermissionManagerPanel({ onClose }) {
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState(null)
 
-  // Fetch assigned clients
+  // Fetch all clients
   useEffect(() => {
     const fetchClients = async () => {
       try {
-        const data = await projectApi.getEmployeeClients(user?.id)
+        const data = await projectApi.getAllClients()
         setClients(data.clients || data || [])
       } catch { setClients([]) }
     }
     fetchClients()
-  }, [user?.id])
+  }, [])
 
   // Fetch permissions when client selected
   useEffect(() => {
@@ -173,12 +173,16 @@ export default function PermissionManagerPanel({ onClose }) {
         }
         setPermissions(permMap)
 
-        // Get vault folders for this client
-        const clientProjects = await projectApi.getClientProjects(selectedClient.id)
-        // Use the vault from the client record if available
+        // Get vault folders for this client (non-fatal if vault doesn't exist yet)
         if (selectedClient.boxFolderId) {
-          const data = await vaultApi.listFiles(selectedClient.boxFolderId)
-          setVaultFolders((data.files || []).filter(f => f.type === 'folder'))
+          try {
+            const data = await vaultApi.listFiles(selectedClient.boxFolderId)
+            setVaultFolders((data.files || []).filter(f => f.type === 'folder'))
+          } catch (vaultErr) {
+            // Vault folder not found or inaccessible — not a blocking error
+            console.warn('Could not load vault folders:', vaultErr.message)
+            setVaultFolders([])
+          }
         }
       } catch (err) {
         setError(err.message)
@@ -199,13 +203,18 @@ export default function PermissionManagerPanel({ onClose }) {
   )
 
   return (
-    <GlassPanel className="max-h-[80vh] overflow-y-auto">
+    <GlassPanel className="max-h-[85vh] overflow-y-auto">
       <div className="flex items-center justify-between mb-5">
-        <div className="flex items-center gap-2">
-          <Shield size={16} className="text-[var(--color-primary)]" />
-          <PanelTitle>Permission Manager</PanelTitle>
+        <div className="flex items-center gap-2.5">
+          {selectedClient && (
+            <button onClick={() => setSelectedClient(null)} className="w-7 h-7 rounded-lg flex items-center justify-center cursor-pointer bg-transparent border border-[var(--color-outline-variant)] text-[var(--color-on-surface-variant)] hover:bg-[var(--color-surface-highest)] transition-colors mr-1">
+              <ChevronRight size={14} className="rotate-180" />
+            </button>
+          )}
+          <Shield size={16} className="text-[var(--color-on-surface)]" />
+          <span className="text-[15px] font-semibold text-[var(--color-on-surface)]">Permission Manager</span>
         </div>
-        {onClose && <button onClick={onClose} className="text-[11px] text-[var(--color-on-surface-variant)] cursor-pointer bg-transparent border-none hover:text-white">Close</button>}
+        {onClose && <button onClick={onClose} className="text-[12px] text-[var(--color-on-surface-variant)] cursor-pointer bg-transparent border-none hover:text-white">Close</button>}
       </div>
 
       {/* Client list */}
@@ -244,7 +253,7 @@ export default function PermissionManagerPanel({ onClose }) {
               ))
             ) : (
               <p className="text-[12px] text-[var(--color-on-surface-variant)] text-center py-4 italic">
-                {clients.length === 0 ? 'No clients assigned' : 'No matching clients'}
+                {clients.length === 0 ? 'No clients available' : 'No matching clients'}
               </p>
             )}
           </div>
@@ -281,7 +290,7 @@ export default function PermissionManagerPanel({ onClose }) {
                 ))
               ) : (
                 <p className="text-[12px] text-[var(--color-on-surface-variant)] text-center py-6 italic">
-                  Select a client with a vault to manage permissions
+                  No vault folders found. Onboard this client to create their vault.
                 </p>
               )}
             </div>

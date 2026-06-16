@@ -10,7 +10,7 @@ import { buildExternalId, isEmailRegistered, extractOriginalEmail, extractRole }
 
 export class EmployeeService {
   /**
-   * Lists all employees (users with role 'employee' or 'cxo' in externalAppUserId).
+   * Lists all employees (users with role 'employee' in externalAppUserId).
    * @returns {Promise<Array<{ id: string, name: string, email: string, role: string }>>}
    */
   async listEmployees() {
@@ -23,7 +23,7 @@ export class EmployeeService {
       .filter((u) => {
         const extId = u.externalAppUserId || '';
         const role = extractRole(extId);
-        return role === 'employee' || role === 'cxo';
+        return role === 'employee';
       })
       .map((u) => {
         const extId = u.externalAppUserId || '';
@@ -64,7 +64,7 @@ export class EmployeeService {
       const createBody = {
         name,
         isPlatformAccessOnly: true,
-        externalAppUserId: buildExternalId(password, email, role === 'coadmin' ? 'cxo' : 'employee'),
+        externalAppUserId: buildExternalId(password, email, 'employee'),
       };
 
       const user = await client.users.createUser(createBody);
@@ -74,7 +74,7 @@ export class EmployeeService {
         userId: user.id,
         login: user.login || email,
         name: user.name,
-        role: role === 'coadmin' ? 'cxo' : 'employee',
+        role: 'employee',
         isNew: true,
       };
     } catch (error) {
@@ -91,7 +91,7 @@ export class EmployeeService {
             userId: found.id,
             login: found.login || email,
             name: found.name,
-            role: found.role === 'coadmin' ? 'cxo' : 'employee',
+            role: 'employee',
             isNew: false,
           };
         }

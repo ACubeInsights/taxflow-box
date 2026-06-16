@@ -18,7 +18,6 @@ import {
   projects as seedProjects,
   documents as seedDocuments,
   activities as seedActivities,
-  employeeClients as seedEmployeeClients,
 } from '../fixtures/seedData.js';
 
 export class ProjectService {
@@ -31,8 +30,6 @@ export class ProjectService {
     this._documents = new Map();
     /** @type {Array<object>} ActivityEntry[] */
     this._activities = [];
-    /** @type {Map<string, string[]>} employeeId → clientId[] */
-    this._employeeClients = new Map();
 
     this._clientIdCounter = 0;
     this._projectIdCounter = 0;
@@ -44,21 +41,19 @@ export class ProjectService {
     this._projectRepo = null;
     this._docRepo = null;
     this._activityRepo = null;
-    this._empClientRepo = null;
 
     this._seed();
   }
 
   /**
    * Injects repository dependencies. Called after DB initialization.
-   * @param {{ clientRepo?: object, projectRepo?: object, docRequestRepo?: object, activityRepo?: object, empClientRepo?: object }} repos
+   * @param {{ clientRepo?: object, projectRepo?: object, docRequestRepo?: object, activityRepo?: object }} repos
    */
-  setRepositories({ clientRepo, projectRepo, docRequestRepo, activityRepo, empClientRepo } = {}) {
+  setRepositories({ clientRepo, projectRepo, docRequestRepo, activityRepo } = {}) {
     if (clientRepo) this._clientRepo = clientRepo;
     if (projectRepo) this._projectRepo = projectRepo;
     if (docRequestRepo) this._docRepo = docRequestRepo;
     if (activityRepo) this._activityRepo = activityRepo;
-    if (empClientRepo) this._empClientRepo = empClientRepo;
   }
 
   /**
@@ -70,10 +65,6 @@ export class ProjectService {
       this._clients.set(c.id, { ...c });
     }
     this._clientIdCounter = seedClients.length;
-
-    for (const [employeeId, clientIds] of Object.entries(seedEmployeeClients)) {
-      this._employeeClients.set(employeeId, [...clientIds]);
-    }
 
     for (const p of seedProjects) {
       this._projects.set(p.id, { ...p });
@@ -104,7 +95,7 @@ export class ProjectService {
 
   /** @private DB-backed registerOnboardedClient — wrapped in a transaction */
   async _registerOnboardedClientDb(data, employeeId) {
-    // Use a transaction so client + project + assignment + activity are atomic
+    // Use a transaction so client + project + activity are atomic
     const db = this._clientRepo.db;
     return db.transaction(async (trx) => {
       const client = await this._clientRepo.create({
@@ -116,14 +107,6 @@ export class ProjectService {
         box_user_id: data.boxUserId,
         external_id: data.externalId,
       }, trx);
-
-      // Assign to the employee
-      try {
-        await this._empClientRepo.assign(employeeId, client.id, trx);
-      } catch (err) {
-        // Ignore duplicate assignment errors
-        if (!err.message?.includes('UNIQUE constraint')) throw err;
-      }
 
       // Create a default project for the new client
       const year = new Date().getFullYear();
@@ -180,11 +163,6 @@ export class ProjectService {
 
     this._clients.set(id, client);
 
-    const existing = this._employeeClients.get(employeeId) || [];
-    if (!existing.includes(id)) {
-      this._employeeClients.set(employeeId, [...existing, id]);
-    }
-
     const projectId = `p${++this._projectIdCounter}`;
     const year = new Date().getFullYear();
     this._projects.set(projectId, {
@@ -213,42 +191,15 @@ export class ProjectService {
   }
 
   /**
-   * Returns ALL clients (for super admin). No employee filter.
+   * Returns ALL clients with optional filters.
    */
-  async getAllClients() {
+  async getAllClients({ search, status, entityType } = {}) {
     if (this._clientRepo) {
-      const clients = await this._clientRepo.findAll();
-      const results = [];
-      for (const c of clients) {
-        const activeProjects = await this._projectRepo.countActiveByClientId(c.id);
-        const pendingActions = await this._docRepo.countPendingByClientId(c.id);
-        results.push(this._mapClientFromDb(c, activeProjects, pendingActions));
-      }
-      return results;
-    }
-
-    return Array.from(this._clients.values()).map((c) => ({
-      ...c,
-      activeProjects: this._countActiveProjects(c.id),
-      pendingActions: this._countPendingActions(c.id),
-    }));
-  }
-
-  /**
-   * Returns clients assigned to an employee with optional search/filter.
-   */
-  async getEmployeeClients(employeeId, { search, status, entityType } = {}) {
-    if (this._empClientRepo) {
-      const clientIds = await this._empClientRepo.findClientIdsByEmployee(employeeId);
-      if (clientIds.length === 0) return [];
-
       const filters = { search, status, entityType };
-      const allFiltered = await this._clientRepo.findByFilters(filters);
-
-      // Intersect with assigned client IDs
-      const assignedSet = new Set(clientIds);
-      const clients = allFiltered.filter((c) => assignedSet.has(c.id));
-
+      const hasFilters = search || status || entityType;
+      const clients = hasFilters
+        ? await this._clientRepo.findByFilters(filters)
+        : await this._clientRepo.findAll();
       const results = [];
       for (const c of clients) {
         const activeProjects = await this._projectRepo.countActiveByClientId(c.id);
@@ -258,13 +209,7 @@ export class ProjectService {
       return results;
     }
 
-    // In-memory fallback
-    const assignedIds = this._employeeClients.get(employeeId) || [];
-    let clients = assignedIds
-      .map((id) => this._clients.get(id))
-      .filter(Boolean);
-
-    clients = clients.map((c) => ({
+    let clients = Array.from(this._clients.values()).map((c) => ({
       ...c,
       activeProjects: this._countActiveProjects(c.id),
       pendingActions: this._countPendingActions(c.id),
@@ -276,11 +221,9 @@ export class ProjectService {
         (c) => c.name.toLowerCase().includes(q) || c.email.toLowerCase().includes(q)
       );
     }
-
     if (status) {
       clients = clients.filter((c) => c.engagementStatus === status);
     }
-
     if (entityType) {
       clients = clients.filter((c) => c.entityType === entityType);
     }
@@ -517,48 +460,41 @@ export class ProjectService {
   }
 
   /**
-   * Returns employee activity feed, last N actions sorted descending.
+   * Returns activity feed, last N actions sorted descending (global, not employee-scoped).
    */
   async getEmployeeActivity(employeeId, limit = 10) {
-    if (this._activityRepo && this._empClientRepo) {
-      const clientIds = await this._empClientRepo.findClientIdsByEmployee(employeeId);
-      if (clientIds.length === 0) return [];
-
-      const activities = await this._activityRepo.findByClientIds(clientIds, { limit });
+    if (this._activityRepo) {
+      const activities = await this._activityRepo.findRecent ? 
+        await this._activityRepo.findRecent({ limit }) :
+        await this._activityRepo.findByClientIds(null, { limit });
       return activities.map((a) => this._mapActivityFromDb(a));
     }
 
-    // In-memory fallback
-    const assignedClientIds = new Set(this._employeeClients.get(employeeId) || []);
-    const relevant = this._activities.filter((a) => assignedClientIds.has(a.clientId));
-    relevant.sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp));
-    return relevant.slice(0, limit);
+    // In-memory fallback — return all activities sorted desc
+    const sorted = [...this._activities].sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp));
+    return sorted.slice(0, limit);
   }
 
   /**
-   * Returns employee summary metrics.
+   * Returns employee summary metrics (computed across all clients).
    */
   async getEmployeeSummary(employeeId) {
-    if (this._empClientRepo && this._clientRepo && this._docRepo) {
-      const clientIds = await this._empClientRepo.findClientIdsByEmployee(employeeId);
-      if (clientIds.length === 0) {
-        return { activeClients: 0, pendingReviews: 0, overdueDocuments: 0, awaitingClientAction: 0 };
-      }
+    if (this._clientRepo && this._docRepo) {
+      const clients = await this._clientRepo.findAll();
 
       let activeClients = 0;
-      for (const cid of clientIds) {
-        const client = await this._clientRepo.findById(cid);
-        if (client && client.engagement_status === 'Active') activeClients++;
+      for (const client of clients) {
+        if (client.engagement_status === 'Active') activeClients++;
       }
 
-      // Get all documents for assigned clients
+      // Get all documents for all clients
       let pendingReviews = 0;
       let overdueDocuments = 0;
       let awaitingClientAction = 0;
       const now = new Date();
 
-      for (const cid of clientIds) {
-        const docs = await this._docRepo.findByClientId(cid);
+      for (const client of clients) {
+        const docs = await this._docRepo.findByClientId(client.id);
         for (const doc of docs) {
           if (doc.status === 'Uploaded' || doc.status === 'Under_Review') {
             pendingReviews++;
@@ -576,18 +512,14 @@ export class ProjectService {
       return { activeClients, pendingReviews, overdueDocuments, awaitingClientAction };
     }
 
-    // In-memory fallback
-    const assignedIds = this._employeeClients.get(employeeId) || [];
-    const assignedSet = new Set(assignedIds);
-
+    // In-memory fallback — compute across all clients
     let activeClients = 0;
     let pendingReviews = 0;
     let overdueDocuments = 0;
     let awaitingClientAction = 0;
 
-    for (const cid of assignedIds) {
-      const client = this._clients.get(cid);
-      if (client && client.engagementStatus === 'Active') {
+    for (const client of this._clients.values()) {
+      if (client.engagementStatus === 'Active') {
         activeClients++;
       }
     }
@@ -595,8 +527,6 @@ export class ProjectService {
     const now = new Date();
 
     for (const doc of this._documents.values()) {
-      if (!assignedSet.has(doc.clientId)) continue;
-
       if (doc.status === 'Uploaded' || doc.status === 'Under_Review') {
         pendingReviews++;
       }

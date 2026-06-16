@@ -70,7 +70,7 @@ export default function LoginScreen() {
               TaxFlow Pro
             </h1>
             <p className="mt-2 text-[10px] text-[var(--color-on-surface-variant)] tracking-[0.16em] font-bold uppercase">
-              Powered by Box AI
+              Secure Document Management
             </p>
           </div>
 

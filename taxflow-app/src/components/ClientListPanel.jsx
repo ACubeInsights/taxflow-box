@@ -5,7 +5,6 @@ import { Search, AlertTriangle, RefreshCw, Users } from 'lucide-react'
 import { GlassPanel, PanelTitle, Badge } from './ui'
 import { projectApi } from '../services/api'
 import { saveFilters, loadFilters } from '../services/sessionFilters'
-import { useAuth } from '../context/AuthContext'
 
 const FILTER_KEY = '/dashboard:clientFilters'
 
@@ -28,8 +27,6 @@ const ENTITY_COLORS = {
 
 export default function ClientListPanel() {
   const navigate = useNavigate()
-  const { user } = useAuth()
-  const employeeId = user?.id || 'employee-1'
   const [clients, setClients] = useState([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState(null)
@@ -44,14 +41,14 @@ export default function ClientListPanel() {
     setLoading(true)
     setError(null)
     try {
-      const data = await projectApi.getEmployeeClients(employeeId)
+      const data = await projectApi.getAllClients()
       setClients(data.clients || data || [])
     } catch (err) {
       setError(err.message || 'Failed to load clients')
     } finally {
       setLoading(false)
     }
-  }, [employeeId])
+  }, [])
 
   useEffect(() => {
     fetchClients()
@@ -82,7 +79,7 @@ export default function ClientListPanel() {
   if (loading) {
     return (
       <GlassPanel>
-        <PanelTitle>Assigned Clients</PanelTitle>
+        <PanelTitle>All Clients</PanelTitle>
         <div className="flex flex-col gap-3">
           {[0, 1, 2, 3, 4].map((i) => (
             <div
@@ -117,7 +114,7 @@ export default function ClientListPanel() {
 
   return (
     <GlassPanel>
-      <PanelTitle>Assigned Clients</PanelTitle>
+      <PanelTitle>All Clients</PanelTitle>
 
       {/* Search + Filters */}
       <div className="flex flex-wrap items-center gap-3 mb-5">
@@ -159,7 +156,7 @@ export default function ClientListPanel() {
           <Users size={32} className="mx-auto mb-3 text-[var(--color-on-surface-variant)] opacity-40" />
           <p className="text-[var(--color-on-surface-variant)] text-sm font-medium m-0">
             {clients.length === 0
-              ? 'No clients assigned to you yet. Contact your administrator to get clients assigned.'
+              ? 'No clients in the system yet.'
               : 'No clients match your filters.'}
           </p>
         </div>

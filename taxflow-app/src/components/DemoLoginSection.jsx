@@ -1,10 +1,9 @@
 import { useState } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
-import { Shield, TrendingUp, Users, FileText } from 'lucide-react'
+import { Shield, Users, FileText } from 'lucide-react'
 
 const DEMO_ROLES = [
   { id: 'superadmin', label: 'Super Admin', description: 'System management', icon: Shield, accentColor: 'var(--color-primary)' },
-  { id: 'cxo', label: 'CXO/Partner', description: 'Executive overview', icon: TrendingUp, accentColor: 'var(--color-tertiary)' },
   { id: 'employee', label: 'Employee/Tax Preparer', description: 'Client & AI workflow', icon: FileText, accentColor: 'var(--color-secondary)' },
   { id: 'client', label: 'Client', description: 'Your tax portal', icon: Users, accentColor: 'var(--color-on-surface-variant)' },
 ]

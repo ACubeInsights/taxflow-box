@@ -4,7 +4,6 @@ import { ResetTokenRepository } from './ResetTokenRepository.js';
 import { ClientRepository } from './ClientRepository.js';
 import { ProjectRepository } from './ProjectRepository.js';
 import { DocumentRequestRepository } from './DocumentRequestRepository.js';
-import { EmployeeClientRepository } from './EmployeeClientRepository.js';
 import { CommentRepository } from './CommentRepository.js';
 import { NotificationRepository } from './NotificationRepository.js';
 import { ActivityLogRepository } from './ActivityLogRepository.js';
@@ -40,7 +39,6 @@ export function initRepositories(db) {
     clientRepo: new ClientRepository(db),
     projectRepo: new ProjectRepository(db),
     docRequestRepo: new DocumentRequestRepository(db),
-    empClientRepo: new EmployeeClientRepository(db),
     commentRepo: new CommentRepository(db),
     notificationRepo: new NotificationRepository(db),
     activityRepo: new ActivityLogRepository(db),
@@ -71,7 +69,6 @@ export function injectRepositories(repos) {
     projectRepo: repos.projectRepo,
     docRequestRepo: repos.docRequestRepo,
     activityRepo: repos.activityRepo,
-    empClientRepo: repos.empClientRepo,
   });
 
   commentService.setRepositories({ commentRepo: repos.commentRepo });

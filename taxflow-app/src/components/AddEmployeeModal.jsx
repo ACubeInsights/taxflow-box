@@ -4,16 +4,10 @@ import { X, UserCog, Loader2, CheckCircle2, AlertCircle } from 'lucide-react'
 import { employeeApi } from '../services/api'
 import FloatingLabel from './FloatingLabel'
 
-const ROLE_OPTIONS = [
-  { value: 'employee', label: 'Employee / Tax Preparer' },
-  { value: 'cxo', label: 'CXO / Partner' },
-]
-
 export default function AddEmployeeModal({ open, onClose }) {
   const [name, setName] = useState('')
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
-  const [role, setRole] = useState('employee')
   const [loading, setLoading] = useState(false)
   const [result, setResult] = useState(null)
   const [error, setError] = useState(null)
@@ -27,7 +21,7 @@ export default function AddEmployeeModal({ open, onClose }) {
     setError(null)
     setResult(null)
     try {
-      const res = await employeeApi.createEmployee(name.trim(), email.trim(), role, password)
+      const res = await employeeApi.createEmployee(name.trim(), email.trim(), 'employee', password)
       setResult(res)
     } catch (err) {
       setError(err.message || 'Failed to create employee')
@@ -40,7 +34,6 @@ export default function AddEmployeeModal({ open, onClose }) {
     setName('')
     setEmail('')
     setPassword('')
-    setRole('employee')
     setResult(null)
     setError(null)
     setLoading(false)
@@ -76,7 +69,7 @@ export default function AddEmployeeModal({ open, onClose }) {
               </div>
               <div>
                 <h2 className="m-0 text-[16px] font-bold text-[var(--color-on-surface)] tracking-tight">Add Employee</h2>
-                <p className="m-0 text-[11px] text-[var(--color-on-surface-variant)]">Creates a Box managed user</p>
+                <p className="m-0 text-[11px] text-[var(--color-on-surface-variant)]">Creates a new employee account</p>
               </div>
             </div>
             <button onClick={handleClose} className="w-8 h-8 rounded-lg flex items-center justify-center bg-transparent border border-[var(--color-outline-variant)] text-[var(--color-on-surface-variant)] hover:text-white hover:border-white/20 transition-colors cursor-pointer">
@@ -113,25 +106,6 @@ export default function AddEmployeeModal({ open, onClose }) {
                 <FloatingLabel label="Full Name" type="text" value={name} onChange={(e) => setName(e.target.value)} />
                 <FloatingLabel label="Email Address" type="email" value={email} onChange={(e) => setEmail(e.target.value)} />
                 <FloatingLabel label="Initial Password (min 6 chars)" type="password" value={password} onChange={(e) => setPassword(e.target.value)} />
-
-                {/* Role selector */}
-                <div className="flex gap-2">
-                  {ROLE_OPTIONS.map((opt) => (
-                    <button
-                      key={opt.value}
-                      type="button"
-                      onClick={() => setRole(opt.value)}
-                      className="flex-1 py-2.5 rounded-xl text-[12px] font-bold tracking-wide transition-all duration-200 cursor-pointer border"
-                      style={{
-                        background: role === opt.value ? 'linear-gradient(180deg, var(--color-primary), var(--color-primary-container))' : 'transparent',
-                        color: role === opt.value ? 'var(--color-surface-lowest)' : 'var(--color-on-surface-variant)',
-                        borderColor: role === opt.value ? 'transparent' : 'var(--color-outline-variant)',
-                      }}
-                    >
-                      {opt.label}
-                    </button>
-                  ))}
-                </div>
 
                 <AnimatePresence>
                   {error && (

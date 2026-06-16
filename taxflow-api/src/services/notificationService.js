@@ -32,6 +32,8 @@ const EVENT_TEMPLATES = {
   signature_declined: (ctx) => `Signature declined for: ${ctx.fileName || 'unknown'}`,
   signature_expired: (ctx) => `Signature expired for: ${ctx.fileName || 'unknown'}`,
   document_reuploaded: (ctx) => `Document re-uploaded: ${ctx.fileName || 'unknown'}`,
+  request_published: (ctx) => `New document request: ${ctx.fileName || 'unknown'}`,
+  permission_updated: (ctx) => `Your access to ${ctx.resourceType || 'resource'} "${ctx.resourceName || 'unknown'}" has been updated to: ${ctx.accessLevel || 'unknown'}`,
 };
 
 export class NotificationService {

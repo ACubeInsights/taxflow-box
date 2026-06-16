@@ -9,66 +9,53 @@ describe('ProjectService', () => {
     service = new ProjectService(); // fresh seeded instance
   });
 
-  // ─── getEmployeeClients ─────────────────────────────────────────────
+  // ─── getAllClients ───────────────────────────────────────────────────
 
-  describe('getEmployeeClients', () => {
-    it('returns only clients assigned to the given employee', async () => {
-      const clients = await service.getEmployeeClients('employee-1');
-      expect(clients).toHaveLength(5);
-      expect(clients.map((c) => c.id).sort()).toEqual(['c1', 'c2', 'c3', 'c4', 'c5']);
-    });
-
-    it('returns empty array for unknown employee', async () => {
-      expect(await service.getEmployeeClients('unknown')).toEqual([]);
+  describe('getAllClients', () => {
+    it('returns all clients in the system', async () => {
+      const clients = await service.getAllClients();
+      expect(clients).toHaveLength(7);
     });
 
     it('filters by search query (name, case-insensitive)', async () => {
-      const results = await service.getEmployeeClients('employee-1', { search: 'acme' });
+      const results = await service.getAllClients({ search: 'acme' });
       expect(results).toHaveLength(1);
       expect(results[0].name).toBe('Acme Industries');
     });
 
-    it('filters by search query (email or name)', async () => {
-      const results = await service.getEmployeeClients('employee-1', { search: 'jane' });
+    it('filters by search query (email)', async () => {
+      const results = await service.getAllClients({ search: 'jane' });
       expect(results).toHaveLength(1);
       expect(results[0].name).toBe('Jane Smith');
     });
 
     it('filters by engagement status', async () => {
-      const results = await service.getEmployeeClients('employee-1', { status: 'On_Hold' });
+      const results = await service.getAllClients({ status: 'On_Hold' });
       expect(results).toHaveLength(1);
       expect(results[0].name).toBe('Greenfield Trust');
     });
 
     it('filters by entity type', async () => {
-      const results = await service.getEmployeeClients('employee-1', { entityType: 'Individual' });
-      expect(results).toHaveLength(2);
-      const names = results.map(r => r.name).sort();
-      expect(names).toEqual(['Jane Smith', 'Ray Kowalski']);
+      const results = await service.getAllClients({ entityType: 'Individual' });
+      expect(results).toHaveLength(3);
     });
 
     it('combines search and filters', async () => {
-      const results = await service.getEmployeeClients('employee-1', { search: 'green', status: 'On_Hold' });
+      const results = await service.getAllClients({ search: 'green', status: 'On_Hold' });
       expect(results).toHaveLength(1);
       expect(results[0].id).toBe('c3');
     });
 
     it('returns empty when filters match nothing', async () => {
-      const results = await service.getEmployeeClients('employee-1', { entityType: 'Partnership' });
+      const results = await service.getAllClients({ entityType: 'LLC' });
       expect(results).toEqual([]);
     });
 
     it('computes activeProjects and pendingActions dynamically', async () => {
-      const clients = await service.getEmployeeClients('employee-1');
+      const clients = await service.getAllClients();
       const acme = clients.find((c) => c.id === 'c1');
       expect(acme.activeProjects).toBe(2);
       expect(acme.pendingActions).toBeGreaterThanOrEqual(0);
-    });
-
-    it('employee-2 only sees assigned clients c3, c6, c7', async () => {
-      const clients = await service.getEmployeeClients('employee-2');
-      expect(clients).toHaveLength(3);
-      expect(clients.map((c) => c.id).sort()).toEqual(['c3', 'c6', 'c7']);
     });
   });
 
@@ -201,11 +188,11 @@ describe('ProjectService', () => {
     });
 
     it('records an activity entry on creation', async () => {
-      const before = (await service.getEmployeeActivity('employee-1')).length;
+      const before = (await service.getEmployeeActivity('employee-1', 100)).length;
       await service.createDocumentRequest('p1', {
         name: 'New Doc', documentType: 'W-2', dueDate: '2025-06-01',
       });
-      const after = (await service.getEmployeeActivity('employee-1')).length;
+      const after = (await service.getEmployeeActivity('employee-1', 100)).length;
       expect(after).toBe(before + 1);
     });
 
@@ -262,13 +249,11 @@ describe('ProjectService', () => {
       expect(activities.length).toBeLessThanOrEqual(10);
     });
 
-    it('returns only activities for assigned clients', async () => {
-      const activities = await service.getEmployeeActivity('employee-2');
-      // employee-2 is assigned to c3, c6, c7 — c6 and c7 have activities (a10, a11)
-      expect(activities.length).toBeGreaterThanOrEqual(2);
-      for (const a of activities) {
-        expect(['c3', 'c6', 'c7']).toContain(a.clientId);
-      }
+    it('returns activities from all clients (global)', async () => {
+      const activities = await service.getEmployeeActivity('employee-1', 20);
+      // Should include activities from c6 and c7 (previously only employee-2)
+      const clientIds = [...new Set(activities.map(a => a.clientId))];
+      expect(clientIds.length).toBeGreaterThan(2);
     });
 
     it('each activity has required fields', async () => {
@@ -299,24 +284,22 @@ describe('ProjectService', () => {
       expect(summary).toHaveProperty('awaitingClientAction');
     });
 
-    it('counts active clients correctly', async () => {
+    it('counts active clients across all clients', async () => {
       const summary = await service.getEmployeeSummary('employee-1');
-      // c1 Active, c2 Active, c3 On_Hold, c4 Active, c5 Active → 4 active
-      expect(summary.activeClients).toBe(4);
+      // c1 Active, c2 Active, c3 On_Hold, c4 Active, c5 Active, c6 Active, c7 Complete → 5 active
+      expect(summary.activeClients).toBe(5);
     });
 
-    it('counts pending reviews (Uploaded + Under_Review)', async () => {
+    it('counts pending reviews (Uploaded + Under_Review) across all clients', async () => {
       const summary = await service.getEmployeeSummary('employee-1');
-      // d2 Uploaded, d6 Under_Review, d7 Uploaded, d12 Uploaded, d13 Under_Review, d15 Uploaded → 6
-      expect(summary.pendingReviews).toBe(6);
+      // d2 Uploaded, d6 Under_Review, d7 Uploaded, d12 Uploaded, d13 Under_Review, d15 Uploaded, d18 Uploaded → 7
+      expect(summary.pendingReviews).toBe(7);
     });
 
-    it('returns zeros for unknown employee', async () => {
-      const summary = await service.getEmployeeSummary('unknown');
-      expect(summary.activeClients).toBe(0);
-      expect(summary.pendingReviews).toBe(0);
-      expect(summary.overdueDocuments).toBe(0);
-      expect(summary.awaitingClientAction).toBe(0);
+    it('returns same metrics regardless of employeeId', async () => {
+      const summary1 = await service.getEmployeeSummary('employee-1');
+      const summary2 = await service.getEmployeeSummary('employee-2');
+      expect(summary1).toEqual(summary2);
     });
   });
 });

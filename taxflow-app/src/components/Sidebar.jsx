@@ -10,15 +10,8 @@ const NAV_ITEMS = {
     { id: 'dashboard', icon: LayoutDashboard, label: 'Dashboard' },
     { id: 'users', icon: Users, label: 'User Management' },
     { id: 'security', icon: Shield, label: 'Security & Audit' },
-    { id: 'ai-status', icon: Bot, label: 'Box AI Status' },
+    { id: 'ai-status', icon: Bot, label: 'AI Insights' },
     { id: 'config', icon: Settings, label: 'System Config' },
-  ],
-  cxo: [
-    { id: 'overview', icon: LayoutDashboard, label: 'Overview' },
-    { id: 'analytics', icon: BarChart2, label: 'Portfolio Analytics' },
-    { id: 'compliance', icon: FileText, label: 'Compliance Reports' },
-    { id: 'alerts', icon: Bell, label: 'Alerts & Deadlines' },
-    { id: 'settings', icon: Settings, label: 'Settings' },
   ],
   employee: [
     { id: 'workspace', icon: LayoutDashboard, label: 'My Workspace' },
@@ -39,7 +32,6 @@ const NAV_ITEMS = {
 
 const ROLE_META = {
   superadmin: { label: 'Super Admin', color: 'var(--color-primary)', initials: 'SA' },
-  cxo: { label: 'CXO / Partner', color: 'var(--color-tertiary)', initials: 'CX' },
   employee: { label: 'Tax Preparer', color: 'var(--color-secondary)', initials: 'TP' },
   client: { label: 'Client', color: 'var(--color-on-surface-variant)', initials: 'CL' },
 }
@@ -70,7 +62,7 @@ export default function Sidebar({ collapsed, onToggle, activeView, onNavigate })
               TaxFlow Pro
             </span>
             <span className="text-[9px] text-[var(--color-on-surface-variant)] tracking-widest font-bold uppercase mt-[1px]">
-              Box AI Platform
+              TaxFlow Pro
             </span>
           </div>
         )}

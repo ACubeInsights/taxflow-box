@@ -3,7 +3,6 @@ import { motion, AnimatePresence } from 'framer-motion'
 import { useAuth } from '../context/AuthContext'
 import TopNav from './TopNav'
 import SuperAdminDashboard from './dashboards/SuperAdminDashboard'
-import CXODashboard from './dashboards/CXODashboard'
 import EmployeeDashboard from './dashboards/EmployeeDashboard'
 import ClientDashboard from './dashboards/ClientDashboard'
 import ClientDetailView from './views/ClientDetailView'
@@ -13,7 +12,6 @@ import NotFoundView from './views/NotFoundView'
 
 const DASHBOARDS = {
   superadmin: SuperAdminDashboard,
-  cxo: CXODashboard,
   employee: EmployeeDashboard,
   client: ClientDashboard,
 }
