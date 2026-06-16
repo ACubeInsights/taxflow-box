@@ -14,11 +14,11 @@
   },
   "dependencies": {
     "box-node-sdk": "^10.0.0",
-    "typescript": "^5.4.0"
+    "typescript": "^5.4.0",
+    "@types/node": "^20.14.0"
   },
   "devDependencies": {
     "vitest": "^1.6.0",
-    "fast-check": "^3.19.0",
-    "@types/node": "^20.14.0"
+    "fast-check": "^3.19.0"
   }
 }
