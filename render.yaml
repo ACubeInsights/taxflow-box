@@ -1,0 +1,49 @@
+services:
+  - type: web
+    name: taxflow-api
+    runtime: node
+    region: oregon
+    rootDir: .
+    buildCommand: cd box-wrapper-service && npm install && npm run build && cd ../taxflow-api && npm install
+    startCommand: cd taxflow-api && node src/server.js
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: PORT
+        value: "3001"
+      - key: BOX_CONFIG_PATH
+        value: ./box_config.json
+      - key: BOX_ROOT_FOLDER_ID
+        value: "0"
+      - key: BOX_ENTERPRISE_ID
+        value: "1497277803"
+      - key: BOX_ADMIN_EMAIL
+        value: agarwalayush1412@gmail.com
+      - key: FRONTEND_URL
+        sync: false
+      - key: DATABASE_URL
+        value: ./data/taxflow.db
+      - key: SMTP_HOST
+        value: smtp.gmail.com
+      - key: SMTP_PORT
+        value: "587"
+      - key: SMTP_USER
+        sync: false
+      - key: SMTP_PASS
+        sync: false
+      - key: SMTP_FROM
+        sync: false
+      - key: BOX_CLIENT_ID
+        sync: false
+      - key: BOX_CLIENT_SECRET
+        sync: false
+      - key: BOX_PUBLIC_KEY_ID
+        sync: false
+      - key: BOX_PRIVATE_KEY
+        sync: false
+      - key: BOX_PASSPHRASE
+        sync: false
+    disk:
+      name: taxflow-data
+      mountPath: /opt/render/project/src/taxflow-api/data
+      sizeGB: 1

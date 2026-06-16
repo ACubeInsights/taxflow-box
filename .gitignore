@@ -1,2 +1,20 @@
 # Kiro IDE
 .kiro/
+
+# Secrets
+box_config.json
+.env
+*.env.local
+
+# Dependencies
+node_modules/
+
+# Build artifacts
+dist/
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Database
+*.db

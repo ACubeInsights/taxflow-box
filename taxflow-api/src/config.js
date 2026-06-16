@@ -7,6 +7,27 @@ const __dirname = dirname(__filename);
 
 dotenv.config({ path: join(__dirname, '../.env') });
 
+// Support Box config via environment variables (for deployment)
+// If BOX_CLIENT_ID env var is set, write a box_config.json from env vars
+const boxConfigFromEnv = process.env.BOX_CLIENT_ID && process.env.BOX_PRIVATE_KEY;
+if (boxConfigFromEnv) {
+  const fs = await import('fs');
+  const configData = JSON.stringify({
+    boxAppSettings: {
+      clientID: process.env.BOX_CLIENT_ID,
+      clientSecret: process.env.BOX_CLIENT_SECRET,
+      appAuth: {
+        publicKeyID: process.env.BOX_PUBLIC_KEY_ID,
+        privateKey: process.env.BOX_PRIVATE_KEY.replace(/\\n/g, '\n'),
+        passphrase: process.env.BOX_PASSPHRASE,
+      },
+    },
+    enterpriseID: process.env.BOX_ENTERPRISE_ID || '',
+  });
+  const configPath = join(__dirname, '../box_config.json');
+  fs.writeFileSync(configPath, configData);
+}
+
 const boxConfigPath = process.env.BOX_CONFIG_PATH || './box_config.json';
 
 export const config = {
