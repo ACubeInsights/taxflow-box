@@ -1,7 +1,7 @@
 import { useState, useEffect, useCallback } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { motion } from 'framer-motion'
-import { Bot, Sparkles, Plus, FileSearch, Clock, AlertTriangle, RefreshCw, UserPlus } from 'lucide-react'
+import { Bot, Sparkles, Plus, FileSearch, Clock, AlertTriangle, RefreshCw, UserPlus, Shield } from 'lucide-react'
 import { SectionHeader, GlassPanel, PanelTitle, Badge } from '../ui'
 import { portalApi, projectApi } from '../../services/api'
 import { useAuth } from '../../context/AuthContext'
@@ -9,6 +9,7 @@ import SummaryBar from '../SummaryBar'
 import ClientListPanel from '../ClientListPanel'
 import DocumentRequestCreator from '../DocumentRequestCreator'
 import OnboardClientModal from '../OnboardClientModal'
+import PermissionManagerPanel from '../PermissionManagerPanel'
 
 const containerVariants = {
   hidden: { opacity: 0 },
@@ -52,6 +53,7 @@ export default function EmployeeDashboard() {
   const { user } = useAuth()
   const [drawerOpen, setDrawerOpen] = useState(false)
   const [onboardOpen, setOnboardOpen] = useState(false)
+  const [permissionsOpen, setPermissionsOpen] = useState(false)
 
   // Activity feed state
   const [activity, setActivity] = useState([])
@@ -238,6 +240,13 @@ export default function EmployeeDashboard() {
           <UserPlus size={16} strokeWidth={2.5} />
           Onboard New Client
         </button>
+        <button
+          onClick={() => setPermissionsOpen(true)}
+          className="flex items-center gap-2 rounded-[14px] border border-[var(--color-primary)]/30 bg-[var(--color-primary)]/10 px-6 py-3 text-[13px] font-bold tracking-wide text-[var(--color-primary)] transition-all duration-300 hover:bg-[var(--color-primary)]/20 hover:-translate-y-[1px] active:scale-[0.98]"
+        >
+          <Shield size={16} strokeWidth={2.5} />
+          Manage Permissions
+        </button>
       </motion.div>
 
       {/* Document Request Creator */}
@@ -252,13 +261,31 @@ export default function EmployeeDashboard() {
         onClose={() => setOnboardOpen(false)}
         onSuccess={(result) => {
           setOnboardOpen(false)
-          // Navigate to the new client using the project service client ID
           const clientId = result.clientId
           if (clientId) {
             navigate(`/clients/${clientId}`)
           }
         }}
       />
+
+      {/* Permission Manager Panel */}
+      {permissionsOpen && (
+        <motion.div
+          initial={{ opacity: 0 }}
+          animate={{ opacity: 1 }}
+          className="fixed inset-0 z-[100] flex items-center justify-center p-8 bg-black/50 backdrop-blur-sm"
+          onClick={() => setPermissionsOpen(false)}
+        >
+          <motion.div
+            initial={{ scale: 0.95, y: 20 }}
+            animate={{ scale: 1, y: 0 }}
+            className="w-full max-w-[600px] max-h-[80vh]"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <PermissionManagerPanel onClose={() => setPermissionsOpen(false)} />
+          </motion.div>
+        </motion.div>
+      )}
     </motion.div>
   )
 }

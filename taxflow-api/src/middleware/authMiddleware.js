@@ -5,6 +5,7 @@
 
 import authService from '../services/authService.js';
 import { getRepositories } from '../db/repositories/index.js';
+import permissionService from '../services/permissionService.js';
 
 /**
  * Requires a valid session. Rejects with 401 if missing/expired.
@@ -66,12 +67,18 @@ export function requireRole(...roles) {
 }
 
 /**
- * Validates that the requested folderId belongs to the authenticated client's vault.
- * Only allows access to uploads_folder_id, tax_folder_id, and signed_documents_folder_id.
+ * Validates that the requesting client has permission to access the folder.
+ * Employees/superadmins bypass this check.
+ * Uses the resource_permissions table for granular access control.
  * Must be used after requireAuth.
  */
 export async function validateFolderOwnership(req, res, next) {
   try {
+    // Employees and superadmins bypass folder ownership checks
+    if (['employee', 'superadmin'].includes(req.user.role)) {
+      return next();
+    }
+
     let repos;
     try {
       repos = getRepositories();
@@ -79,45 +86,73 @@ export async function validateFolderOwnership(req, res, next) {
       return res.status(503).json({ error: 'Service temporarily unavailable' });
     }
 
-    const { clientRepo, clientVaultRepo } = repos;
+    const { clientRepo } = repos;
     const userId = req.user.userId;
     const userEmail = req.user.email;
-
-    // Look up the client record — try by ID, then by Box user ID, then by email
-    let client = await clientRepo.findById(userId);
-    if (!client) {
-      client = await clientRepo.findByBoxUserId(userId);
-    }
-    if (!client && userEmail) {
-      client = await clientRepo.findByEmail(userEmail);
-    }
-
-    if (!client) {
-      return res.status(404).json({ error: 'Client vault not found' });
-    }
-
-    // Look up the vault record using the client's ID
-    const vault = await clientVaultRepo.findByClientId(client.id);
-    if (!vault) {
-      return res.status(404).json({ error: 'Client vault not found' });
-    }
-
-    // Check if the requested folder ID matches one of the three allowed folders
     const folderId = req.params.folderId;
-    const allowedFolderIds = [
-      vault.uploads_folder_id,
-      vault.tax_folder_id,
-      vault.signed_documents_folder_id,
-    ].filter(Boolean);
 
-    if (!allowedFolderIds.includes(folderId)) {
-      return res.status(403).json({ error: 'Access denied: folder does not belong to your vault' });
+    // Resolve client record from the clients table (not users table)
+    let client = await clientRepo.findByEmail(userEmail);
+    if (!client) client = await clientRepo.findById(userId);
+    if (!client) client = await clientRepo.findByBoxUserId(userId);
+
+    if (!client) {
+      return res.status(404).json({ error: 'Resource not found' });
     }
 
-    // Attach vault to request for downstream use
-    req.clientVault = vault;
+    // Check granular permission for this folder
+    const hasAccess = await permissionService.hasAccess(client.id, folderId, 'viewer');
+    if (!hasAccess) {
+      // Return 404 (not 403) to prevent resource enumeration
+      return res.status(404).json({ error: 'Resource not found' });
+    }
+
+    req.clientId = client.id;
     next();
   } catch (err) {
     next(err);
   }
+}
+
+/**
+ * Middleware factory that checks granular permissions for client users on file operations.
+ * Employees/superadmins bypass this check.
+ * @param {string} requiredLevel - Minimum access level required ('viewer','commenter','writer','delete')
+ */
+export function permissionCheck(requiredLevel) {
+  return async (req, res, next) => {
+    // Employees and superadmins bypass permission checks
+    if (['employee', 'superadmin'].includes(req.user?.role)) {
+      return next();
+    }
+
+    try {
+      const repos = getRepositories();
+      const { clientRepo } = repos;
+      const userId = req.user.userId;
+      const userEmail = req.user.email;
+      const resourceId = req.params.folderId || req.params.fileId;
+
+      if (!resourceId) return next();
+
+      // Resolve client from clients table (by email first, then by ID)
+      let client = await clientRepo.findByEmail(userEmail);
+      if (!client) client = await clientRepo.findById(userId);
+      if (!client) client = await clientRepo.findByBoxUserId(userId);
+
+      if (!client) {
+        return res.status(404).json({ error: 'Resource not found' });
+      }
+
+      const hasAccess = await permissionService.hasAccess(client.id, resourceId, requiredLevel);
+      if (!hasAccess) {
+        return res.status(404).json({ error: 'Resource not found' });
+      }
+
+      req.clientId = client.id;
+      next();
+    } catch (err) {
+      next(err);
+    }
+  };
 }

@@ -4,6 +4,7 @@ import { AuthProvider, useAuth } from './context/AuthContext'
 import { DocumentWorkflowProvider } from './context/DocumentWorkflowContext'
 import LoginScreen from './components/LoginScreen'
 import ResetPasswordPage from './components/ResetPasswordPage'
+import SignupPage from './components/SignupPage'
 import AppShell from './components/AppShell'
 import './App.css'
 
@@ -14,6 +15,11 @@ function AppContent() {
   // Handle /reset-password route regardless of auth state
   if (location.pathname === '/reset-password') {
     return <ResetPasswordPage />
+  }
+
+  // Handle /signup route regardless of auth state (client self-signup)
+  if (location.pathname === '/signup') {
+    return <SignupPage />
   }
 
   return (

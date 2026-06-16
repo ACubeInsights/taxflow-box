@@ -161,13 +161,6 @@ export default function LoginScreen() {
 
           <DemoLoginSection demoLogin={demoLogin} isMobile={isMobile} />
 
-          {/* Footer */}
-          <div className="flex items-center justify-center gap-2 mt-8 opacity-60">
-            <Lock size={12} className="text-[var(--color-on-surface-variant)]" />
-            <p className="m-0 text-[9px] text-[var(--color-on-surface-variant)] tracking-[0.06em] font-semibold uppercase">
-              AES-256 Encryption &nbsp;·&nbsp; SOC 2 Type II
-            </p>
-          </div>
         </div>
       </motion.div>
     </div>

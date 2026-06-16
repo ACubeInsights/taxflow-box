@@ -23,6 +23,8 @@ import commentRoutes from './routes/comments.js';
 import documentTypeRoutes from './routes/documentTypes.js';
 import authRoutes from './routes/auth.js';
 import employeeRoutes from './routes/employees.js';
+import inviteRoutes from './routes/invites.js';
+import permissionRoutes from './routes/permissions.js';
 import complianceService from './services/complianceService.js';
 import aiExtractionService from './services/aiExtractionService.js';
 import webhookService from './services/webhookService.js';
@@ -43,10 +45,13 @@ app.get('/health', (req, res) => {
 
 app.use('/api/auth', authRoutes);
 app.use('/api/employees', employeeRoutes);
+app.use('/api/invites', inviteRoutes);
+app.use('/api/permissions', permissionRoutes);
 app.use('/api/clients', clientRoutes);
 app.use('/api/documents', documentRoutes);
 app.use('/api/vaults', vaultRoutes);
 app.use('/api/onboarding', onboardingRoutes);
+app.use('/api/invites', inviteRoutes);
 app.use('/api/webhooks', webhookRoutes);
 app.use('/api/reviews', reviewRoutes);
 app.use('/api/portal', portalRoutes);

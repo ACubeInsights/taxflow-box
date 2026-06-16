@@ -11,6 +11,8 @@ import { ActivityLogRepository } from './ActivityLogRepository.js';
 import { WebhookKeyRepository } from './WebhookKeyRepository.js';
 import { ApprovalUndoRepository } from './ApprovalUndoRepository.js';
 import { ClientVaultRepository } from './ClientVaultRepository.js';
+import { InviteRepository } from './InviteRepository.js';
+import { PermissionRepository } from './PermissionRepository.js';
 
 import authService from '../../services/authService.js';
 import projectService from '../../services/projectService.js';
@@ -19,6 +21,9 @@ import inAppNotificationStore from '../../services/inAppNotificationStore.js';
 import webhookService from '../../services/webhookService.js';
 import statusTransitionService from '../../services/statusTransitionService.js';
 import portalService from '../../services/portalService.js';
+import inviteService from '../../services/inviteService.js';
+import signupService from '../../services/signupService.js';
+import permissionService from '../../services/permissionService.js';
 
 let repos = null;
 
@@ -42,6 +47,8 @@ export function initRepositories(db) {
     webhookKeyRepo: new WebhookKeyRepository(db),
     approvalUndoRepo: new ApprovalUndoRepository(db),
     clientVaultRepo: new ClientVaultRepository(db),
+    inviteRepo: new InviteRepository(db),
+    permissionRepo: new PermissionRepository(db),
   };
   return repos;
 }
@@ -87,6 +94,15 @@ export function injectRepositories(repos) {
       clientRepo: repos.clientRepo,
       projectRepo: repos.projectRepo,
     });
+  }
+
+  inviteService.setRepositories({ inviteRepo: repos.inviteRepo });
+  signupService.setRepositories({ inviteRepo: repos.inviteRepo });
+
+  permissionService.setRepositories({ permissionRepo: repos.permissionRepo });
+
+  if (inviteService.setRepositories) {
+    inviteService.setRepositories({ inviteRepo: repos.inviteRepo });
   }
 }
 

@@ -78,6 +78,8 @@ export class EmailService {
       document_uploaded: `Document Uploaded: ${context.fileName || 'document'}`,
       document_approved: `Document Approved: ${context.fileName || 'document'}`,
       password_reset: 'Reset Your TaxFlow Pro Password',
+      client_invite: `You're Invited to TaxFlow Pro`,
+      client_invite: `You're Invited to TaxFlow Pro`,
     };
     return subjects[templateId] || `TaxFlow Pro Notification: ${templateId}`;
   }

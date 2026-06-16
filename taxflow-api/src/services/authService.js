@@ -291,7 +291,8 @@ export class AuthService {
           }
         }
       }
-      const dbUser = await this._userRepo.findByEmail(email);
+      // Look up by email first, then by Box user ID as fallback
+      const dbUser = await this._userRepo.findByEmail(email) || await this._userRepo.findByBoxUserId(found.id);
       if (dbUser) {
         const session = await this.createSession({
           userId: dbUser.id,
@@ -303,6 +304,7 @@ export class AuthService {
       }
     }
 
+    // No DB available — use in-memory session (no FK constraint)
     const session = await this.createSession({
       userId: found.id,
       email: email,

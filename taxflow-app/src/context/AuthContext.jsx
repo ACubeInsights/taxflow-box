@@ -43,6 +43,7 @@ function persistSession(data) {
 export function AuthProvider({ children }) {
   // Restore session from sessionStorage on mount
   const persisted = loadPersistedSession()
+  const _authTokenSetOnMount = useRef(false)
 
   const [user, setUser] = useState(persisted?.user || null)
   const [transitioning, setTransitioning] = useState(false)
@@ -55,12 +56,12 @@ export function AuthProvider({ children }) {
   const lastActivityRef = useRef(Date.now())
   const inactivityIntervalRef = useRef(null)
 
-  // Set the auth token header on mount if we have a persisted session
-  useEffect(() => {
-    if (persisted?.token) {
-      setAuthToken(persisted.token)
-    }
-  }, [])
+  // Set the auth token header synchronously on initial load (before any child renders)
+  // This ensures API calls made during the first render cycle have the token
+  if (persisted?.token && !_authTokenSetOnMount.current) {
+    setAuthToken(persisted.token)
+    _authTokenSetOnMount.current = true
+  }
 
   const logout = useCallback(async () => {
     // Best-effort server logout

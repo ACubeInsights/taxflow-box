@@ -1,50 +1,19 @@
-import { useState, useEffect, useRef } from 'react'
+import { useState } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
-import { X, UserPlus, Loader2, CheckCircle2, AlertCircle, ChevronDown } from 'lucide-react'
-import { onboardingApi, employeeApi } from '../services/api'
+import { X, UserPlus, Loader2, CheckCircle2, AlertCircle, Send } from 'lucide-react'
+import { inviteApi } from '../services/api'
 import { useAuth } from '../context/AuthContext.jsx'
 import FloatingLabel from './FloatingLabel'
 
 export default function OnboardClientModal({ open, onClose, onSuccess }) {
   const { user } = useAuth()
-  const isEmployee = user?.role === 'employee'
 
-  const [clientName, setClientName] = useState('')
-  const [externalId, setExternalId] = useState('')
   const [email, setEmail] = useState('')
-  const [password, setPassword] = useState('')
-  const [employeeEmail, setEmployeeEmail] = useState(isEmployee ? (user?.email || '') : '')
-  const [financialYear, setFinancialYear] = useState(new Date().getFullYear().toString())
   const [loading, setLoading] = useState(false)
   const [result, setResult] = useState(null)
   const [error, setError] = useState(null)
 
-  // Employee dropdown state
-  const [employees, setEmployees] = useState([])
-  const [empSearch, setEmpSearch] = useState('')
-  const [empDropdownOpen, setEmpDropdownOpen] = useState(false)
-  const empRef = useRef(null)
-
-  // Fetch employees on mount (for super admin)
-  useEffect(() => {
-    if (!isEmployee && open) {
-      employeeApi.listEmployees().then(setEmployees).catch(() => setEmployees([]))
-    }
-  }, [open, isEmployee])
-
-  // Close dropdown on outside click
-  useEffect(() => {
-    const handler = (e) => { if (empRef.current && !empRef.current.contains(e.target)) setEmpDropdownOpen(false) }
-    document.addEventListener('mousedown', handler)
-    return () => document.removeEventListener('mousedown', handler)
-  }, [])
-
-  const filteredEmployees = employees.filter((emp) => {
-    const q = empSearch.toLowerCase()
-    return emp.name.toLowerCase().includes(q) || emp.email.toLowerCase().includes(q)
-  })
-
-  const isValid = clientName.trim() && externalId.trim() && email.trim() && password.trim().length >= 6 && employeeEmail.trim()
+  const isValid = email.trim() && email.includes('@')
 
   const handleSubmit = async (e) => {
     e.preventDefault()
@@ -55,29 +24,20 @@ export default function OnboardClientModal({ open, onClose, onSuccess }) {
     setResult(null)
 
     try {
-      const res = await onboardingApi.onboardClient(
-        clientName.trim(),
-        externalId.trim(),
-        email.trim(),
-        employeeEmail.trim(),
-        financialYear.trim() || undefined,
-        password
-      )
+      const res = await inviteApi.createInvite({
+        email: email.trim(),
+        employeeEmail: user?.email || '',
+      })
       setResult(res)
     } catch (err) {
-      setError(err.message || 'Onboarding failed')
+      setError(err.message || 'Failed to send invite')
     } finally {
       setLoading(false)
     }
   }
 
   const handleClose = () => {
-    setClientName('')
-    setExternalId('')
     setEmail('')
-    setPassword('')
-    setEmployeeEmail(isEmployee ? (user?.email || '') : '')
-    setFinancialYear(new Date().getFullYear().toString())
     setResult(null)
     setError(null)
     setLoading(false)
@@ -101,7 +61,7 @@ export default function OnboardClientModal({ open, onClose, onSuccess }) {
           animate={{ opacity: 1, scale: 1, y: 0 }}
           exit={{ opacity: 0, scale: 0.95, y: 20 }}
           transition={{ type: 'spring', stiffness: 200, damping: 25 }}
-          className="w-full max-w-[480px] rounded-[24px] border border-[var(--color-outline-variant)] overflow-hidden"
+          className="w-full max-w-[420px] rounded-[24px] border border-[var(--color-outline-variant)] overflow-hidden"
           style={{
             background: 'var(--color-surface-container)',
             boxShadow: 'inset 0 1px 0 rgba(255,255,255,0.05), 0 40px 80px rgba(0,0,0,0.6)',
@@ -119,10 +79,10 @@ export default function OnboardClientModal({ open, onClose, onSuccess }) {
               </div>
               <div>
                 <h2 className="m-0 text-[16px] font-bold text-[var(--color-on-surface)] tracking-tight">
-                  Onboard New Client
+                  Invite Client
                 </h2>
                 <p className="m-0 text-[11px] text-[var(--color-on-surface-variant)]">
-                  Creates Box App User, folders, and permissions
+                  Send a signup link to your client's email
                 </p>
               </div>
             </div>
@@ -135,89 +95,21 @@ export default function OnboardClientModal({ open, onClose, onSuccess }) {
           </div>
 
           {/* Body */}
-          <div className="px-6 py-5">
+          <div className="px-6 py-6">
             {result ? (
-              <SuccessView result={result} onClose={handleClose} onSuccess={onSuccess} />
+              <SuccessView result={result} onClose={handleClose} />
             ) : (
-              <form onSubmit={handleSubmit} className="flex flex-col gap-4">
-                <FloatingLabel
-                  label="Client Name"
-                  type="text"
-                  value={clientName}
-                  onChange={(e) => setClientName(e.target.value)}
-                />
-                <FloatingLabel
-                  label="External ID (e.g. CL-001)"
-                  type="text"
-                  value={externalId}
-                  onChange={(e) => setExternalId(e.target.value)}
-                />
+              <form onSubmit={handleSubmit} className="flex flex-col gap-5">
                 <FloatingLabel
                   label="Client Email"
                   type="email"
                   value={email}
                   onChange={(e) => setEmail(e.target.value)}
                 />
-                <FloatingLabel
-                  label="Client Password (min 6 chars)"
-                  type="password"
-                  value={password}
-                  onChange={(e) => setPassword(e.target.value)}
-                />
-                {isEmployee ? (
-                  <FloatingLabel
-                    label="Assigned Employee (you)"
-                    type="email"
-                    value={employeeEmail}
-                    disabled
-                  />
-                ) : (
-                  <div ref={empRef} className="relative">
-                    <div
-                      className="flex items-center gap-2 px-4 py-3.5 rounded-xl border border-[var(--color-outline-variant)] bg-[var(--color-surface-high)] cursor-pointer transition-colors hover:border-[var(--color-primary)]"
-                      onClick={() => setEmpDropdownOpen(!empDropdownOpen)}
-                    >
-                      <input
-                        type="text"
-                        placeholder="Search employee..."
-                        value={empDropdownOpen ? empSearch : (employeeEmail ? employees.find(e => e.email === employeeEmail)?.name || employeeEmail : '')}
-                        onChange={(e) => { setEmpSearch(e.target.value); setEmpDropdownOpen(true) }}
-                        onFocus={() => setEmpDropdownOpen(true)}
-                        className="flex-1 bg-transparent border-none outline-none text-[14px] text-[var(--color-on-surface)] placeholder:text-[var(--color-on-surface-variant)]"
-                      />
-                      <ChevronDown size={16} className={`text-[var(--color-on-surface-variant)] transition-transform ${empDropdownOpen ? 'rotate-180' : ''}`} />
-                    </div>
-                    {employeeEmail && !empDropdownOpen && (
-                      <p className="m-0 mt-1 text-[10px] text-[var(--color-on-surface-variant)] pl-1">{employeeEmail}</p>
-                    )}
-                    {empDropdownOpen && (
-                      <div className="absolute z-50 top-full left-0 right-0 mt-1 max-h-48 overflow-y-auto rounded-xl border border-[var(--color-outline-variant)] bg-[var(--color-surface-container)] shadow-lg">
-                        {filteredEmployees.length === 0 ? (
-                          <div className="px-4 py-3 text-[12px] text-[var(--color-on-surface-variant)]">
-                            {employees.length === 0 ? 'No employees found. Create one first.' : 'No match'}
-                          </div>
-                        ) : filteredEmployees.map((emp) => (
-                          <button
-                            key={emp.id}
-                            type="button"
-                            onClick={() => { setEmployeeEmail(emp.email); setEmpSearch(''); setEmpDropdownOpen(false) }}
-                            className="w-full text-left px-4 py-2.5 text-[13px] border-none bg-transparent cursor-pointer hover:bg-[var(--color-surface-highest)] transition-colors"
-                            style={{ color: 'var(--color-on-surface)' }}
-                          >
-                            <span className="font-medium">{emp.name}</span>
-                            <span className="ml-2 text-[11px] text-[var(--color-on-surface-variant)]">{emp.email}</span>
-                          </button>
-                        ))}
-                      </div>
-                    )}
-                  </div>
-                )}
-                <FloatingLabel
-                  label="Financial Year"
-                  type="text"
-                  value={financialYear}
-                  onChange={(e) => setFinancialYear(e.target.value)}
-                />
+
+                <p className="m-0 text-[12px] text-[var(--color-on-surface-variant)] leading-relaxed">
+                  The client will receive an email with a link to set up their account — they'll fill in their name, password, and other details themselves.
+                </p>
 
                 {/* Error */}
                 <AnimatePresence>
@@ -252,12 +144,12 @@ export default function OnboardClientModal({ open, onClose, onSuccess }) {
                     {loading ? (
                       <>
                         <Loader2 size={16} className="animate-spin" />
-                        Creating...
+                        Sending...
                       </>
                     ) : (
                       <>
-                        <UserPlus size={16} />
-                        Onboard Client
+                        <Send size={16} />
+                        Send Invite
                       </>
                     )}
                   </span>
@@ -271,59 +163,24 @@ export default function OnboardClientModal({ open, onClose, onSuccess }) {
   )
 }
 
-function SuccessView({ result, onClose, onSuccess }) {
-  const appUser = result.appUser || {}
+function SuccessView({ result, onClose }) {
   return (
     <div className="flex flex-col items-center text-center gap-4 py-2">
       <div className="w-14 h-14 rounded-full flex items-center justify-center bg-emerald-500/15 border border-emerald-500/30">
         <CheckCircle2 size={28} className="text-emerald-400" />
       </div>
       <div>
-        <h3 className="m-0 text-[16px] font-bold text-white mb-1">Client Onboarded</h3>
-        <p className="m-0 text-[12px] text-[var(--color-on-surface-variant)] leading-relaxed">
-          {appUser.name || 'Client'} ({appUser.login || appUser.email || ''})
-          {appUser.isNew === false && ' — existing user was linked'}
+        <h3 className="m-0 text-[16px] font-bold text-white mb-1">Invitation Sent</h3>
+        <p className="m-0 text-[13px] text-[var(--color-on-surface-variant)] leading-relaxed">
+          A signup link has been sent to <strong className="text-[var(--color-on-surface)]">{result.email}</strong>. They'll complete their account setup from there.
         </p>
       </div>
-      <div className="w-full text-left p-3 rounded-xl bg-[var(--color-surface-high)] border border-[var(--color-outline-variant)]">
-        <p className="m-0 text-[11px] text-[var(--color-on-surface-variant)] mb-2 font-semibold uppercase tracking-wider">Details</p>
-        <div className="flex flex-col gap-1">
-          <DetailRow label="App User ID" value={appUser.userId} />
-          <DetailRow label="Root Folder" value={result.folders?.root} />
-          <DetailRow label="Uploads Folder" value={result.folders?.uploads} />
-          <DetailRow label="Webhook" value={result.webhookId || 'Not registered'} />
-        </div>
-      </div>
-      <div className="flex gap-3 mt-2">
-        {onSuccess && (
-          <button
-            onClick={() => onSuccess(result)}
-            className="px-6 py-2.5 rounded-xl text-[13px] font-semibold border-none cursor-pointer transition-colors"
-            style={{
-              background: 'linear-gradient(180deg, var(--color-primary), var(--color-primary-container))',
-              color: 'var(--color-surface-lowest)',
-              boxShadow: 'inset 0 1px 0 rgba(255,255,255,0.4), 0 8px 20px rgba(173,198,255,0.2)',
-            }}
-          >
-            View Client
-          </button>
-        )}
-        <button
-          onClick={onClose}
-          className="px-6 py-2.5 rounded-xl text-[13px] font-semibold bg-[var(--color-surface-high)] border border-[var(--color-outline-variant)] text-[var(--color-on-surface)] hover:bg-[var(--color-surface-highest)] transition-colors cursor-pointer"
-        >
-          Done
-        </button>
-      </div>
-    </div>
-  )
-}
-
-function DetailRow({ label, value }) {
-  return (
-    <div className="flex items-center justify-between py-1">
-      <span className="text-[11px] text-[var(--color-on-surface-variant)]">{label}</span>
-      <span className="text-[11px] font-mono text-[var(--color-on-surface)] opacity-80">{value || '—'}</span>
+      <button
+        onClick={onClose}
+        className="mt-2 px-6 py-2.5 rounded-xl text-[13px] font-semibold bg-[var(--color-surface-high)] border border-[var(--color-outline-variant)] text-[var(--color-on-surface)] hover:bg-[var(--color-surface-highest)] transition-colors cursor-pointer"
+      >
+        Done
+      </button>
     </div>
   )
 }

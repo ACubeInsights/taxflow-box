@@ -7,7 +7,7 @@ export class UserRepository extends BaseRepository {
   }
 
   async findByEmail(email, trx) {
-    return this.query(trx).where('email', email).whereNull('deleted_at').first();
+    return this.query(trx).whereRaw('LOWER(email) = ?', [email.toLowerCase()]).whereNull('deleted_at').first();
   }
 
   async findByBoxUserId(boxUserId, trx) {

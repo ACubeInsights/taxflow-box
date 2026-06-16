@@ -120,12 +120,6 @@ export default function UploadDropzone({ onUpload, disabled = false, folderId, r
           <p className="m-0 mb-6 text-[14px] text-[var(--color-on-surface-variant)] leading-relaxed max-w-[300px]">
             Your secure vault is being set up. Uploads will be available shortly.
           </p>
-          <div className="mt-8 pt-6 border-t border-[var(--color-outline-variant)] w-full max-w-[280px]">
-            <p className="m-0 text-[10px] font-bold text-[var(--color-on-surface-variant)]/60 tracking-[0.15em] uppercase text-center flex items-center justify-center gap-2">
-              <Shield size={10} />
-              AES-256 Encrypted
-            </p>
-          </div>
         </div>
       </div>
     )
@@ -257,12 +251,6 @@ export default function UploadDropzone({ onUpload, disabled = false, folderId, r
                 Browse Files
               </button>
 
-              <div className="mt-8 pt-6 border-t border-[var(--color-outline-variant)] w-full max-w-[280px]">
-                <p className="m-0 text-[10px] font-bold text-[var(--color-on-surface-variant)]/60 tracking-[0.15em] uppercase text-center flex items-center justify-center gap-2">
-                  <Shield size={10} />
-                  AES-256 Encrypted
-                </p>
-              </div>
             </motion.div>
           )}
         </AnimatePresence>

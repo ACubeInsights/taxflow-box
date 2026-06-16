@@ -6,6 +6,7 @@
 
 import express from 'express';
 import tokenService from '../services/tokenService.js';
+import { requireAuth } from '../middleware/authMiddleware.js';
 
 const router = express.Router();
 
@@ -13,9 +14,9 @@ const router = express.Router();
  * POST /api/tokens/preview
  * Generate a downscoped preview token for Box Content Preview embedding.
  * Body: { fileId: string, userId: string }
- * Response: TokenResult (200) | 400 | 403 | 404 | 500
+ * Response: TokenResult (200) | 400 | 401 | 403 | 404 | 500
  */
-router.post('/preview', async (req, res, next) => {
+router.post('/preview', requireAuth, async (req, res, next) => {
   try {
     const { fileId, userId } = req.body;
 

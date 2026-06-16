@@ -176,6 +176,9 @@ export const vaultApi = {
   async getDownloadUrl(fileId) {
     return apiRequest(`/vaults/files/${fileId}/download`);
   },
+  async getEmbedUrl(fileId) {
+    return apiRequest(`/vaults/files/${fileId}/embed`);
+  },
 };
 
 export const onboardingApi = {
@@ -394,5 +397,53 @@ export const documentTypeApi = {
   },
   async getDocumentType(typeId) {
     return apiRequest(`/document-types/${typeId}`);
+  },
+};
+
+/**
+ * Permission API — Granular file/folder access control
+ */
+export const permissionApi = {
+  async setPermission(clientId, resourceId, resourceType, accessLevel, resourceName) {
+    return apiRequest('/permissions', {
+      method: 'POST',
+      body: JSON.stringify({ clientId, resourceId, resourceType, accessLevel, resourceName }),
+    });
+  },
+  async getClientPermissions(clientId) {
+    return apiRequest(`/permissions/${clientId}`);
+  },
+  async getPermission(clientId, resourceId) {
+    return apiRequest(`/permissions/${clientId}/${resourceId}`);
+  },
+};
+
+/**
+ * Invite API — Client invitation and self-signup
+ */
+export const inviteApi = {
+  async createInvite(data) {
+    return apiRequest('/invites', {
+      method: 'POST',
+      body: JSON.stringify(data),
+    });
+  },
+  async validateToken(token) {
+    return apiRequest(`/invites/validate?token=${encodeURIComponent(token)}`);
+  },
+  async completeSignup(token, password, clientName, externalId, email) {
+    return apiRequest('/invites/signup', {
+      method: 'POST',
+      body: JSON.stringify({ token, password, clientName, externalId, email }),
+    });
+  },
+  async resendInvite(inviteId) {
+    return apiRequest(`/invites/${inviteId}/resend`, { method: 'POST' });
+  },
+  async listInvites(status) {
+    const params = new URLSearchParams();
+    if (status) params.set('status', status);
+    const qs = params.toString();
+    return apiRequest(`/invites${qs ? `?${qs}` : ''}`);
   },
 };
