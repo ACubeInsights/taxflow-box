@@ -1,12 +1,13 @@
 import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { motion } from 'framer-motion'
-import { Plus, UserPlus, Shield } from 'lucide-react'
+import { Plus, UserPlus, Shield, Upload } from 'lucide-react'
 import { useAuth } from '../../context/AuthContext'
 import ClientListPanel from '../ClientListPanel'
 import DocumentRequestCreator from '../DocumentRequestCreator'
 import OnboardClientModal from '../OnboardClientModal'
 import PermissionManagerPanel from '../PermissionManagerPanel'
+import ShareFileModal from '../ShareFileModal'
 
 export default function EmployeeDashboard() {
   const navigate = useNavigate()
@@ -14,6 +15,7 @@ export default function EmployeeDashboard() {
   const [drawerOpen, setDrawerOpen] = useState(false)
   const [onboardOpen, setOnboardOpen] = useState(false)
   const [permissionsOpen, setPermissionsOpen] = useState(false)
+  const [shareFileOpen, setShareFileOpen] = useState(false)
 
   return (
     <div className="max-w-[1200px] mx-auto py-6">
@@ -35,6 +37,13 @@ export default function EmployeeDashboard() {
         >
           <Plus size={15} />
           New Document Request
+        </button>
+        <button
+          onClick={() => setShareFileOpen(true)}
+          className="flex items-center gap-2 px-5 py-2.5 rounded-lg text-[13px] font-semibold cursor-pointer bg-transparent border border-[var(--color-outline-variant)] text-[var(--color-on-surface)] transition-all hover:bg-[var(--color-surface-container-high)] active:scale-[0.98]"
+        >
+          <Upload size={15} />
+          Share File
         </button>
         <button
           onClick={() => setOnboardOpen(true)}
@@ -92,6 +101,12 @@ export default function EmployeeDashboard() {
           </motion.div>
         </motion.div>
       )}
+
+      {/* Share File Modal */}
+      <ShareFileModal
+        open={shareFileOpen}
+        onClose={() => setShareFileOpen(false)}
+      />
     </div>
   )
 }
