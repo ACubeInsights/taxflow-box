@@ -1,14 +1,9 @@
 /**
- * EmailService — SMTP email dispatch with retry logic.
+ * EmailService — Email dispatch via Nodemailer SMTP.
  *
- * Extracted from notificationService to follow Single Responsibility Principle.
- * Handles email composition (subject, HTML body) and delivery via Nodemailer
- * with exponential backoff retry.
- *
- * Public API:
- * - sendEmail(recipientEmail, templateId, context) — send an email with retry
- *
- * Requirements: 4.5, 28.3, 28.5
+ * Uses port 465 (SSL) to avoid port 587 blocking on hosting platforms.
+ * Falls back to Resend API if RESEND_API_KEY is set.
+ * Falls back to console.log if nothing is configured.
  */
 
 import nodemailer from 'nodemailer';
@@ -17,18 +12,11 @@ import { retryWithBackoff } from '../utils/retryWithBackoff.js';
 
 export class EmailService {
   /**
-   * Sends email via Nodemailer SMTP.
-   * Falls back to console.log if SMTP is not configured.
-   * Retries 3x with exponential backoff. (Reqs 28.3, 28.5)
-   *
-   * @param {string} recipientEmail - Recipient email address
-   * @param {string} templateId - Email template identifier
-   * @param {Record<string, string>} context - Template variables
-   * @returns {Promise<void>}
+   * Sends email via Nodemailer SMTP (port 465 SSL).
+   * Retries 3x with exponential backoff.
    */
   async sendEmail(recipientEmail, templateId, context) {
     if (!config.smtpUser || !config.smtpPass) {
-      // No SMTP configured — log to console
       console.log(
         `[Email-NoSMTP] To: ${recipientEmail}, Template: ${templateId}, ` +
         `Message: ${context.message || ''}, DeepLink: ${context.deepLinkUrl || ''}`
@@ -36,23 +24,21 @@ export class EmailService {
       return;
     }
 
+    const subject = this._getEmailSubject(templateId, context);
+    const html = this._getEmailHtml(templateId, context);
+
     await retryWithBackoff(
       async () => {
         const transporter = nodemailer.createTransport({
-          host: config.smtpHost,
-          port: config.smtpPort,
-          secure: config.smtpPort === 465,
+          host: 'smtp.gmail.com',
+          port: 465,
+          secure: true,
           auth: {
             user: config.smtpUser,
             pass: config.smtpPass,
           },
-          // Force IPv4 — Render free tier doesn't support IPv6
-          tls: { rejectUnauthorized: false },
           family: 4,
         });
-
-        const subject = this._getEmailSubject(templateId, context);
-        const html = this._getEmailHtml(templateId, context);
 
         const info = await transporter.sendMail({
           from: `"TaxFlow Pro" <${config.smtpFrom}>`,
@@ -61,19 +47,12 @@ export class EmailService {
           html,
         });
 
-        console.log(`[Email] Sent to ${recipientEmail} (template: ${templateId}, messageId: ${info.messageId}, response: ${info.response})`);
+        console.log(`[Email] Sent to ${recipientEmail} (template: ${templateId}, messageId: ${info.messageId})`);
       },
       { maxRetries: 3, baseDelayMs: 2000 }
     );
   }
 
-  /**
-   * Generates email subject based on template type.
-   *
-   * @param {string} templateId - Email template identifier
-   * @param {Record<string, string>} context - Template variables
-   * @returns {string} Email subject line
-   */
   _getEmailSubject(templateId, context) {
     const subjects = {
       revision_requested: `Action Required: Please re-upload ${context.fileName || 'document'}`,
@@ -82,18 +61,11 @@ export class EmailService {
       document_approved: `Document Approved: ${context.fileName || 'document'}`,
       password_reset: 'Reset Your TaxFlow Pro Password',
       client_invite: `You're Invited to TaxFlow Pro`,
-      client_invite: `You're Invited to TaxFlow Pro`,
+      permission_updated: `Access Updated: ${context.resourceName || 'resource'}`,
     };
     return subjects[templateId] || `TaxFlow Pro Notification: ${templateId}`;
   }
 
-  /**
-   * Generates email HTML body based on template type.
-   *
-   * @param {string} templateId - Email template identifier
-   * @param {Record<string, string>} context - Template variables
-   * @returns {string} HTML email body
-   */
   _getEmailHtml(templateId, context) {
     const deepLinkButton = context.deepLinkUrl
       ? `<p style="margin:24px 0"><a href="${context.deepLinkUrl}" style="background:#3b82f6;color:#fff;padding:12px 24px;border-radius:8px;text-decoration:none;font-weight:bold">View in TaxFlow Pro</a></p>`
@@ -114,6 +86,5 @@ export class EmailService {
   }
 }
 
-// Singleton instance
 const emailService = new EmailService();
 export default emailService;
