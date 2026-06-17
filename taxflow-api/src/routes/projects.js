@@ -6,8 +6,63 @@
 
 import express from 'express';
 import projectService from '../services/projectService.js';
+import { initDatabase } from '../db/db.js';
 
 const router = express.Router();
+
+/**
+ * POST /api/admin/clients/fix-missing
+ * Creates a client record for a user that completed signup but doesn't have a client entry.
+ * Admin utility endpoint.
+ */
+router.post('/admin/clients/fix-missing', async (req, res, next) => {
+  try {
+    const { email, name } = req.body;
+    if (!email) return res.status(400).json({ error: 'email required' });
+
+    const db = await initDatabase();
+
+    // Check if client already exists
+    const existing = await db('clients').where('email', email).first();
+    if (existing) return res.json({ message: 'Client already exists', client: existing });
+
+    // Find the user record
+    const user = await db('users').where('email', email).first();
+    if (!user) return res.status(404).json({ error: 'No user found with that email' });
+
+    // Create client record
+    const clientId = crypto.randomUUID();
+    const clientName = name || user.name || email.split('@')[0];
+    await db('clients').insert({
+      id: clientId,
+      name: clientName,
+      email,
+      entity_type: 'Individual',
+      engagement_status: 'Active',
+      box_folder_id: '',
+      box_user_id: user.box_user_id || '',
+      external_id: `CL-${Date.now()}`,
+      created_at: new Date().toISOString(),
+      updated_at: new Date().toISOString(),
+    });
+
+    // Create a default project
+    const projectId = crypto.randomUUID();
+    await db('projects').insert({
+      id: projectId,
+      client_id: clientId,
+      name: `${new Date().getFullYear()} Tax Return`,
+      description: `Tax filing for ${clientName}`,
+      status: 'Active',
+      created_at: new Date().toISOString(),
+      updated_at: new Date().toISOString(),
+    });
+
+    res.status(201).json({ message: 'Client record created', clientId, projectId });
+  } catch (error) {
+    next(error);
+  }
+});
 
 /**
  * GET /api/admin/clients
