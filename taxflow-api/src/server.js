@@ -43,6 +43,19 @@ app.get('/health', (req, res) => {
   res.json({ status: 'ok', timestamp: new Date().toISOString() });
 });
 
+// Temporary test endpoint for email debugging
+app.get('/api/test-email', async (req, res) => {
+  const { to } = req.query;
+  if (!to) return res.status(400).json({ error: 'Missing ?to= param' });
+  try {
+    const { default: emailService } = await import('./services/emailService.js');
+    await emailService.sendEmail(to, 'Test Email from Render', { message: 'If you see this, SMTP from Render is working.' });
+    res.json({ ok: true, sentTo: to });
+  } catch (err) {
+    res.status(500).json({ ok: false, error: err.message });
+  }
+});
+
 app.use('/api/auth', authRoutes);
 app.use('/api/employees', employeeRoutes);
 app.use('/api/invites', inviteRoutes);

@@ -54,14 +54,14 @@ export class EmailService {
         const subject = this._getEmailSubject(templateId, context);
         const html = this._getEmailHtml(templateId, context);
 
-        await transporter.sendMail({
+        const info = await transporter.sendMail({
           from: `"TaxFlow Pro" <${config.smtpFrom}>`,
           to: recipientEmail,
           subject,
           html,
         });
 
-        console.log(`[Email] Sent to ${recipientEmail} (template: ${templateId})`);
+        console.log(`[Email] Sent to ${recipientEmail} (template: ${templateId}, messageId: ${info.messageId}, response: ${info.response})`);
       },
       { maxRetries: 3, baseDelayMs: 2000 }
     );
