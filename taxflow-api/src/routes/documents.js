@@ -1,6 +1,7 @@
 import express from 'express';
 import multer from 'multer';
 import boxService from '../services/boxService.js';
+import { initDatabase } from '../db/db.js';
 
 const router = express.Router();
 
@@ -36,6 +37,25 @@ router.post('/upload', upload.single('file'), async (req, res, next) => {
       req.file.buffer
     );
 
+    // If this upload is linked to a document request, update the DB
+    if (requestId) {
+      try {
+        const db = await initDatabase();
+        await db('document_requests')
+          .where('id', requestId)
+          .update({
+            status: 'Uploaded',
+            box_file_id: file.id,
+            uploaded_file_name: file.name,
+            version: db.raw('version + 1'),
+            updated_at: new Date().toISOString(),
+          });
+      } catch (dbErr) {
+        console.error('Failed to update document request after upload:', dbErr.message);
+        // Don't fail the upload response — file is already on Box
+      }
+    }
+
     res.status(201).json({
       message: 'Document uploaded successfully',
       file: {
@@ -44,7 +64,7 @@ router.post('/upload', upload.single('file'), async (req, res, next) => {
         size: file.size,
         createdAt: file.created_at,
       },
-      requestId, // Pass through for frontend state update
+      requestId,
     });
   } catch (error) {
     next(error);
