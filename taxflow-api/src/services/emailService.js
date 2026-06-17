@@ -1,24 +1,23 @@
 /**
- * EmailService — Email dispatch via Nodemailer SMTP.
+ * EmailService — Email dispatch via Brevo (formerly Sendinblue) HTTP API.
  *
- * Uses port 465 (SSL) to avoid port 587 blocking on hosting platforms.
- * Falls back to Resend API if RESEND_API_KEY is set.
- * Falls back to console.log if nothing is configured.
+ * Uses Brevo's HTTPS API (no SMTP ports needed).
+ * Works on any hosting platform including Render free tier.
+ * Free tier: 300 emails/day.
  */
 
-import nodemailer from 'nodemailer';
 import { config } from '../config.js';
 import { retryWithBackoff } from '../utils/retryWithBackoff.js';
 
+const BREVO_API_KEY = process.env.BREVO_API_KEY || '';
+const FROM_EMAIL = config.smtpFrom || 'agarwalayush1412@gmail.com';
+const FROM_NAME = 'TaxFlow Pro';
+
 export class EmailService {
-  /**
-   * Sends email via Nodemailer SMTP (port 465 SSL).
-   * Retries 3x with exponential backoff.
-   */
   async sendEmail(recipientEmail, templateId, context) {
-    if (!config.smtpUser || !config.smtpPass) {
+    if (!BREVO_API_KEY) {
       console.log(
-        `[Email-NoSMTP] To: ${recipientEmail}, Template: ${templateId}, ` +
+        `[Email-NoKey] To: ${recipientEmail}, Template: ${templateId}, ` +
         `Message: ${context.message || ''}, DeepLink: ${context.deepLinkUrl || ''}`
       );
       return;
@@ -29,25 +28,30 @@ export class EmailService {
 
     await retryWithBackoff(
       async () => {
-        const transporter = nodemailer.createTransport({
-          host: 'smtp.gmail.com',
-          port: 465,
-          secure: true,
-          auth: {
-            user: config.smtpUser,
-            pass: config.smtpPass,
-          },
-          family: 4,
-        });
-
-        const info = await transporter.sendMail({
-          from: `"TaxFlow Pro" <${config.smtpFrom}>`,
-          to: recipientEmail,
+        const body = JSON.stringify({
+          sender: { name: FROM_NAME, email: FROM_EMAIL },
+          to: [{ email: recipientEmail }],
           subject,
-          html,
+          htmlContent: html,
         });
 
-        console.log(`[Email] Sent to ${recipientEmail} (template: ${templateId}, messageId: ${info.messageId})`);
+        const response = await fetch('https://api.brevo.com/v3/smtp/email', {
+          method: 'POST',
+          headers: {
+            'accept': 'application/json',
+            'content-type': 'application/json',
+            'api-key': BREVO_API_KEY,
+          },
+          body,
+        });
+
+        const data = await response.json();
+
+        if (!response.ok) {
+          throw new Error(`Brevo error: ${response.status} ${JSON.stringify(data)}`);
+        }
+
+        console.log(`[Email] Sent to ${recipientEmail} (template: ${templateId}, messageId: ${data.messageId})`);
       },
       { maxRetries: 3, baseDelayMs: 2000 }
     );
