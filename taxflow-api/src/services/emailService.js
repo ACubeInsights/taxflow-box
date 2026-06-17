@@ -46,6 +46,9 @@ export class EmailService {
             user: config.smtpUser,
             pass: config.smtpPass,
           },
+          // Force IPv4 — Render free tier doesn't support IPv6
+          tls: { rejectUnauthorized: false },
+          family: 4,
         });
 
         const subject = this._getEmailSubject(templateId, context);
