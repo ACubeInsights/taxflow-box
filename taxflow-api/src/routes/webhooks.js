@@ -22,13 +22,18 @@ const router = express.Router();
  * Response: 200 OK | 403 Forbidden
  */
 router.post('/box', webhookRawBody, async (req, res) => {
-  // Extract signature headers (Req 8.1)
+  // Extract signature and timestamp headers (Req 8.1)
   const primarySignature = req.headers['box-signature-primary'] || '';
   const secondarySignature = req.headers['box-signature-secondary'] || '';
+  const deliveryTimestamp = req.headers['box-delivery-timestamp'] || '';
   const rawBody = req.rawBody;
 
   if (!rawBody) {
     return res.status(400).json({ error: 'Missing request body' });
+  }
+
+  if (!deliveryTimestamp) {
+    return res.status(400).json({ error: 'Missing BOX-DELIVERY-TIMESTAMP header' });
   }
 
   // Try to verify against all stored webhook keys
@@ -39,6 +44,7 @@ router.post('/box', webhookRawBody, async (req, res) => {
     if (
       webhookService.verifySignature(
         rawBody,
+        deliveryTimestamp,
         primarySignature,
         secondarySignature,
         keys.primaryKey,
@@ -57,6 +63,7 @@ router.post('/box', webhookRawBody, async (req, res) => {
       headers: {
         'box-signature-primary': primarySignature ? '[present]' : '[missing]',
         'box-signature-secondary': secondarySignature ? '[present]' : '[missing]',
+        'box-delivery-timestamp': deliveryTimestamp ? '[present]' : '[missing]',
       },
     });
     return res.status(403).json({ error: 'Invalid webhook signature' });

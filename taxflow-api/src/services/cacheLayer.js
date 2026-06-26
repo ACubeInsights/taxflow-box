@@ -83,6 +83,32 @@ export class CacheLayer {
   }
 
   /**
+   * Invalidates all cache entries whose keys start with the given prefix.
+   * Use after write operations to ensure fresh data on next read.
+   *
+   * @param {string} prefix - Key prefix to match (e.g., 'portal:client:abc123')
+   * @returns {Promise<number>} Number of entries invalidated
+   */
+  async invalidate(prefix) {
+    let count = 0;
+    for (const key of this._store.keys()) {
+      if (key.startsWith(prefix)) {
+        this._store.delete(key);
+        count++;
+      }
+    }
+    return count;
+  }
+
+  /**
+   * Clears the entire cache.
+   * @returns {Promise<void>}
+   */
+  async clear() {
+    this._store.clear();
+  }
+
+  /**
    * Cache-through pattern: returns cached value if present and fresh,
    * otherwise executes the fetcher, caches the result, and returns it.
    *

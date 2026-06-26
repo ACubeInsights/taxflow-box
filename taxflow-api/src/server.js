@@ -39,8 +39,19 @@ app.use(cors({ origin: config.frontendUrl, credentials: true }));
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 
-app.get('/health', (req, res) => {
-  res.json({ status: 'ok', timestamp: new Date().toISOString() });
+app.get('/health', async (req, res) => {
+  let boxHealth;
+  try {
+    boxHealth = await boxService.healthCheck();
+  } catch (err) {
+    boxHealth = { connected: false, tier: 'unknown', error: err.message };
+  }
+
+  res.json({
+    status: boxHealth.connected ? 'ok' : 'degraded',
+    timestamp: new Date().toISOString(),
+    box: boxHealth,
+  });
 });
 
 // Temporary test endpoint for email debugging
@@ -127,6 +138,19 @@ async function startServer() {
     // Wire webhook event handlers
     webhookService.registerHandler('FILE.UPLOADED', (event) => postUploadPipeline.processUpload(event));
     webhookService.registerHandler('SIGN_REQUEST.*', (event) => signService.handleSignEvent(event));
+
+    // Verify webhook health on startup (non-fatal)
+    try {
+      await webhookService.loadFromDb();
+      const health = await webhookService.verifyWebhooksHealthy();
+      if (health.missing > 0) {
+        console.warn(`[Startup] Webhook health: ${health.missing} missing, ${health.reregistered} re-registered`);
+      } else if (health.total > 0) {
+        console.log(`[Startup] Webhook health: ${health.healthy}/${health.total} healthy`);
+      }
+    } catch (err) {
+      console.warn('Webhook health check skipped:', err.message);
+    }
 
     app.listen(config.port, () => {
       console.log(`TaxFlow API running on http://localhost:${config.port}`);

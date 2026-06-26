@@ -19,11 +19,30 @@ const router = express.Router();
  * GET /api/notifications/:recipientId
  * Retrieve in-app notifications for a recipient.
  */
-router.get('/:recipientId', (req, res, next) => {
+router.get('/:recipientId', async (req, res, next) => {
   try {
     const { recipientId } = req.params;
-    const notifications = notificationService.getNotifications(recipientId);
+    const { limit, offset } = req.query;
+    const options = {};
+    if (limit) options.limit = parseInt(limit, 10);
+    if (offset) options.offset = parseInt(offset, 10);
+
+    const notifications = await notificationService.getNotifications(recipientId, options);
     res.json(notifications);
+  } catch (error) {
+    next(error);
+  }
+});
+
+/**
+ * PATCH /api/notifications/:notificationId/read
+ * Mark a notification as read.
+ */
+router.patch('/:notificationId/read', async (req, res, next) => {
+  try {
+    const { notificationId } = req.params;
+    await notificationService.markAsRead(notificationId);
+    res.json({ success: true });
   } catch (error) {
     next(error);
   }

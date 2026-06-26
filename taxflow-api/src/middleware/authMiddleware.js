@@ -117,9 +117,13 @@ export async function validateFolderOwnership(req, res, next) {
 /**
  * Middleware factory that checks granular permissions for client users on file operations.
  * Employees/superadmins bypass this check.
+ * Supports folder inheritance: if no explicit file permission exists, checks if the client
+ * has sufficient access to any folder in their vault (since files inherit parent folder access).
  * @param {string} requiredLevel - Minimum access level required ('viewer','commenter','writer','delete')
  */
 export function permissionCheck(requiredLevel) {
+  const LEVEL_HIERARCHY = { no_access: 0, viewer: 1, commenter: 2, writer: 3, delete: 4 };
+
   return async (req, res, next) => {
     // Employees and superadmins bypass permission checks
     if (['employee', 'superadmin'].includes(req.user?.role)) {
@@ -144,13 +148,27 @@ export function permissionCheck(requiredLevel) {
         return res.status(404).json({ error: 'Resource not found' });
       }
 
+      // Check explicit permission for this resource
       const hasAccess = await permissionService.hasAccess(client.id, resourceId, requiredLevel);
-      if (!hasAccess) {
-        return res.status(404).json({ error: 'Resource not found' });
+      if (hasAccess) {
+        req.clientId = client.id;
+        return next();
       }
 
-      req.clientId = client.id;
-      next();
+      // Fallback: check if client has sufficient folder-level access (inheritance)
+      // This covers files inside accessible folders that don't have explicit per-file permissions
+      const allPerms = await permissionService.getClientPermissions(client.id);
+      const requiredNum = LEVEL_HIERARCHY[requiredLevel] || 1;
+      const hasFolderAccess = allPerms.some(p =>
+        p.resourceType === 'folder' && (LEVEL_HIERARCHY[p.accessLevel] || 0) >= requiredNum
+      );
+
+      if (hasFolderAccess) {
+        req.clientId = client.id;
+        return next();
+      }
+
+      return res.status(404).json({ error: 'Resource not found' });
     } catch (err) {
       next(err);
     }

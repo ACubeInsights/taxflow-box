@@ -23,6 +23,7 @@ import portalService from '../../services/portalService.js';
 import inviteService from '../../services/inviteService.js';
 import signupService from '../../services/signupService.js';
 import permissionService from '../../services/permissionService.js';
+import employeeService from '../../services/employeeService.js';
 
 let repos = null;
 
@@ -97,6 +98,10 @@ export function injectRepositories(repos) {
   signupService.setRepositories({ inviteRepo: repos.inviteRepo });
 
   permissionService.setRepositories({ permissionRepo: repos.permissionRepo });
+
+  if (employeeService.setRepositories) {
+    employeeService.setRepositories({ userRepo: repos.userRepo });
+  }
 
   if (inviteService.setRepositories) {
     inviteService.setRepositories({ inviteRepo: repos.inviteRepo });

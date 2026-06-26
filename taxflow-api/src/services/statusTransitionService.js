@@ -12,6 +12,7 @@
 import projectService from './projectService.js';
 import commentService from './commentService.js';
 import notificationService from './notificationService.js';
+import cacheLayer from './cacheLayer.js';
 import { createHttpError } from '../utils/httpError.js';
 
 /** 10-minute undo window in milliseconds */
@@ -124,6 +125,10 @@ export class StatusTransitionService {
         });
       }
     }
+
+    // Invalidate portal caches so dashboards show fresh data
+    cacheLayer.invalidate(`portal:client:${doc.clientId}`).catch(() => {});
+    cacheLayer.invalidate('portal:employee:').catch(() => {});
 
     return {
       documentId,

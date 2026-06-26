@@ -1,8 +1,13 @@
 # Kiro IDE
 .kiro/
 
-# Secrets
+# IDE
+.idea/
+
+# Secrets — NEVER commit these
 box_config.json
+*.pem
+*.key
 .env
 *.env.local
 
@@ -18,3 +23,6 @@ Thumbs.db
 
 # Database
 *.db
+
+# Upload temp files
+/tmp/taxflow-uploads/

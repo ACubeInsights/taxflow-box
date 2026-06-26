@@ -141,10 +141,20 @@ export class NotificationService {
    * Delegates to inAppNotificationStore.
    *
    * @param {string} recipientId
+   * @param {{ limit?: number, offset?: number }} [options]
    * @returns {Promise<Array<object>>}
    */
-  async getNotifications(recipientId) {
-    return this._store.getNotifications(recipientId);
+  async getNotifications(recipientId, options) {
+    return this._store.getNotifications(recipientId, options);
+  }
+
+  /**
+   * Marks a notification as read.
+   * @param {string} notificationId
+   * @returns {Promise<void>}
+   */
+  async markAsRead(notificationId) {
+    return this._store.markAsRead(notificationId);
   }
 
   /**

@@ -18,10 +18,10 @@ import emailService from './emailService.js';
 import crypto from 'crypto';
 import { config } from '../config.js';
 import { createHttpError } from '../utils/httpError.js';
-import { buildExternalId, hashPassword, verifyPassword, extractOriginalEmail, extractRole } from '../utils/authUtils.js';
+import { buildExternalId, buildExternalIdLegacy, hashPassword, hashPasswordLegacy, verifyPassword, extractOriginalEmail, extractRole } from '../utils/authUtils.js';
 
 // Re-export auth utilities for backward compatibility
-export { buildExternalId, hashPassword, verifyPassword, extractOriginalEmail };
+export { buildExternalId, buildExternalIdLegacy, hashPassword, verifyPassword, extractOriginalEmail };
 
 /** Session TTL: 1 hour */
 const SESSION_TTL_MS = 60 * 60 * 1000;
@@ -233,9 +233,16 @@ export class AuthService {
     if (this._userRepo) {
       const user = await this._userRepo.findByEmail(email);
       if (user) {
-        if (!verifyPassword(password, user.password_hash)) {
+        const result = await verifyPassword(password, user.password_hash);
+        if (!result.valid) {
           throw createHttpError('Invalid credentials', 401, 'UNAUTHORIZED');
         }
+
+        // Transparent hash migration: if legacy hash, upgrade to bcrypt
+        if (result.needsRehash && result.newHash) {
+          await this._userRepo.updatePasswordHash(user.id, result.newHash);
+        }
+
         const session = await this.createSession({
           userId: user.id,
           email: user.email,
@@ -265,7 +272,8 @@ export class AuthService {
     if (!found) throw createHttpError('Invalid credentials', 401, 'UNAUTHORIZED');
 
     const extId = getExtId(found);
-    if (!verifyPassword(password, extId)) {
+    const boxVerifyResult = await verifyPassword(password, extId);
+    if (!boxVerifyResult.valid) {
       throw createHttpError('Invalid credentials', 401, 'UNAUTHORIZED');
     }
 
@@ -273,24 +281,30 @@ export class AuthService {
     const role = extractRole(extId);
 
     // Auto-sync: if DB repos are available, ensure this Box user exists in the local users table
-    // so the session FK constraint is satisfied
+    // Store with bcrypt hash (migrate away from legacy format in Box)
     if (this._userRepo) {
       const existingDbUser = await this._userRepo.findByBoxUserId(found.id);
       if (!existingDbUser) {
+        // Use bcrypt hash for the local DB record (not the legacy format)
+        const bcryptHash = boxVerifyResult.newHash || await hashPassword(password);
         try {
           await this._userRepo.create({
             box_user_id: found.id,
             email: email.toLowerCase(),
             name: found.name,
             role,
-            password_hash: extId,
+            password_hash: bcryptHash,
           });
         } catch (err) {
           if (!err.message?.includes('UNIQUE constraint')) {
             console.error('Failed to auto-sync Box user to local DB:', err.message);
           }
         }
+      } else if (boxVerifyResult.needsRehash && boxVerifyResult.newHash) {
+        // Existing DB user with legacy hash — upgrade
+        await this._userRepo.updatePasswordHash(existingDbUser.id, boxVerifyResult.newHash);
       }
+
       // Look up by email first, then by Box user ID as fallback
       const dbUser = await this._userRepo.findByEmail(email) || await this._userRepo.findByBoxUserId(found.id);
       if (dbUser) {
@@ -330,10 +344,11 @@ export class AuthService {
     if (this._userRepo) {
       const user = await this._userRepo.findById(userId);
       if (user) {
-        if (!verifyPassword(currentPassword, user.password_hash)) {
+        const result = await verifyPassword(currentPassword, user.password_hash);
+        if (!result.valid) {
           throw createHttpError('Current password is incorrect', 401, 'UNAUTHORIZED');
         }
-        const newHash = hashPassword(newPassword);
+        const newHash = await hashPassword(newPassword);
         await this._userRepo.updatePasswordHash(userId, newHash);
         return { success: true };
       }
@@ -343,12 +358,14 @@ export class AuthService {
     const client = boxService.getBoxClient();
     const user = await client.users.getUserById(userId, { queryParams: { fields: ['id', 'login', 'name', 'role', 'external_app_user_id'] } });
     const extId = getExtId(user);
-    if (!verifyPassword(currentPassword, extId)) {
+    const boxResult = await verifyPassword(currentPassword, extId);
+    if (!boxResult.valid) {
       throw createHttpError('Current password is incorrect', 401, 'UNAUTHORIZED');
     }
     const email = extractOriginalEmail(extId) || user.login;
+    // Update Box with legacy format (until Task 1.3 migrates externalAppUserId)
     await client.users.updateUserById(userId, {
-      requestBody: { externalAppUserId: buildExternalId(newPassword, email) },
+      requestBody: { externalAppUserId: buildExternalIdLegacy(newPassword, email) },
     });
     return { success: true };
   }
@@ -406,17 +423,19 @@ export class AuthService {
       this._resetTokens.delete(token);
     }
 
-    // If DB user repo is available, try to update password in DB
+    // Hash new password with bcrypt
+    const newHash = await hashPassword(newPassword);
+
+    // If DB user repo is available, update password in DB
     if (this._userRepo) {
       const user = await this._userRepo.findByEmail(entry.email);
       if (user) {
-        const newHash = hashPassword(newPassword);
         await this._userRepo.updatePasswordHash(user.id, newHash);
         return { success: true };
       }
     }
 
-    // Fallback to Box API
+    // Fallback to Box API (legacy — store in externalAppUserId until migration completes)
     const client = boxService.getBoxClient();
     const allUsers = await client.users.getUsers({
       userType: 'all',
@@ -430,7 +449,7 @@ export class AuthService {
     });
     if (!found) throw createHttpError('User not found', 404, 'NOT_FOUND');
     await client.users.updateUserById(found.id, {
-      requestBody: { externalAppUserId: buildExternalId(newPassword, entry.email) },
+      requestBody: { externalAppUserId: buildExternalIdLegacy(newPassword, entry.email) },
     });
     return { success: true };
   }

@@ -15,16 +15,21 @@ router.get('/:folderId/files', requireAuth, requireRole('client', 'employee', 's
     const { folderId } = req.params;
     const files = await boxService.listFiles(folderId);
 
-    // For client role: filter files by their granular permissions
+    // For client role: use folder-level access as baseline, override with explicit file permissions
     if (req.user.role === 'client' && req.clientId) {
       const fileIds = files.map(f => f.id);
       const accessMap = await permissionService.getAccessibleResources(req.clientId, fileIds);
 
-      const filtered = files
-        .filter(f => accessMap[f.id]) // Only files with explicit permission
-        .map(f => ({ ...f, accessLevel: accessMap[f.id] }));
+      // Get the folder's own access level as the inherited baseline
+      const folderPerm = await permissionService.getPermission(req.clientId, folderId);
+      const folderLevel = folderPerm?.accessLevel || 'viewer'; // Default to viewer if folder is accessible
 
-      return res.json({ folderId, files: filtered, count: filtered.length });
+      const enriched = files.map(f => ({
+        ...f,
+        accessLevel: accessMap[f.id] || folderLevel, // Explicit file perm wins, else inherit from folder
+      }));
+
+      return res.json({ folderId, files: enriched, count: enriched.length });
     }
 
     // Employees/superadmins see everything with full access
@@ -92,6 +97,169 @@ router.delete('/files/:fileId', requireAuth, permissionCheck('delete'), async (r
 
     res.json({ message: 'File deleted successfully' });
   } catch (error) {
+    next(error);
+  }
+});
+
+// ─── Folder Management (Employee/Superadmin only) ────────────────────────────
+
+/**
+ * POST /api/vaults/:parentFolderId/folders
+ * Create a subfolder inside the given parent folder.
+ * Auth: requireAuth → requireRole('employee', 'superadmin')
+ * Body: { name: string }
+ */
+router.post('/:parentFolderId/folders', requireAuth, requireRole('employee', 'superadmin'), async (req, res, next) => {
+  try {
+    const { parentFolderId } = req.params;
+    const { name } = req.body;
+
+    if (!name || typeof name !== 'string' || name.trim().length === 0) {
+      return res.status(400).json({ error: 'Folder name is required' });
+    }
+
+    const trimmedName = name.trim();
+
+    // Box folder name constraints: max 255 chars, no leading/trailing spaces,
+    // cannot be "." or ".."
+    if (trimmedName.length > 255) {
+      return res.status(400).json({ error: 'Folder name must be 255 characters or fewer' });
+    }
+    if (trimmedName === '.' || trimmedName === '..') {
+      return res.status(400).json({ error: 'Invalid folder name' });
+    }
+
+    const client = boxService.getBoxClient();
+    const folder = await client.folders.createFolder({
+      name: trimmedName,
+      parent: { id: parentFolderId },
+    });
+
+    res.status(201).json({
+      id: folder.id,
+      name: folder.name,
+      type: 'folder',
+      createdAt: folder.createdAt || folder.created_at || new Date().toISOString(),
+    });
+  } catch (error) {
+    if (error.statusCode === 404) {
+      return res.status(404).json({ error: 'Parent folder not found' });
+    }
+    if (error.statusCode === 409) {
+      return res.status(409).json({ error: 'A folder with this name already exists in the target location' });
+    }
+    if (error.statusCode === 403) {
+      return res.status(403).json({ error: 'Insufficient permissions to create folder here' });
+    }
+    next(error);
+  }
+});
+
+/**
+ * PUT /api/vaults/folders/:folderId
+ * Rename a folder.
+ * Auth: requireAuth → requireRole('employee', 'superadmin')
+ * Body: { name: string }
+ */
+router.put('/folders/:folderId', requireAuth, requireRole('employee', 'superadmin'), async (req, res, next) => {
+  try {
+    const { folderId } = req.params;
+    const { name } = req.body;
+
+    if (!name || typeof name !== 'string' || name.trim().length === 0) {
+      return res.status(400).json({ error: 'New folder name is required' });
+    }
+
+    const trimmedName = name.trim();
+
+    if (trimmedName.length > 255) {
+      return res.status(400).json({ error: 'Folder name must be 255 characters or fewer' });
+    }
+    if (trimmedName === '.' || trimmedName === '..') {
+      return res.status(400).json({ error: 'Invalid folder name' });
+    }
+
+    const client = boxService.getBoxClient();
+    const folder = await client.folders.updateFolderById(folderId, {
+      requestBody: { name: trimmedName },
+    });
+
+    res.json({
+      id: folder.id,
+      name: folder.name,
+      type: 'folder',
+    });
+  } catch (error) {
+    if (error.statusCode === 404) {
+      return res.status(404).json({ error: 'Folder not found' });
+    }
+    if (error.statusCode === 409) {
+      return res.status(409).json({ error: 'A folder with this name already exists in the target location' });
+    }
+    if (error.statusCode === 403) {
+      return res.status(403).json({ error: 'Insufficient permissions to rename this folder' });
+    }
+    next(error);
+  }
+});
+
+/**
+ * DELETE /api/vaults/folders/:folderId
+ * Delete a folder (recursively deletes contents).
+ * Auth: requireAuth → requireRole('employee', 'superadmin')
+ */
+router.delete('/folders/:folderId', requireAuth, requireRole('employee', 'superadmin'), async (req, res, next) => {
+  try {
+    const { folderId } = req.params;
+
+    // Safety: prevent deletion of the root folder (Box root = '0')
+    if (folderId === '0') {
+      return res.status(400).json({ error: 'Cannot delete root folder' });
+    }
+
+    const client = boxService.getBoxClient();
+    await client.folders.deleteFolderById(folderId, { queryParams: { recursive: true } });
+
+    res.json({ message: 'Folder deleted successfully' });
+  } catch (error) {
+    if (error.statusCode === 404) {
+      return res.status(404).json({ error: 'Folder not found' });
+    }
+    if (error.statusCode === 403) {
+      return res.status(403).json({ error: 'Insufficient permissions to delete this folder' });
+    }
+    next(error);
+  }
+});
+
+/**
+ * GET /api/vaults/:folderId/contents
+ * List all items (files AND folders) in a vault folder.
+ * Used by the employee dashboard to browse the full folder tree.
+ * Auth: requireAuth → requireRole('employee', 'superadmin')
+ */
+router.get('/:folderId/contents', requireAuth, requireRole('employee', 'superadmin'), async (req, res, next) => {
+  try {
+    const { folderId } = req.params;
+    const client = boxService.getBoxClient();
+    const items = await client.folders.getFolderItems(folderId, {
+      queryParams: { fields: ['id', 'name', 'type', 'size', 'created_at', 'modified_at'] },
+    });
+
+    const entries = (items.entries || []).map(item => ({
+      id: item.id,
+      name: item.name,
+      type: item.type,
+      size: item.size || null,
+      createdAt: item.createdAt || item.created_at || null,
+      modifiedAt: item.modifiedAt || item.modified_at || null,
+    }));
+
+    res.json({ folderId, items: entries, count: entries.length });
+  } catch (error) {
+    if (error.statusCode === 404) {
+      return res.status(404).json({ error: 'Folder not found' });
+    }
     next(error);
   }
 });

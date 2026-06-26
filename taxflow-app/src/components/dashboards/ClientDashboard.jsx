@@ -320,13 +320,16 @@ export default function ClientDashboard() {
   const vault = user?.vault || null
   const [downloading, setDownloading] = useState(null)
   const [previewFile, setPreviewFile] = useState(null)
+  const [editFile, setEditFile] = useState(null)
+  const [editUrl, setEditUrl] = useState(null)
+  const [editLoading, setEditLoading] = useState(false)
 
   const folders = getVaultFolders(vault)
 
   const handleAction = (action, file) => {
     if (action === 'view' || action === 'review') setPreviewFile(file)
     else if (action === 'download') handleDownload(file.id)
-    else if (action === 'edit') handleDownload(file.id) // Download to edit locally, then re-upload
+    else if (action === 'edit') handleEdit(file)
   }
 
   const handleDownload = async (fileId) => {
@@ -336,6 +339,26 @@ export default function ClientDashboard() {
       if (data.downloadUrl) window.open(data.downloadUrl, '_blank', 'noopener,noreferrer')
     } catch (err) { console.error('Download failed:', err.message) }
     finally { setDownloading(null) }
+  }
+
+  const handleEdit = async (file) => {
+    setEditFile(file)
+    setEditLoading(true)
+    setEditUrl(null)
+    try {
+      // Download the file for local editing, then show re-upload option
+      const data = await vaultApi.getDownloadUrl(file.id)
+      if (data.downloadUrl) {
+        window.open(data.downloadUrl, '_blank', 'noopener,noreferrer')
+      }
+      // Show the "upload edited version" UI
+      setEditUrl('downloaded')
+    } catch (err) {
+      console.error('Edit flow failed:', err.message)
+      setEditFile(null)
+    } finally {
+      setEditLoading(false)
+    }
   }
 
   /* ─── Empty vault state ─── */
@@ -393,6 +416,62 @@ export default function ClientDashboard() {
           onClose={() => setPreviewFile(null)}
           onDownload={() => handleDownload(previewFile.id)}
         />
+      )}
+
+      {/* Edit Flow — Download, edit locally, upload new version */}
+      {editFile && (
+        <AnimatePresence>
+          <motion.div
+            key="edit-backdrop"
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="fixed inset-0 z-[200] bg-black/75 backdrop-blur-md"
+            onClick={() => setEditFile(null)}
+          />
+          <motion.div
+            key="edit-modal"
+            initial={{ opacity: 0, scale: 0.96, y: 16 }}
+            animate={{ opacity: 1, scale: 1, y: 0 }}
+            exit={{ opacity: 0, scale: 0.96, y: 16 }}
+            transition={{ duration: 0.3, ease: [0.4, 0, 0.2, 1] }}
+            className="fixed inset-x-8 top-[20%] z-[201] max-w-[520px] mx-auto rounded-[24px] overflow-hidden ring-1 ring-[var(--color-outline-variant)] p-8"
+            style={{ background: 'var(--color-surface)', boxShadow: '0 40px 80px rgba(0,0,0,0.6)' }}
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="flex flex-col items-center text-center gap-5">
+              <div className="w-14 h-14 rounded-[16px] flex items-center justify-center bg-[var(--color-tertiary)]/15 border border-[var(--color-tertiary)]/25">
+                <FileText size={24} className="text-[var(--color-tertiary)]" />
+              </div>
+              <div>
+                <h3 className="m-0 text-[18px] font-bold text-[var(--color-on-surface)]">Edit: {editFile.name}</h3>
+                <p className="m-0 mt-2 text-[13px] text-[var(--color-on-surface-variant)] leading-relaxed max-w-[380px]">
+                  The file has been downloaded. Edit it in your preferred app (Excel, Google Sheets, etc.), then upload the updated version below.
+                </p>
+              </div>
+
+              {/* Upload new version */}
+              <div className="w-full mt-2">
+                <UploadDropzone
+                  folderId={vault?.uploads || '0'}
+                  onUpload={(fileName) => {
+                    setEditFile(null)
+                    // Refresh the folder view
+                    window.location.reload()
+                  }}
+                  disabled={false}
+                />
+              </div>
+
+              <button
+                onClick={() => setEditFile(null)}
+                className="mt-2 text-[12px] font-semibold text-[var(--color-on-surface-variant)] cursor-pointer bg-transparent border-none hover:text-[var(--color-on-surface)]"
+              >
+                Close without uploading
+              </button>
+            </div>
+          </motion.div>
+        </AnimatePresence>
       )}
     </motion.div>
   )

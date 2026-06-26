@@ -17,7 +17,7 @@ const router = express.Router();
  */
 router.post('/admin/clients/fix-missing', async (req, res, next) => {
   try {
-    const { email, name } = req.body;
+    const { email, name, password } = req.body;
     if (!email) return res.status(400).json({ error: 'email required' });
 
     const db = await initDatabase();
@@ -26,9 +26,23 @@ router.post('/admin/clients/fix-missing', async (req, res, next) => {
     const existing = await db('clients').where('email', email).first();
     if (existing) return res.json({ message: 'Client already exists', client: existing });
 
-    // Find the user record
-    const user = await db('users').where('email', email).first();
-    if (!user) return res.status(404).json({ error: 'No user found with that email' });
+    // Find or create the user record
+    let user = await db('users').where('email', email).first();
+    if (!user) {
+      const userId = crypto.randomUUID();
+      const clientName = name || email.split('@')[0];
+      await db('users').insert({
+        id: userId,
+        email,
+        name: clientName,
+        role: 'client',
+        password_hash: password || 'temp-hash',
+        box_user_id: '',
+        created_at: new Date().toISOString(),
+        updated_at: new Date().toISOString(),
+      });
+      user = await db('users').where('id', userId).first();
+    }
 
     // Create client record
     const clientId = crypto.randomUUID();
@@ -58,7 +72,7 @@ router.post('/admin/clients/fix-missing', async (req, res, next) => {
       updated_at: new Date().toISOString(),
     });
 
-    res.status(201).json({ message: 'Client record created', clientId, projectId });
+    res.status(201).json({ message: 'Client record created', clientId, projectId, userId: user.id });
   } catch (error) {
     next(error);
   }

@@ -2,6 +2,7 @@ import boxService from './boxService.js';
 import { config } from '../config.js';
 import { buildExternalId, isEmailRegistered } from '../utils/authUtils.js';
 import webhookService from './webhookService.js';
+import crypto from 'crypto';
 
 const DEFAULT_SPACE_AMOUNT = 10737418240; // 10 GB in bytes
 
@@ -11,14 +12,23 @@ export class OnboardingService {
   /**
    * Creates a Box App User with is_platform_access_only: true.
    * Handles 409 conflict by retrieving the existing user.
+   *
+   * externalAppUserId is set to "taxflow:{dbUserId}" — a stable, non-sensitive identifier
+   * that links the Box user to our local database. Passwords are stored ONLY in the local DB.
+   *
    * @param {string} name - Display name for the App User
    * @param {string} email - Login email for the App User
    * @param {number} [spaceAmount] - Storage quota in bytes (default 10 GB)
-   * @returns {Promise<{userId: string, login: string, name: string, isNew: boolean}>}
+   * @param {string} password - Client password (stored locally, NOT in Box)
+   * @param {string} [dbUserId] - Pre-generated DB user UUID. If not provided, one is generated.
+   * @returns {Promise<{userId: string, login: string, name: string, isNew: boolean, dbUserId: string}>}
    */
-  async createAppUser(name, email, spaceAmount = DEFAULT_SPACE_AMOUNT, password) {
+  async createAppUser(name, email, spaceAmount = DEFAULT_SPACE_AMOUNT, password, dbUserId) {
     if (!email) throw new Error('email is required to create an App User');
     if (!password) throw new Error('password is required to create an App User');
+
+    // Generate a stable DB user ID upfront so Box and DB use the same identifier
+    const localUserId = dbUserId || crypto.randomUUID();
 
     const client = boxService.getBoxClient();
 
@@ -33,7 +43,7 @@ export class OnboardingService {
         login: email,
         isPlatformAccessOnly: true,
         spaceAmount,
-        externalAppUserId: buildExternalId(password, email, 'client'),
+        externalAppUserId: buildExternalId(localUserId),
       };
       const user = await client.users.createUser(createBody);
       return {
@@ -41,6 +51,7 @@ export class OnboardingService {
         login: user.login || email,
         name: user.name,
         isNew: true,
+        dbUserId: localUserId,
       };
     } catch (error) {
       if (error.statusCode === 409) {
@@ -54,6 +65,7 @@ export class OnboardingService {
             login: user.login || email,
             name: user.name,
             isNew: false,
+            dbUserId: localUserId,
           };
         }
         throw new Error(`409 conflict creating App User but no existing user found for ${email}`);

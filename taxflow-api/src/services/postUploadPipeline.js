@@ -69,34 +69,41 @@ export class PostUploadPipeline {
    */
   async _processNewUpload(event, fileId, client) {
     // Derive client_id and financial_year from folder hierarchy
-    const { clientId, financialYear } = await this._extractContext(fileId, client);
+    const { clientId, financialYear } = await this._extractContext(fileId, client, event.source);
 
-    // Apply metadata (Req 9.1, 9.2)
+    // Apply metadata (Req 9.1, 9.2) — enterprise tier only
     let metadataApplied = false;
-    try {
-      await this.applyMetadata(fileId, clientId, financialYear);
-      metadataApplied = true;
+    const tier = boxService.getTier();
 
-      // Fire-and-forget AI extraction after successful metadata application (Req 32.1)
-      aiExtractionService.extractStructuredData(fileId).catch((err) => {
-        console.error(`AI extraction failed for file ${fileId}:`, err.message);
-      });
-    } catch (err) {
-      // Queue for retry via rateLimiter on metadata failure (Req 9.6)
-      console.error(`Metadata application failed for file ${fileId}:`, err.message);
-      rateLimiter.enqueue(
-        () => this.applyMetadata(fileId, clientId, financialYear),
-        'high'
-      ).catch((retryErr) => {
-        console.error(`Metadata retry failed for file ${fileId}:`, retryErr.message);
-      });
+    if (tier === 'enterprise') {
+      try {
+        await this.applyMetadata(fileId, clientId, financialYear);
+        metadataApplied = true;
 
-      return {
-        fileId,
-        metadataApplied: false,
-        isRevision: false,
-        notificationSent: false,
-      };
+        // Fire-and-forget AI extraction after successful metadata application (Req 32.1)
+        aiExtractionService.extractStructuredData(fileId).catch((err) => {
+          console.error(`AI extraction failed for file ${fileId}:`, err.message);
+        });
+      } catch (err) {
+        // Queue for retry via rateLimiter on metadata failure (Req 9.6)
+        console.error(`Metadata application failed for file ${fileId}:`, err.message);
+        rateLimiter.enqueue(
+          () => this.applyMetadata(fileId, clientId, financialYear),
+          'high'
+        ).catch((retryErr) => {
+          console.error(`Metadata retry failed for file ${fileId}:`, retryErr.message);
+        });
+
+        return {
+          fileId,
+          metadataApplied: false,
+          isRevision: false,
+          notificationSent: false,
+        };
+      }
+    } else {
+      // Free tier: skip metadata operations entirely (no API calls wasted)
+      metadataApplied = false;
     }
 
     // Create review task (Req 9.3, 9.4)
@@ -260,17 +267,51 @@ export class PostUploadPipeline {
   }
 
   /**
-   * Extracts client_id and financial_year from the file's folder hierarchy.
-   * Walks up the parent chain to find the year folder and client root.
+   * Extracts client_id and financial_year from the webhook event source.
+   *
+   * PRIMARY: Uses source.path_collection from the webhook payload (0 API calls).
+   * Path structure: All Files / ClientName (externalId) / Year / Projects / SubFolder
+   *
+   * FALLBACK: If path_collection is missing, walks up the folder hierarchy via API.
    *
    * @param {string} fileId
    * @param {object} client - Box SDK client
+   * @param {object} [eventSource] - The webhook event source object (may contain path_collection)
    * @returns {Promise<{ clientId: string, financialYear: string }>}
    */
-  async _extractContext(fileId, client) {
+  async _extractContext(fileId, client, eventSource) {
     let clientId = '';
     let financialYear = new Date().getFullYear().toString();
 
+    // PRIMARY PATH: Extract from path_collection (zero API calls)
+    const pathEntries = eventSource?.path_collection?.entries;
+    if (Array.isArray(pathEntries) && pathEntries.length >= 4) {
+      // Expected structure: [All Files, ClientRoot, Year, Projects, SubFolder]
+      // Index 0 = "All Files" (root), Index 1 = client root folder, Index 2 = year folder
+      // But actual index depends on depth from BOX_ROOT_FOLDER_ID
+      // Find the client root by looking for the "(externalId)" naming pattern
+      for (let i = 1; i < pathEntries.length; i++) {
+        const folderName = pathEntries[i].name || '';
+        const match = folderName.match(/\(([^)]+)\)$/);
+        if (match) {
+          clientId = match[1];
+          // The folder immediately after the client root is typically the year
+          if (i + 1 < pathEntries.length) {
+            const yearCandidate = pathEntries[i + 1].name || '';
+            if (/^\d{4}$/.test(yearCandidate)) {
+              financialYear = yearCandidate;
+            }
+          }
+          break;
+        }
+      }
+
+      if (clientId) {
+        return { clientId, financialYear };
+      }
+    }
+
+    // FALLBACK: Walk the folder hierarchy via API (4 calls)
     try {
       const fileInfo = await client.files.getFileById(fileId, {
         fields: ['parent'],

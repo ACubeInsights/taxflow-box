@@ -1,0 +1,12 @@
+{
+  "boxAppSettings": {
+    "clientID": "YOUR_CLIENT_ID",
+    "clientSecret": "YOUR_CLIENT_SECRET",
+    "appAuth": {
+      "publicKeyID": "YOUR_PUBLIC_KEY_ID",
+      "privateKey": "-----BEGIN ENCRYPTED PRIVATE KEY-----\nYOUR_PRIVATE_KEY_HERE\n-----END ENCRYPTED PRIVATE KEY-----\n",
+      "passphrase": "YOUR_PASSPHRASE"
+    }
+  },
+  "enterpriseID": "YOUR_ENTERPRISE_ID"
+}

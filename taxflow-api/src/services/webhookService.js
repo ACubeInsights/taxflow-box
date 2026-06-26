@@ -199,13 +199,47 @@ export class WebhookService {
   }
 
   /**
-   * Verifies webhook payload using HMAC-SHA256 with constant-time comparison.
+   * Maximum age (in milliseconds) for a webhook delivery timestamp.
+   * Payloads older than this are rejected to prevent replay attacks.
+   * Per Box documentation: 10 minutes.
    */
-  verifySignature(body, primarySignature, secondarySignature, primaryKey, secondaryKey) {
+  static MAX_TIMESTAMP_AGE_MS = 10 * 60 * 1000;
+
+  /**
+   * Verifies webhook payload using HMAC-SHA256 with constant-time comparison.
+   * Per Box documentation, the HMAC is computed over body + timestamp bytes.
+   * Additionally validates that the delivery timestamp is not stale (replay protection).
+   *
+   * @param {Buffer|string} body - Raw request body bytes
+   * @param {string} timestamp - Value of BOX-DELIVERY-TIMESTAMP header (RFC-3339)
+   * @param {string} primarySignature - Value of BOX-SIGNATURE-PRIMARY header
+   * @param {string} secondarySignature - Value of BOX-SIGNATURE-SECONDARY header
+   * @param {string} primaryKey - Stored primary signature key
+   * @param {string} secondaryKey - Stored secondary signature key
+   * @returns {boolean} True if signature is valid and timestamp is fresh
+   */
+  verifySignature(body, timestamp, primarySignature, secondarySignature, primaryKey, secondaryKey) {
+    // Step 1: Replay protection — reject stale timestamps
+    if (!timestamp) {
+      return false;
+    }
+
+    const deliveryTime = Date.parse(timestamp);
+    if (isNaN(deliveryTime)) {
+      return false;
+    }
+
+    if (Date.now() - deliveryTime > WebhookService.MAX_TIMESTAMP_AGE_MS) {
+      return false;
+    }
+
+    // Step 2: Compute HMAC-SHA256 over body + timestamp (per Box docs)
+    // Reference: https://developer.box.com/guides/webhooks/v2/signatures-v2.md
     if (primaryKey && primarySignature) {
       const computedPrimary = crypto
         .createHmac('sha256', primaryKey)
         .update(body)
+        .update(timestamp)
         .digest('base64');
 
       if (this._timingSafeCompare(computedPrimary, primarySignature)) {
@@ -217,6 +251,7 @@ export class WebhookService {
       const computedSecondary = crypto
         .createHmac('sha256', secondaryKey)
         .update(body)
+        .update(timestamp)
         .digest('base64');
 
       if (this._timingSafeCompare(computedSecondary, secondarySignature)) {
@@ -311,6 +346,68 @@ export class WebhookService {
         console.error(`Failed to persist webhook keys for folder ${folderId}:`, err.message);
       });
     }
+  }
+
+  /**
+   * Verifies all registered webhooks still exist in Box.
+   * Detects missing webhooks (deleted by Box due to inactivity or admin action)
+   * and optionally re-registers them.
+   *
+   * @param {{ reregister?: boolean }} [options] - Whether to re-register missing webhooks
+   * @returns {Promise<{ total: number, healthy: number, missing: number, reregistered: number, errors: Array<{ folderId: string, error: string }> }>}
+   */
+  async verifyWebhooksHealthy({ reregister = true } = {}) {
+    const result = { total: 0, healthy: 0, missing: 0, reregistered: 0, errors: [] };
+
+    // Get all locally registered webhook folder IDs
+    const localFolderIds = Array.from(this._webhookStore.keys());
+    result.total = localFolderIds.length;
+
+    if (localFolderIds.length === 0) {
+      return result;
+    }
+
+    // Fetch all webhooks from Box
+    let boxWebhooks = [];
+    try {
+      const client = this._getBoxClient ? this._getBoxClient() : boxService.getBoxClient();
+      const response = await client.webhooks.getWebhooks();
+      boxWebhooks = response.entries || [];
+    } catch (err) {
+      console.error('[WebhookHealth] Failed to list webhooks from Box:', err.message);
+      result.errors.push({ folderId: '*', error: `List webhooks failed: ${err.message}` });
+      return result;
+    }
+
+    // Build set of Box-side webhook target folder IDs
+    const boxFolderIds = new Set(
+      boxWebhooks
+        .filter((wh) => wh.target?.type === 'folder')
+        .map((wh) => wh.target.id)
+    );
+
+    // Check each local registration against Box
+    for (const folderId of localFolderIds) {
+      if (boxFolderIds.has(folderId)) {
+        result.healthy++;
+      } else {
+        result.missing++;
+        console.warn(`[WebhookHealth] Webhook missing for folder ${folderId}`);
+
+        if (reregister) {
+          try {
+            await this.registerWebhook(folderId);
+            result.reregistered++;
+            console.info(`[WebhookHealth] Re-registered webhook for folder ${folderId}`);
+          } catch (err) {
+            result.errors.push({ folderId, error: err.message });
+            console.error(`[WebhookHealth] Re-registration failed for folder ${folderId}:`, err.message);
+          }
+        }
+      }
+    }
+
+    return result;
   }
 }
 

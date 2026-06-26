@@ -14,6 +14,16 @@ export class UserRepository extends BaseRepository {
     return this.query(trx).where('box_user_id', boxUserId).whereNull('deleted_at').first();
   }
 
+  /**
+   * Finds all users with a given role.
+   * @param {string} role - Role to filter by (e.g., 'employee', 'client', 'superadmin')
+   * @param {object} [trx] - Optional transaction
+   * @returns {Promise<Array>}
+   */
+  async findByRole(role, trx) {
+    return this.query(trx).where('role', role).whereNull('deleted_at');
+  }
+
   async create(userData, trx) {
     const now = new Date().toISOString();
     const record = {
