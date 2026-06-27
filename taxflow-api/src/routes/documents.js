@@ -201,66 +201,74 @@ router.get('/:fileId/edit-url', requireAuth, async (req, res, next) => {
     const { fileId } = req.params;
     const client = boxService.getBoxClient();
 
-    // Get expiring embed link (works without shared link scopes)
-    let file;
-    try {
-      file = await client.files.getFileById(fileId, {
-        queryParams: { fields: ['expiring_embed_link', 'name', 'id', 'shared_link'] },
-      });
-    } catch (err) {
-      const msg = err.message || '';
-      if (msg.includes('404')) {
+    // Get auth token for raw API call
+    const token = await client.auth.retrieveToken();
+
+    // Create editable shared link via raw Box API (SDK strips response for shared_link)
+    const boxResp = await fetch(`https://api.box.com/2.0/files/${fileId}?fields=shared_link,name,extension`, {
+      method: 'PUT',
+      headers: {
+        'Authorization': `Bearer ${token.accessToken}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        shared_link: {
+          access: 'open',
+          permissions: { can_edit: true, can_download: true, can_preview: true }
+        }
+      }),
+    });
+
+    if (!boxResp.ok) {
+      const errData = await boxResp.json().catch(() => ({}));
+      if (boxResp.status === 404) {
         return res.status(404).json({ error: 'File not found' });
       }
-      throw err;
+      throw new Error(`Box API error ${boxResp.status}: ${errData.message || errData.code || 'Unknown'}`);
     }
 
-    // Try expiring embed link first
-    const embedLink = file.expiringEmbedLink?.url || file.rawData?.expiring_embed_link?.url;
+    const data = await boxResp.json();
+    const sharedLink = data.shared_link;
 
-    if (embedLink) {
-      // Append edit/annotation parameters
-      const separator = embedLink.includes('?') ? '&' : '?';
-      const editUrl = `${embedLink}${separator}showAnnotations=true&showDownload=true`;
+    if (sharedLink && sharedLink.url) {
+      const hash = sharedLink.url.split('/s/')[1];
+      const embedUrl = `https://app.box.com/embed/s/${hash}?showAnnotations=true&showDownload=true`;
 
       return res.json({
-        embedUrl: editUrl,
+        embedUrl,
+        sharedLinkUrl: sharedLink.url,
         fileId,
-        fileName: file.name || file.rawData?.name,
-        method: 'expiring_embed_link',
+        fileName: data.name,
+        extension: data.extension,
+        method: 'editable_shared_link',
         permissions: { canEdit: true, canDownload: true, canPreview: true },
       });
     }
 
-    // Fallback: try shared link approach
+    // Fallback: expiring embed link (read-only but better than nothing)
     try {
-      const result = await client.sharedLinksFiles.addShareLinkToFile(fileId, {
-        shared_link: { access: 'open' },
-      }, { fields: 'shared_link' });
-
-      const sharedLinkUrl = result.rawData?.shared_link?.url;
-      if (sharedLinkUrl) {
-        const hash = sharedLinkUrl.split('/s/')[1];
+      const file = await client.files.getFileById(fileId, {
+        queryParams: { fields: ['expiring_embed_link', 'name', 'extension'] },
+      });
+      const embedLink = file.expiringEmbedLink?.url || file.rawData?.expiring_embed_link?.url;
+      if (embedLink) {
         return res.json({
-          embedUrl: `https://app.box.com/embed/s/${hash}?showAnnotations=true&showDownload=true`,
-          sharedLinkUrl,
+          embedUrl: embedLink,
           fileId,
-          fileName: file.name || file.rawData?.name,
-          method: 'shared_link',
-          permissions: { canEdit: true, canDownload: true, canPreview: true },
+          fileName: file.name || data.name,
+          extension: file.extension || data.extension,
+          method: 'expiring_embed_link',
+          permissions: { canEdit: false, canDownload: true, canPreview: true },
         });
       }
-    } catch {
-      // Shared link not available — fall through
-    }
+    } catch { /* fall through */ }
 
-    // Last fallback: just provide the download URL
     return res.status(200).json({
       embedUrl: null,
       fileId,
-      fileName: file.name || file.rawData?.name,
+      fileName: data.name,
       method: 'none',
-      message: 'Embed not available for this file. Use download + re-upload flow.',
+      message: 'Embed not available. Use download + re-upload flow.',
       permissions: { canEdit: false, canDownload: true, canPreview: false },
     });
   } catch (error) {

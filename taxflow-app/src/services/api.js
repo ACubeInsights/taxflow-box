@@ -164,6 +164,10 @@ export const documentApi = {
 
     return await response.json();
   },
+
+  async getEditUrl(fileId) {
+    return apiRequest(`/documents/${fileId}/edit-url`);
+  },
 };
 
 /**

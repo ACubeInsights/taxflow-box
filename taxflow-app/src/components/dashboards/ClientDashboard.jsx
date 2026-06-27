@@ -7,7 +7,7 @@ import {
 } from 'lucide-react'
 import { SectionHeader, GlassPanel, PanelTitle } from '../ui'
 import { useAuth } from '../../context/AuthContext'
-import { vaultApi } from '../../services/api'
+import { vaultApi, documentApi } from '../../services/api'
 import { formatFileSize, getFileIcon, sortFilesByDate } from '../../utils/fileUtils'
 import UploadDropzone from '../UploadDropzone'
 import BoxPreviewModal from '../BoxPreviewModal'
@@ -346,15 +346,20 @@ export default function ClientDashboard() {
     setEditLoading(true)
     setEditUrl(null)
     try {
-      // Download the file for local editing, then show re-upload option
-      const data = await vaultApi.getDownloadUrl(file.id)
-      if (data.downloadUrl) {
-        window.open(data.downloadUrl, '_blank', 'noopener,noreferrer')
+      const data = await documentApi.getEditUrl(file.id)
+      if (data.embedUrl && data.method === 'editable_shared_link') {
+        setEditUrl(data.embedUrl)
+      } else if (data.embedUrl) {
+        // Fallback to read-only preview
+        setEditUrl(data.embedUrl)
+      } else {
+        // No embed available — download fallback
+        handleDownload(file.id)
+        setEditFile(null)
       }
-      // Show the "upload edited version" UI
-      setEditUrl('downloaded')
     } catch (err) {
-      console.error('Edit flow failed:', err.message)
+      console.error('Edit URL failed:', err.message)
+      handleDownload(file.id)
       setEditFile(null)
     } finally {
       setEditLoading(false)
@@ -418,7 +423,7 @@ export default function ClientDashboard() {
         />
       )}
 
-      {/* Edit Flow — Download, edit locally, upload new version */}
+      {/* Edit Modal — Box editable shared link embed */}
       {editFile && (
         <AnimatePresence>
           <motion.div
@@ -435,40 +440,53 @@ export default function ClientDashboard() {
             animate={{ opacity: 1, scale: 1, y: 0 }}
             exit={{ opacity: 0, scale: 0.96, y: 16 }}
             transition={{ duration: 0.3, ease: [0.4, 0, 0.2, 1] }}
-            className="fixed inset-x-8 top-[20%] z-[201] max-w-[520px] mx-auto rounded-[24px] overflow-hidden ring-1 ring-[var(--color-outline-variant)] p-8"
+            className="fixed inset-3 z-[201] flex flex-col rounded-[20px] overflow-hidden ring-1 ring-[var(--color-outline-variant)]"
             style={{ background: 'var(--color-surface)', boxShadow: '0 40px 80px rgba(0,0,0,0.6)' }}
             onClick={(e) => e.stopPropagation()}
           >
-            <div className="flex flex-col items-center text-center gap-5">
-              <div className="w-14 h-14 rounded-[16px] flex items-center justify-center bg-[var(--color-tertiary)]/15 border border-[var(--color-tertiary)]/25">
-                <FileText size={24} className="text-[var(--color-tertiary)]" />
+            {/* Header */}
+            <div className="flex items-center justify-between px-6 py-3 border-b border-[var(--color-outline-variant)] bg-[var(--color-surface-container)]/60 backdrop-blur-xl shrink-0">
+              <div className="flex items-center gap-3 min-w-0">
+                <div className="w-8 h-8 rounded-lg flex items-center justify-center bg-[var(--color-tertiary)]/15 border border-[var(--color-tertiary)]/25">
+                  <FileText size={14} className="text-[var(--color-tertiary)]" />
+                </div>
+                <div className="min-w-0">
+                  <h3 className="m-0 text-[13px] font-bold text-[var(--color-on-surface)] truncate">{editFile.name}</h3>
+                  <p className="m-0 text-[10px] text-[var(--color-on-surface-variant)]">Editing in Box</p>
+                </div>
               </div>
-              <div>
-                <h3 className="m-0 text-[18px] font-bold text-[var(--color-on-surface)]">Edit: {editFile.name}</h3>
-                <p className="m-0 mt-2 text-[13px] text-[var(--color-on-surface-variant)] leading-relaxed max-w-[380px]">
-                  The file has been downloaded. Edit it in your preferred app (Excel, Google Sheets, etc.), then upload the updated version below.
-                </p>
-              </div>
-
-              {/* Upload new version */}
-              <div className="w-full mt-2">
-                <UploadDropzone
-                  folderId={vault?.uploads || '0'}
-                  onUpload={(fileName) => {
-                    setEditFile(null)
-                    // Refresh the folder view
-                    window.location.reload()
-                  }}
-                  disabled={false}
-                />
-              </div>
-
               <button
                 onClick={() => setEditFile(null)}
-                className="mt-2 text-[12px] font-semibold text-[var(--color-on-surface-variant)] cursor-pointer bg-transparent border-none hover:text-[var(--color-on-surface)]"
+                className="h-8 px-4 rounded-lg flex items-center gap-2 text-[12px] font-bold cursor-pointer transition-all ring-1 ring-[var(--color-outline-variant)] bg-transparent text-[var(--color-on-surface-variant)] hover:bg-[var(--color-surface-highest)] hover:text-[var(--color-on-surface)]"
               >
-                Close without uploading
+                Done
               </button>
+            </div>
+
+            {/* Edit iframe */}
+            <div className="flex-1 relative overflow-hidden bg-white">
+              {editLoading && (
+                <div className="absolute inset-0 flex flex-col items-center justify-center gap-3 z-10 bg-[var(--color-surface-lowest)]">
+                  <Loader2 size={28} className="animate-spin text-[var(--color-primary)]" />
+                  <span className="text-[13px] text-[var(--color-on-surface-variant)] font-medium">Opening editor…</span>
+                </div>
+              )}
+              {editUrl && (
+                <iframe
+                  src={editUrl}
+                  title={`Edit: ${editFile.name}`}
+                  className="w-full h-full border-none"
+                  sandbox="allow-scripts allow-same-origin allow-forms allow-popups allow-popups-to-escape-sandbox"
+                  allow="fullscreen"
+                />
+              )}
+              {!editLoading && !editUrl && (
+                <div className="absolute inset-0 flex flex-col items-center justify-center gap-3 bg-[var(--color-surface-lowest)]">
+                  <AlertCircle size={28} className="text-[#f87171]" />
+                  <p className="text-[13px] text-[var(--color-on-surface)] font-semibold m-0">Unable to open editor</p>
+                  <p className="text-[11px] text-[var(--color-on-surface-variant)] m-0">Try downloading the file instead.</p>
+                </div>
+              )}
             </div>
           </motion.div>
         </AnimatePresence>
