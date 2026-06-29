@@ -9,7 +9,7 @@ import { saveFilters, loadFilters } from '../services/sessionFilters'
 const FILTER_KEY = '/dashboard:clientFilters'
 
 const STATUS_OPTIONS = ['Active', 'On_Hold', 'Complete']
-const ENTITY_OPTIONS = ['Individual', 'Business', 'Trust', 'S-Corp', 'Partnership']
+const ENTITY_OPTIONS = ['Individual', 'Business', 'Trust', 'S-Corp', 'Partnership', 'LLC', 'C-Corp', 'Non-Profit']
 
 const STATUS_COLORS = {
   Active: '#22c55e',
@@ -23,6 +23,9 @@ const ENTITY_COLORS = {
   Trust: '#f59e0b',
   'S-Corp': '#ec4899',
   Partnership: '#3b82f6',
+  LLC: '#10b981',
+  'C-Corp': '#f43f5e',
+  'Non-Profit': '#8b5cf6',
 }
 
 export default function ClientListPanel() {
@@ -75,6 +78,13 @@ export default function ClientListPanel() {
     }
     return result
   }, [clients, search, statusFilter, entityFilter])
+
+  // Derive entity types from actual data (never miss a type)
+  const dynamicEntityOptions = useMemo(() => {
+    const types = new Set(ENTITY_OPTIONS)
+    clients.forEach(c => { if (c.entityType) types.add(c.entityType) })
+    return [...types].sort()
+  }, [clients])
 
   if (loading) {
     return (
@@ -144,7 +154,7 @@ export default function ClientListPanel() {
           className="rounded-xl border border-[var(--color-outline-variant)] bg-[var(--color-surface-container)]/50 px-3 py-2.5 text-[12px] font-semibold text-[var(--color-on-surface)] outline-none appearance-none cursor-pointer"
         >
           <option value="">All Entity Types</option>
-          {ENTITY_OPTIONS.map((e) => (
+          {dynamicEntityOptions.map((e) => (
             <option key={e} value={e}>{e}</option>
           ))}
         </select>
