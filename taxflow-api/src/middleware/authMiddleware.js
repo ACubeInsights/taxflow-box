@@ -102,13 +102,37 @@ export async function validateFolderOwnership(req, res, next) {
 
     // Check granular permission for this folder
     const hasAccess = await permissionService.hasAccess(client.id, folderId, 'viewer');
-    if (!hasAccess) {
-      // Return 404 (not 403) to prevent resource enumeration
-      return res.status(404).json({ error: 'Resource not found' });
+    if (hasAccess) {
+      req.clientId = client.id;
+      return next();
     }
 
-    req.clientId = client.id;
-    next();
+    // Fallback: check if folder belongs to the client's vault (for clients onboarded
+    // before granular permissions were introduced)
+    const { clientVaultRepo } = repos;
+    if (clientVaultRepo) {
+      const vault = await clientVaultRepo.findByClientId(client.id);
+      if (vault) {
+        const vaultFolderIds = [
+          vault.root_folder_id,
+          vault.year_folder_id,
+          vault.projects_folder_id,
+          vault.tax_folder_id,
+          vault.uploads_folder_id,
+          vault.supporting_docs_folder_id,
+          vault.signed_documents_folder_id,
+          vault.internal_notes_folder_id,
+        ].filter(Boolean);
+
+        if (vaultFolderIds.includes(folderId)) {
+          req.clientId = client.id;
+          return next();
+        }
+      }
+    }
+
+    // No access via either method
+    return res.status(404).json({ error: 'Resource not found' });
   } catch (err) {
     next(err);
   }

@@ -65,9 +65,24 @@ export default function ClientListPanel() {
   const filtered = useMemo(() => {
     let result = clients
     if (search.trim()) {
-      const q = search.toLowerCase()
+      const q = search.trim().toLowerCase()
+      // Support both substring matching and basic regex patterns
+      let matcher
+      try {
+        // If the search looks like a regex pattern (has special chars), try regex
+        const hasRegexChars = /[.*+?^${}()|[\]\\]/.test(q)
+        if (hasRegexChars) {
+          const re = new RegExp(q, 'i')
+          matcher = (str) => re.test(str || '')
+        } else {
+          matcher = (str) => (str || '').toLowerCase().includes(q)
+        }
+      } catch {
+        // Invalid regex — fall back to substring match
+        matcher = (str) => (str || '').toLowerCase().includes(q)
+      }
       result = result.filter(
-        (c) => c.name?.toLowerCase().includes(q) || c.email?.toLowerCase().includes(q)
+        (c) => matcher(c.name) || matcher(c.email)
       )
     }
     if (statusFilter) {
@@ -169,6 +184,14 @@ export default function ClientListPanel() {
               ? 'No clients in the system yet.'
               : 'No clients match your filters.'}
           </p>
+          {clients.length > 0 && (search || statusFilter || entityFilter) && (
+            <button
+              onClick={() => { setSearch(''); setStatusFilter(''); setEntityFilter(''); }}
+              className="mt-3 px-4 py-2 rounded-lg text-[12px] font-semibold cursor-pointer bg-[var(--color-primary)]/10 border border-[var(--color-primary)]/20 text-[var(--color-primary)] hover:bg-[var(--color-primary)]/15 transition-all"
+            >
+              Clear all filters
+            </button>
+          )}
         </div>
       ) : (
         <div className="flex flex-col gap-2">
