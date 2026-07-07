@@ -16,7 +16,7 @@ const router = express.Router();
 router.get('/documents/:documentId/comments', async (req, res, next) => {
   try {
     const { documentId } = req.params;
-    const comments = commentService.getComments(documentId);
+    const comments = await commentService.getComments(documentId);
     res.json(comments);
   } catch (error) {
     next(error);
@@ -39,7 +39,7 @@ router.post('/documents/:documentId/comments', async (req, res, next) => {
       return res.status(400).json({ error: 'Comment text is required' });
     }
 
-    const comment = commentService.addComment(documentId, { type, authorId, authorName, text, mentions });
+    const comment = await commentService.addComment(documentId, { type, authorId, authorName, text, mentions });
     res.status(201).json(comment);
   } catch (error) {
     if (error.statusCode === 400) {
@@ -66,7 +66,7 @@ router.put('/comments/:commentId', async (req, res, next) => {
       return res.status(400).json({ error: 'Missing required field: requesterId' });
     }
 
-    const comment = commentService.editComment(commentId, { text, requesterId });
+    const comment = await commentService.editComment(commentId, { text, requesterId });
     res.json(comment);
   } catch (error) {
     if (error.statusCode) {

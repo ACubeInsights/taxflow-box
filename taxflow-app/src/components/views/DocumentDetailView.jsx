@@ -3,12 +3,13 @@ import { useParams, useNavigate } from 'react-router-dom'
 import { motion } from 'framer-motion'
 import {
   FileText, Loader2, AlertCircle, RefreshCw, CheckCircle,
-  RotateCcw, ShieldOff, Calendar, Clock, Undo2, Send,
+  RotateCcw, ShieldOff, Calendar, Clock, Undo2, Send, Edit3,
 } from 'lucide-react'
 import { projectApi, reviewApi, tokenApi } from '../../services/api'
 import Breadcrumb from '../Breadcrumb'
 import { GlassPanel, StatusBadge, Badge, ProgressBar } from '../ui'
 import CommentsThread from '../CommentsThread'
+import DocumentEditor from '../DocumentEditor'
 import { useAuth } from '../../context/AuthContext'
 
 const PRIORITY_COLORS = {
@@ -86,7 +87,7 @@ function LoadingSkeleton() {
 export default function DocumentDetailView() {
   const { clientId, projectId, documentId } = useParams()
   const navigate = useNavigate()
-  const { user } = useAuth()
+  const { user, token } = useAuth()
   const employeeId = user?.id || 'employee-1'
 
   const [doc, setDoc] = useState(null)
@@ -116,6 +117,9 @@ export default function DocumentDetailView() {
 
   // Approve confirmation
   const [showApproveConfirm, setShowApproveConfirm] = useState(false)
+
+  // Document editor state
+  const [showEditor, setShowEditor] = useState(false)
 
   // Undo state
   const [approvedAt, setApprovedAt] = useState(null)
@@ -378,9 +382,19 @@ export default function DocumentDetailView() {
         {/* Left panel — Document Viewer */}
         <motion.div variants={leftPaneVariants} initial="hidden" animate="visible" className="flex flex-col h-full">
           <GlassPanel className="h-full flex flex-col flex-1">
-            <h3 className="mb-6 m-0 text-[12px] font-bold uppercase tracking-[0.15em] text-[var(--color-on-surface-variant)]/70 flex items-center gap-2">
-              <FileText size={14} /> Document Preview
-            </h3>
+            <div className="flex items-center justify-between mb-6">
+              <h3 className="m-0 text-[12px] font-bold uppercase tracking-[0.15em] text-[var(--color-on-surface-variant)]/70 flex items-center gap-2">
+                <FileText size={14} /> Document Preview
+              </h3>
+              {doc.fileId && (
+                <button
+                  onClick={() => setShowEditor(true)}
+                  className="flex items-center gap-1.5 rounded-[10px] border border-[var(--color-primary)]/30 bg-[var(--color-primary)]/10 px-3 py-1.5 text-[12px] font-bold text-[var(--color-primary)] transition-all hover:bg-[var(--color-primary)]/20 active:scale-95"
+                >
+                  <Edit3 size={13} /> Edit Document
+                </button>
+              )}
+            </div>
             <div className="flex flex-col items-center justify-center rounded-2xl border border-white/[0.05] bg-white/[0.02] p-10 min-h-[400px]">
               {doc.fileId && previewToken ? (
                 <iframe
@@ -642,6 +656,21 @@ export default function DocumentDetailView() {
           <CommentsThread documentId={documentId} />
         </motion.div>
       </div>
+
+      {/* Document Editor Modal */}
+      {showEditor && doc.fileId && (
+        <DocumentEditor
+          fileId={doc.fileId}
+          fileName={doc.uploadedFileName || doc.name}
+          fileSize={0}
+          sessionToken={token}
+          onClose={() => setShowEditor(false)}
+          onVersionUploaded={() => {
+            setShowEditor(false)
+            fetchData()
+          }}
+        />
+      )}
     </div>
   )
 }

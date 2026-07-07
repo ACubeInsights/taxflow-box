@@ -3,7 +3,8 @@ import multer from 'multer';
 import boxService from '../services/boxService.js';
 import { BoxService } from '../services/boxService.js';
 import { initDatabase } from '../db/db.js';
-import { requireAuth } from '../middleware/authMiddleware.js';
+import { requireAuth, permissionCheck } from '../middleware/authMiddleware.js';
+import { config } from '../config.js';
 import cacheLayer from '../services/cacheLayer.js';
 import fs from 'fs';
 import path from 'path';
@@ -38,7 +39,7 @@ const upload = multer({
  * Files < 20MB: direct upload. Files >= 20MB: chunked upload.
  * Body (multipart/form-data): { file, folderId, requestId? }
  */
-router.post('/upload', upload.single('file'), async (req, res, next) => {
+router.post('/upload', requireAuth, upload.single('file'), async (req, res, next) => {
   let tempFilePath = null;
 
   try {
@@ -233,15 +234,19 @@ router.get('/:fileId/edit-url', requireAuth, async (req, res, next) => {
     if (sharedLink && sharedLink.url) {
       const hash = sharedLink.url.split('/s/')[1];
       const embedUrl = `https://app.box.com/embed/s/${hash}?showAnnotations=true&showDownload=true`;
+      const officeOnlineUrl = `https://app.box.com/integrations/officeonline/openOfficeOnline?fileId=${fileId}&sharedAccessCode=${encodeURIComponent(hash)}`;
 
       return res.json({
         embedUrl,
+        officeOnlineUrl,
         sharedLinkUrl: sharedLink.url,
+        directEditUrl: `https://app.box.com/file/${fileId}`,
         fileId,
         fileName: data.name,
         extension: data.extension,
         method: 'editable_shared_link',
         permissions: { canEdit: true, canDownload: true, canPreview: true },
+        boxEditAccount: config.boxEditAccountEmail,
       });
     }
 
@@ -281,7 +286,7 @@ router.get('/:fileId/edit-url', requireAuth, async (req, res, next) => {
  * Upload an edited file as a new version to Box.
  * Preserves the original version in version history.
  */
-router.post('/:fileId/upload-version', requireAuth, upload.single('file'), async (req, res, next) => {
+router.post('/:fileId/upload-version', requireAuth, permissionCheck('writer'), upload.single('file'), async (req, res, next) => {
   let tempFilePath = null;
 
   try {
@@ -338,6 +343,69 @@ router.post('/:fileId/upload-version', requireAuth, upload.single('file'), async
     if (tempFilePath) {
       try { fs.unlinkSync(tempFilePath); } catch { /* best effort */ }
     }
+    next(error);
+  }
+});
+
+// ─── EDIT SESSION AUDIT TRAIL ────────────────────────────────────────
+
+/**
+ * POST /api/documents/:fileId/edit-session
+ * Records that an employee opened a document for editing.
+ * Body: { action: 'open_editor' | 'open_in_box' | 'upload_version', fileName?, clientId? }
+ */
+router.post('/:fileId/edit-session', requireAuth, async (req, res, next) => {
+  try {
+    const { fileId } = req.params;
+    const { action, fileName, clientId } = req.body;
+
+    if (!action) {
+      return res.status(400).json({ error: 'Missing required field: action' });
+    }
+
+    const validActions = ['open_editor', 'open_in_box', 'upload_version'];
+    if (!validActions.includes(action)) {
+      return res.status(400).json({ error: `action must be one of: ${validActions.join(', ')}` });
+    }
+
+    const db = await initDatabase();
+    const { randomUUID } = await import('crypto');
+    const id = randomUUID();
+    const now = new Date().toISOString();
+
+    await db('edit_sessions').insert({
+      id,
+      file_id: fileId,
+      file_name: fileName || '',
+      employee_id: req.user.userId,
+      employee_name: req.user.name || '',
+      client_id: clientId || '',
+      action,
+      created_at: now,
+    });
+
+    res.status(201).json({ id, fileId, action, employeeId: req.user.userId, createdAt: now });
+  } catch (error) {
+    next(error);
+  }
+});
+
+/**
+ * GET /api/documents/:fileId/edit-sessions
+ * Returns edit session history for a file, sorted by most recent first.
+ */
+router.get('/:fileId/edit-sessions', requireAuth, async (req, res, next) => {
+  try {
+    const { fileId } = req.params;
+    const db = await initDatabase();
+
+    const sessions = await db('edit_sessions')
+      .where('file_id', fileId)
+      .orderBy('created_at', 'desc')
+      .limit(50);
+
+    res.json(sessions);
+  } catch (error) {
     next(error);
   }
 });

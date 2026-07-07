@@ -6,17 +6,20 @@ import {
 } from 'lucide-react'
 import { formatFileSize } from '../utils/fileUtils'
 
-const API_BASE = import.meta.env.VITE_API_URL || 'http://localhost:3001'
+const API_BASE = import.meta.env.VITE_API_URL || 'http://localhost:3001/api'
 
 /**
  * DocumentEditor — Embedded document editing with three modes:
  * 
  * 1. PREVIEW: Box Content Preview with annotations (highlight, comment, draw)
- * 2. EDIT: Box Embed iframe with "Open" button (ONLYOFFICE / Office Online)
+ * 2. EDIT: Box Embed with editable shared link — employees use a shared Box account
+ *    session to enable inline editing via Office Online. The embed shows an "Open"
+ *    button that launches the full editor when the employee has an active Box session.
+ *    If not signed in, a banner guides them to log into Box with the shared account.
  * 3. VERSIONS: Version history with download for each version
  * 
- * Uses downscoped tokens for preview and shared links for editing.
- * No Box login needed — works with App User tokens via the Service Account.
+ * Architecture: Files NEVER leave Box. All editing happens inside Box's native editor.
+ * Our app provides the embed URL and audit trail (which employee edited which file).
  */
 export default function DocumentEditor({ 
   fileId, 
@@ -37,6 +40,9 @@ export default function DocumentEditor({
   
   // Edit state
   const [embedUrl, setEmbedUrl] = useState(null)
+  const [officeOnlineUrl, setOfficeOnlineUrl] = useState(null)
+  const [directEditUrl, setDirectEditUrl] = useState(null)
+  const [boxEditAccount, setBoxEditAccount] = useState(null)
   
   // Version state
   const [versions, setVersions] = useState([])
@@ -54,7 +60,8 @@ export default function DocumentEditor({
     setLoading(true)
     setError(null)
     try {
-      const res = await fetch(`${API_BASE}/api/documents/${fileId}/preview-token`, {
+      // Use the embed endpoint which returns an expiring embed URL for iframe preview
+      const res = await fetch(`${API_BASE}/vaults/files/${fileId}/embed`, {
         headers: authHeaders,
       })
       if (!res.ok) {
@@ -62,7 +69,7 @@ export default function DocumentEditor({
         throw new Error(body.error || `HTTP ${res.status}`)
       }
       const data = await res.json()
-      setPreviewToken(data.accessToken)
+      setPreviewToken(data.embedUrl)
     } catch (err) {
       setError(`Preview: ${err.message}`)
     } finally {
@@ -75,7 +82,7 @@ export default function DocumentEditor({
     setLoading(true)
     setError(null)
     try {
-      const res = await fetch(`${API_BASE}/api/documents/${fileId}/edit-url`, {
+      const res = await fetch(`${API_BASE}/documents/${fileId}/edit-url`, {
         headers: authHeaders,
       })
       if (!res.ok) {
@@ -84,6 +91,16 @@ export default function DocumentEditor({
       }
       const data = await res.json()
       setEmbedUrl(data.embedUrl)
+      setOfficeOnlineUrl(data.officeOnlineUrl || null)
+      setDirectEditUrl(data.directEditUrl || null)
+      setBoxEditAccount(data.boxEditAccount || null)
+
+      // Record edit session for audit trail
+      fetch(`${API_BASE}/documents/${fileId}/edit-session`, {
+        method: 'POST',
+        headers: { ...authHeaders, 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: 'open_editor', fileName }),
+      }).catch(() => {}) // fire-and-forget
     } catch (err) {
       setError(`Edit: ${err.message}`)
     } finally {
@@ -96,7 +113,7 @@ export default function DocumentEditor({
     setLoading(true)
     setError(null)
     try {
-      const res = await fetch(`${API_BASE}/api/portal/files/${fileId}/versions`, {
+      const res = await fetch(`${API_BASE}/portal/files/${fileId}/versions`, {
         headers: authHeaders,
       })
       if (!res.ok) throw new Error(`HTTP ${res.status}`)
@@ -156,7 +173,7 @@ export default function DocumentEditor({
     formData.append('file', file)
 
     try {
-      const res = await fetch(`${API_BASE}/api/documents/${fileId}/upload-version`, {
+      const res = await fetch(`${API_BASE}/documents/${fileId}/upload-version`, {
         method: 'POST',
         headers: { 'Authorization': `Bearer ${sessionToken}` },
         body: formData,
@@ -180,7 +197,7 @@ export default function DocumentEditor({
   // ─── DOWNLOAD ──────────────────────────────────────────────────────
   const handleDownload = async () => {
     try {
-      const res = await fetch(`${API_BASE}/api/vaults/files/${fileId}/download`, {
+      const res = await fetch(`${API_BASE}/vaults/files/${fileId}/download`, {
         headers: authHeaders,
       })
       if (!res.ok) throw new Error('Download failed')
@@ -314,10 +331,9 @@ export default function DocumentEditor({
           {/* PREVIEW MODE */}
           {mode === 'preview' && !error && (
             <div ref={previewContainerRef} className="w-full h-full">
-              {/* If Box Preview SDK isn't loaded, fall back to iframe with token */}
-              {previewToken && typeof Box === 'undefined' && (
+              {previewToken && (
                 <iframe
-                  src={`https://app.box.com/preview/expiring_embed/${previewToken}?showAnnotations=true&showDownload=true`}
+                  src={previewToken}
                   title={`Preview: ${fileName}`}
                   className="w-full h-full border-none"
                   onLoad={() => setLoading(false)}
@@ -328,15 +344,34 @@ export default function DocumentEditor({
           )}
 
           {/* EDIT MODE */}
-          {mode === 'edit' && embedUrl && !error && (
-            <iframe
-              src={embedUrl}
-              title={`Edit: ${fileName}`}
-              className="w-full h-full border-none"
-              onLoad={() => setLoading(false)}
-              allow="fullscreen; local-network-access *; clipboard-read *; clipboard-write *"
-              allowFullScreen
-            />
+          {mode === 'edit' && !error && (
+            <div className="w-full h-full flex flex-col">
+              {/* Session banner */}
+              <div className="shrink-0 px-5 py-3 border-b border-[var(--color-outline-variant)] bg-[var(--color-surface-container)]/80 flex items-center justify-between gap-4">
+                <div className="flex items-center gap-3 min-w-0">
+                  <div className="w-2 h-2 rounded-full bg-[#22c55e] shrink-0 animate-pulse" />
+                  <p className="m-0 text-[12px] text-[var(--color-on-surface-variant)] leading-snug">
+                    <span className="font-semibold text-[var(--color-on-surface)]">Click "Open" below to edit.</span>
+                    {boxEditAccount && (
+                      <span className="text-[var(--color-on-surface-variant)]">
+                        {' '}Sign into Box with <span className="font-mono font-semibold text-[var(--color-primary)]">{boxEditAccount}</span> if prompted.
+                      </span>
+                    )}
+                  </p>
+                </div>
+              </div>
+              {/* Box embed iframe — shows file with "Open" button for editing */}
+              {embedUrl && (
+                <iframe
+                  src={embedUrl}
+                  title={`Edit: ${fileName}`}
+                  className="w-full flex-1 border-none"
+                  onLoad={() => setLoading(false)}
+                  allow="fullscreen; clipboard-read; clipboard-write"
+                  allowFullScreen
+                />
+              )}
+            </div>
           )}
 
           {/* VERSIONS MODE */}

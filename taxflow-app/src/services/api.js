@@ -288,13 +288,13 @@ export const reviewApi = {
     });
   },
   async transitionStatus(documentId, data) {
-    return apiRequest(`/documents/${documentId}/transition`, {
+    return apiRequest(`/reviews/documents/${documentId}/transition`, {
       method: 'POST',
       body: JSON.stringify(data),
     });
   },
   async bulkTransition(documentIds, data) {
-    return apiRequest('/documents/bulk-transition', {
+    return apiRequest('/reviews/documents/bulk-transition', {
       method: 'POST',
       body: JSON.stringify({ documentIds, ...data }),
     });

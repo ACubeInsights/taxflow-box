@@ -220,6 +220,52 @@ router.post('/', requireAuth, requireRole('employee', 'superadmin'), async (req,
       }
     }
 
+    // Grant default resource_permissions so the client can access their own vault folders
+    if (registeredClient && result.folders) {
+      try {
+        const repos = getRepositories();
+        if (repos) {
+          const { randomUUID } = await import('crypto');
+          const db = repos.clientRepo?.db || (await import('../db/db.js')).initDatabase();
+          const resolvedDb = typeof db === 'function' ? await db() : db;
+          const now = new Date().toISOString();
+          const clientId = registeredClient.id;
+
+          const folderPermissions = [
+            { id: result.folders.uploads, name: 'Uploads', level: 'writer' },
+            { id: result.folders.tax, name: 'Tax', level: 'viewer' },
+            { id: result.folders.signedDocuments, name: 'Signed Documents', level: 'viewer' },
+            { id: result.folders.supportingDocs, name: 'Supporting Docs', level: 'viewer' },
+            { id: result.folders.root, name: 'Root', level: 'viewer' },
+          ].filter(f => f.id);
+
+          for (const folder of folderPermissions) {
+            try {
+              await resolvedDb('resource_permissions').insert({
+                id: randomUUID(),
+                client_id: clientId,
+                resource_id: folder.id,
+                resource_type: 'folder',
+                access_level: folder.level,
+                resource_name: folder.name,
+                granted_by: 'system',
+                is_cascaded: '0',
+                created_at: now,
+                updated_at: now,
+              });
+            } catch (permErr) {
+              // Ignore duplicate key errors (idempotent)
+              if (!permErr.message?.includes('UNIQUE constraint')) {
+                console.warn(`Permission grant failed for folder ${folder.name}:`, permErr.message);
+              }
+            }
+          }
+        }
+      } catch (permErr) {
+        console.warn('Resource permissions setup failed (non-fatal):', permErr.message);
+      }
+    }
+
     res.status(201).json({
       ...result,
       clientId: registeredClient?.id || null,

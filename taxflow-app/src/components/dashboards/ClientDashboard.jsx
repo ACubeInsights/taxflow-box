@@ -3,11 +3,11 @@ import { motion, AnimatePresence } from 'framer-motion'
 import {
   Folder, FolderOpen, FileText, FileSpreadsheet, Image, File,
   Upload, Eye, Download, ClipboardCheck, ChevronRight,
-  Loader2, AlertCircle, RefreshCw,
+  Loader2, AlertCircle, RefreshCw, X, Check,
 } from 'lucide-react'
 import { SectionHeader, GlassPanel, PanelTitle } from '../ui'
 import { useAuth } from '../../context/AuthContext'
-import { vaultApi, documentApi } from '../../services/api'
+import { vaultApi, documentApi, getAuthToken } from '../../services/api'
 import { formatFileSize, getFileIcon, sortFilesByDate } from '../../utils/fileUtils'
 import UploadDropzone from '../UploadDropzone'
 import BoxPreviewModal from '../BoxPreviewModal'
@@ -54,8 +54,8 @@ function getFileActions(file) {
   if (levelNum >= 1) actions.push({ key: 'view', label: 'View', icon: Eye, color: 'var(--color-on-surface-variant)' })
   // Commenter+: can download
   if (levelNum >= 2) actions.push({ key: 'download', label: 'Download', icon: Download, color: 'var(--color-primary)' })
-  // Writer+: can edit (download to edit + re-upload)
-  if (levelNum >= 3) actions.push({ key: 'edit', label: 'Edit', icon: Upload, color: 'var(--color-secondary)' })
+  // Writer+: can upload an updated version
+  if (levelNum >= 3) actions.push({ key: 'update', label: 'Update', icon: Upload, color: 'var(--color-secondary)' })
 
   // Review action if metadata indicates it
   const needsReview = file.metadata?.status === 'pending_client_review' ||
@@ -68,11 +68,12 @@ function getFileActions(file) {
 }
 
 /* ─── File row component ─── */
-function FileRow({ file, onAction, downloading }) {
+function FileRow({ file, onAction, downloading, uploading }) {
   const actions = getFileActions(file)
   const modified = file.modified_at
     ? new Date(file.modified_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })
     : ''
+  const isUploading = uploading === file.id
 
   return (
     <motion.div
@@ -107,24 +108,49 @@ function FileRow({ file, onAction, downloading }) {
       {/* Action buttons — appear on hover with smooth fade */}
       <div className="flex items-center gap-2 shrink-0 opacity-50 group-hover:opacity-100 transition-opacity duration-300">
         {actions.map(action => (
-          <button
-            key={action.key}
-            onClick={() => onAction(action.key, file)}
-            disabled={action.key === 'download' && downloading === file.id}
-            className="h-8 px-3 rounded-[10px] flex items-center gap-1.5 text-[11px] font-bold tracking-wide cursor-pointer transition-all duration-200 disabled:opacity-40 disabled:cursor-not-allowed"
-            style={{
-              background: `color-mix(in srgb, ${action.color} 12%, transparent)`,
-              border: `1px solid color-mix(in srgb, ${action.color} 22%, transparent)`,
-              color: action.color,
-            }}
-            title={action.label}
-          >
-            {action.key === 'download' && downloading === file.id
-              ? <Loader2 size={12} className="animate-spin" />
-              : <action.icon size={12} strokeWidth={2.5} />
-            }
-            <span className="hidden md:inline">{action.label}</span>
-          </button>
+          action.key === 'update' ? (
+            <label
+              key={action.key}
+              className={`h-8 px-3 rounded-[10px] flex items-center gap-1.5 text-[11px] font-bold tracking-wide cursor-pointer transition-all duration-200 ${isUploading ? 'opacity-40 pointer-events-none' : ''}`}
+              style={{
+                background: `color-mix(in srgb, ${action.color} 12%, transparent)`,
+                border: `1px solid color-mix(in srgb, ${action.color} 22%, transparent)`,
+                color: action.color,
+              }}
+              title="Upload updated version"
+            >
+              {isUploading
+                ? <Loader2 size={12} className="animate-spin" />
+                : <action.icon size={12} strokeWidth={2.5} />
+              }
+              <span className="hidden md:inline">{isUploading ? 'Uploading…' : action.label}</span>
+              <input
+                type="file"
+                className="hidden"
+                disabled={isUploading}
+                onChange={(e) => { onAction('update', file, e.target.files?.[0]); e.target.value = ''; }}
+              />
+            </label>
+          ) : (
+            <button
+              key={action.key}
+              onClick={() => onAction(action.key, file)}
+              disabled={action.key === 'download' && downloading === file.id}
+              className="h-8 px-3 rounded-[10px] flex items-center gap-1.5 text-[11px] font-bold tracking-wide cursor-pointer transition-all duration-200 disabled:opacity-40 disabled:cursor-not-allowed"
+              style={{
+                background: `color-mix(in srgb, ${action.color} 12%, transparent)`,
+                border: `1px solid color-mix(in srgb, ${action.color} 22%, transparent)`,
+                color: action.color,
+              }}
+              title={action.label}
+            >
+              {action.key === 'download' && downloading === file.id
+                ? <Loader2 size={12} className="animate-spin" />
+                : <action.icon size={12} strokeWidth={2.5} />
+              }
+              <span className="hidden md:inline">{action.label}</span>
+            </button>
+          )
         ))}
       </div>
     </motion.div>
@@ -132,7 +158,7 @@ function FileRow({ file, onAction, downloading }) {
 }
 
 /* ─── Folder section — collapsible with GlassPanel styling ─── */
-function FolderSection({ folder, onAction, downloading }) {
+function FolderSection({ folder, onAction, downloading, uploading }) {
   const [open, setOpen] = useState(false)
   const [files, setFiles] = useState([])
   const [loading, setLoading] = useState(false)
@@ -297,7 +323,7 @@ function FolderSection({ folder, onAction, downloading }) {
 
               {/* File rows */}
               {!loading && !error && files.map(file => (
-                <FileRow key={file.id} file={file} onAction={onAction} downloading={downloading} />
+                <FileRow key={file.id} file={file} onAction={onAction} downloading={downloading} uploading={uploading} />
               ))}
 
               {/* Inline upload dropzone */}
@@ -314,22 +340,179 @@ function FolderSection({ folder, onAction, downloading }) {
   )
 }
 
+/* ─── Edit Modal — Download + Re-upload flow for clients ─── */
+function EditModal({ file, editUrl, editLoading, onClose, onDownload, onVersionUploaded }) {
+  const [uploading, setUploading] = useState(false)
+  const [uploaded, setUploaded] = useState(false)
+  const [uploadError, setUploadError] = useState(null)
+
+  const handleReupload = async (e) => {
+    const newFile = e.target.files?.[0]
+    if (!newFile) return
+
+    setUploading(true)
+    setUploadError(null)
+
+    const formData = new FormData()
+    formData.append('file', newFile)
+
+    try {
+      const API_BASE = import.meta.env.VITE_API_URL || 'http://localhost:3001/api'
+      const token = getAuthToken()
+      const res = await fetch(`${API_BASE}/documents/${file.id}/upload-version`, {
+        method: 'POST',
+        headers: token ? { 'Authorization': `Bearer ${token}` } : {},
+        body: formData,
+      })
+
+      if (!res.ok) {
+        const body = await res.json().catch(() => ({}))
+        throw new Error(body.error || `Upload failed: HTTP ${res.status}`)
+      }
+
+      setUploaded(true)
+      setTimeout(() => { onVersionUploaded() }, 1200)
+    } catch (err) {
+      setUploadError(err.message || 'Upload failed')
+    } finally {
+      setUploading(false)
+    }
+  }
+
+  return (
+    <AnimatePresence>
+      <motion.div
+        key="edit-backdrop"
+        initial={{ opacity: 0 }}
+        animate={{ opacity: 1 }}
+        exit={{ opacity: 0 }}
+        className="fixed inset-0 z-[200] bg-black/75 backdrop-blur-md"
+        onClick={onClose}
+      />
+      <motion.div
+        key="edit-modal"
+        initial={{ opacity: 0, scale: 0.96, y: 16 }}
+        animate={{ opacity: 1, scale: 1, y: 0 }}
+        exit={{ opacity: 0, scale: 0.96, y: 16 }}
+        transition={{ duration: 0.3, ease: [0.4, 0, 0.2, 1] }}
+        className="fixed inset-3 z-[201] flex flex-col rounded-[20px] overflow-hidden ring-1 ring-[var(--color-outline-variant)]"
+        style={{ background: 'var(--color-surface)', boxShadow: '0 40px 80px rgba(0,0,0,0.6)' }}
+        onClick={(e) => e.stopPropagation()}
+      >
+        {/* Header */}
+        <div className="flex items-center justify-between px-6 py-3 border-b border-[var(--color-outline-variant)] bg-[var(--color-surface-container)]/60 backdrop-blur-xl shrink-0">
+          <div className="flex items-center gap-3 min-w-0">
+            <div className="w-8 h-8 rounded-lg flex items-center justify-center bg-[var(--color-tertiary)]/15 border border-[var(--color-tertiary)]/25">
+              <FileText size={14} className="text-[var(--color-tertiary)]" />
+            </div>
+            <div className="min-w-0">
+              <h3 className="m-0 text-[13px] font-bold text-[var(--color-on-surface)] truncate">{file.name}</h3>
+              <p className="m-0 text-[10px] text-[var(--color-on-surface-variant)]">Edit Document</p>
+            </div>
+          </div>
+          <div className="flex items-center gap-2 shrink-0">
+            <button
+              onClick={onDownload}
+              className="h-8 px-3 rounded-lg flex items-center gap-1.5 text-[11px] font-bold cursor-pointer transition-all ring-1 ring-[var(--color-primary)]/30 bg-[var(--color-primary)]/10 text-[var(--color-primary)] hover:bg-[var(--color-primary)]/20"
+            >
+              <Download size={12} /> Download to Edit
+            </button>
+            <button
+              onClick={onClose}
+              className="w-8 h-8 rounded-lg flex items-center justify-center cursor-pointer transition-all ring-1 ring-[var(--color-outline-variant)] bg-transparent text-[var(--color-on-surface-variant)] hover:bg-[var(--color-surface-highest)]"
+            >
+              <X size={14} />
+            </button>
+          </div>
+        </div>
+
+        {/* Content: Preview + Re-upload bar */}
+        <div className="flex-1 relative overflow-hidden flex flex-col">
+          {/* Preview iframe */}
+          <div className="flex-1 relative bg-white">
+            {editLoading && (
+              <div className="absolute inset-0 flex flex-col items-center justify-center gap-3 z-10 bg-[var(--color-surface-lowest)]">
+                <Loader2 size={28} className="animate-spin text-[var(--color-primary)]" />
+                <span className="text-[13px] text-[var(--color-on-surface-variant)] font-medium">Loading document…</span>
+              </div>
+            )}
+            {editUrl && (
+              <iframe
+                src={editUrl}
+                title={`Edit: ${file.name}`}
+                className="w-full h-full border-none"
+                sandbox="allow-scripts allow-same-origin allow-forms allow-popups allow-popups-to-escape-sandbox"
+                allow="fullscreen"
+              />
+            )}
+            {!editLoading && !editUrl && (
+              <div className="absolute inset-0 flex flex-col items-center justify-center gap-3 bg-[var(--color-surface-lowest)]">
+                <AlertCircle size={28} className="text-[#f87171]" />
+                <p className="text-[13px] text-[var(--color-on-surface)] font-semibold m-0">Preview unavailable</p>
+                <p className="text-[11px] text-[var(--color-on-surface-variant)] m-0">Download the file to edit it.</p>
+              </div>
+            )}
+          </div>
+
+          {/* Re-upload bar at bottom */}
+          <div className="shrink-0 px-6 py-4 border-t border-[var(--color-outline-variant)] bg-[var(--color-surface-container)]/80">
+            {uploaded ? (
+              <div className="flex items-center gap-3 justify-center">
+                <Check size={18} className="text-[#22c55e]" />
+                <span className="text-[13px] font-semibold text-[#22c55e]">Updated version uploaded successfully!</span>
+              </div>
+            ) : (
+              <div className="flex items-center gap-4">
+                <div className="flex-1 min-w-0">
+                  <p className="m-0 text-[12px] font-semibold text-[var(--color-on-surface)]">
+                    Done editing?
+                  </p>
+                  <p className="m-0 text-[11px] text-[var(--color-on-surface-variant)]">
+                    Upload your updated file to replace the current version.
+                  </p>
+                </div>
+                <label className={`h-10 px-5 rounded-xl flex items-center gap-2 text-[13px] font-bold cursor-pointer transition-all shrink-0 ${
+                  uploading
+                    ? 'opacity-50 pointer-events-none bg-[var(--color-primary)]/15 text-[var(--color-primary)] ring-1 ring-[var(--color-primary)]/30'
+                    : 'bg-[var(--color-primary)] text-white hover:opacity-90 shadow-lg'
+                }`}
+                  style={!uploading ? { boxShadow: '0 4px 12px color-mix(in srgb, var(--color-primary) 40%, transparent)' } : {}}
+                >
+                  {uploading ? <Loader2 size={14} className="animate-spin" /> : <Upload size={14} />}
+                  {uploading ? 'Uploading…' : 'Upload Updated File'}
+                  <input
+                    type="file"
+                    className="hidden"
+                    onChange={handleReupload}
+                    disabled={uploading}
+                  />
+                </label>
+              </div>
+            )}
+            {uploadError && (
+              <p className="m-0 mt-2 text-[11px] text-[#f87171] font-medium">{uploadError}</p>
+            )}
+          </div>
+        </div>
+      </motion.div>
+    </AnimatePresence>
+  )
+}
+
 /* ─── Main Client Dashboard ─── */
 export default function ClientDashboard() {
   const { user } = useAuth() || {}
   const vault = user?.vault || null
   const [downloading, setDownloading] = useState(null)
   const [previewFile, setPreviewFile] = useState(null)
-  const [editFile, setEditFile] = useState(null)
-  const [editUrl, setEditUrl] = useState(null)
-  const [editLoading, setEditLoading] = useState(false)
+  const [uploading, setUploading] = useState(null) // fileId being updated
 
   const folders = getVaultFolders(vault)
 
-  const handleAction = (action, file) => {
+  const handleAction = (action, file, selectedFile) => {
     if (action === 'view' || action === 'review') setPreviewFile(file)
     else if (action === 'download') handleDownload(file.id)
-    else if (action === 'edit') handleEdit(file)
+    else if (action === 'update' && selectedFile) handleUpdate(file, selectedFile)
   }
 
   const handleDownload = async (fileId) => {
@@ -341,28 +524,32 @@ export default function ClientDashboard() {
     finally { setDownloading(null) }
   }
 
-  const handleEdit = async (file) => {
-    setEditFile(file)
-    setEditLoading(true)
-    setEditUrl(null)
+  const handleUpdate = async (file, selectedFile) => {
+    setUploading(file.id)
     try {
-      const data = await documentApi.getEditUrl(file.id)
-      if (data.embedUrl && data.method === 'editable_shared_link') {
-        setEditUrl(data.embedUrl)
-      } else if (data.embedUrl) {
-        // Fallback to read-only preview
-        setEditUrl(data.embedUrl)
-      } else {
-        // No embed available — download fallback
-        handleDownload(file.id)
-        setEditFile(null)
+      const formData = new FormData()
+      formData.append('file', selectedFile)
+
+      const API_BASE = import.meta.env.VITE_API_URL || 'http://localhost:3001/api'
+      const token = getAuthToken()
+      const res = await fetch(`${API_BASE}/documents/${file.id}/upload-version`, {
+        method: 'POST',
+        headers: token ? { 'Authorization': `Bearer ${token}` } : {},
+        body: formData,
+      })
+
+      if (!res.ok) {
+        const body = await res.json().catch(() => ({}))
+        throw new Error(body.error || `Upload failed: HTTP ${res.status}`)
       }
+
+      // Refresh the page to show updated file
+      window.location.reload()
     } catch (err) {
-      console.error('Edit URL failed:', err.message)
-      handleDownload(file.id)
-      setEditFile(null)
+      console.error('Update failed:', err.message)
+      alert(`Update failed: ${err.message}`)
     } finally {
-      setEditLoading(false)
+      setUploading(null)
     }
   }
 
@@ -406,6 +593,7 @@ export default function ClientDashboard() {
             folder={folder}
             onAction={handleAction}
             downloading={downloading}
+            uploading={uploading}
           />
         ))}
       </div>
@@ -421,75 +609,6 @@ export default function ClientDashboard() {
           onClose={() => setPreviewFile(null)}
           onDownload={() => handleDownload(previewFile.id)}
         />
-      )}
-
-      {/* Edit Modal — Box editable shared link embed */}
-      {editFile && (
-        <AnimatePresence>
-          <motion.div
-            key="edit-backdrop"
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            exit={{ opacity: 0 }}
-            className="fixed inset-0 z-[200] bg-black/75 backdrop-blur-md"
-            onClick={() => setEditFile(null)}
-          />
-          <motion.div
-            key="edit-modal"
-            initial={{ opacity: 0, scale: 0.96, y: 16 }}
-            animate={{ opacity: 1, scale: 1, y: 0 }}
-            exit={{ opacity: 0, scale: 0.96, y: 16 }}
-            transition={{ duration: 0.3, ease: [0.4, 0, 0.2, 1] }}
-            className="fixed inset-3 z-[201] flex flex-col rounded-[20px] overflow-hidden ring-1 ring-[var(--color-outline-variant)]"
-            style={{ background: 'var(--color-surface)', boxShadow: '0 40px 80px rgba(0,0,0,0.6)' }}
-            onClick={(e) => e.stopPropagation()}
-          >
-            {/* Header */}
-            <div className="flex items-center justify-between px-6 py-3 border-b border-[var(--color-outline-variant)] bg-[var(--color-surface-container)]/60 backdrop-blur-xl shrink-0">
-              <div className="flex items-center gap-3 min-w-0">
-                <div className="w-8 h-8 rounded-lg flex items-center justify-center bg-[var(--color-tertiary)]/15 border border-[var(--color-tertiary)]/25">
-                  <FileText size={14} className="text-[var(--color-tertiary)]" />
-                </div>
-                <div className="min-w-0">
-                  <h3 className="m-0 text-[13px] font-bold text-[var(--color-on-surface)] truncate">{editFile.name}</h3>
-                  <p className="m-0 text-[10px] text-[var(--color-on-surface-variant)]">Editing in Box</p>
-                </div>
-              </div>
-              <button
-                onClick={() => setEditFile(null)}
-                className="h-8 px-4 rounded-lg flex items-center gap-2 text-[12px] font-bold cursor-pointer transition-all ring-1 ring-[var(--color-outline-variant)] bg-transparent text-[var(--color-on-surface-variant)] hover:bg-[var(--color-surface-highest)] hover:text-[var(--color-on-surface)]"
-              >
-                Done
-              </button>
-            </div>
-
-            {/* Edit iframe */}
-            <div className="flex-1 relative overflow-hidden bg-white">
-              {editLoading && (
-                <div className="absolute inset-0 flex flex-col items-center justify-center gap-3 z-10 bg-[var(--color-surface-lowest)]">
-                  <Loader2 size={28} className="animate-spin text-[var(--color-primary)]" />
-                  <span className="text-[13px] text-[var(--color-on-surface-variant)] font-medium">Opening editor…</span>
-                </div>
-              )}
-              {editUrl && (
-                <iframe
-                  src={editUrl}
-                  title={`Edit: ${editFile.name}`}
-                  className="w-full h-full border-none"
-                  sandbox="allow-scripts allow-same-origin allow-forms allow-popups allow-popups-to-escape-sandbox"
-                  allow="fullscreen"
-                />
-              )}
-              {!editLoading && !editUrl && (
-                <div className="absolute inset-0 flex flex-col items-center justify-center gap-3 bg-[var(--color-surface-lowest)]">
-                  <AlertCircle size={28} className="text-[#f87171]" />
-                  <p className="text-[13px] text-[var(--color-on-surface)] font-semibold m-0">Unable to open editor</p>
-                  <p className="text-[11px] text-[var(--color-on-surface-variant)] m-0">Try downloading the file instead.</p>
-                </div>
-              )}
-            </div>
-          </motion.div>
-        </AnimatePresence>
       )}
     </motion.div>
   )

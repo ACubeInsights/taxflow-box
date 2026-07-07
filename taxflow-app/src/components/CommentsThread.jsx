@@ -3,6 +3,7 @@ import { motion, AnimatePresence } from 'framer-motion'
 import { MessageSquare, Loader2, Send, Pencil, X, Check, AtSign } from 'lucide-react'
 import { commentApi } from '../services/api'
 import { GlassPanel } from './ui'
+import { useAuth } from '../context/AuthContext'
 
 const TYPE_STYLES = {
   review: { bg: 'rgba(59,130,246,0.12)', border: 'rgba(59,130,246,0.25)', color: '#3b82f6', label: 'Review' },
@@ -202,6 +203,7 @@ function CommentItem({ comment, onEditSave }) {
 const MAX_COMMENT_LENGTH = 2000
 
 export default function CommentsThread({ documentId }) {
+  const { user } = useAuth() || {}
   const [comments, setComments] = useState([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState(null)
@@ -299,8 +301,8 @@ export default function CommentsThread({ documentId }) {
     try {
       const newComment = await commentApi.addComment(documentId, {
         type: commentType,
-        authorId: 'employee-1',
-        authorName: 'Current User',
+        authorId: user?.id || 'employee-1',
+        authorName: user?.name || 'Current User',
         text: trimmed,
         mentions: trackedMentions,
       })
@@ -322,7 +324,7 @@ export default function CommentsThread({ documentId }) {
   }
 
   const handleEditSave = async (commentId, newText) => {
-    const updated = await commentApi.editComment(commentId, { text: newText, requesterId: 'employee-1' })
+    const updated = await commentApi.editComment(commentId, { text: newText, requesterId: user?.id || 'employee-1' })
     setComments(prev => prev.map(c => c.id === commentId ? { ...c, ...updated } : c))
   }
 

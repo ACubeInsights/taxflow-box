@@ -3,11 +3,12 @@ import { useParams, useNavigate, Link } from 'react-router-dom'
 import {
   AlertTriangle, RefreshCw, Clock, FolderOpen, Activity,
   StickyNote, Send, ChevronRight, FolderPlus, Trash2, Pencil, ArrowLeft,
-  File, FileText, Loader2, Check, X, Upload,
+  File, FileText, Loader2, Check, X, Upload, Eye, Download, Edit3,
 } from 'lucide-react'
 import { GlassPanel, Badge, ProgressBar } from '../ui'
 import Breadcrumb from '../Breadcrumb'
 import { projectApi, portalApi, reviewApi, vaultApi, documentApi, clientApi } from '../../services/api'
+import DocumentEditor from '../DocumentEditor'
 import { useAuth } from '../../context/AuthContext'
 
 const TABS = [
@@ -191,10 +192,16 @@ function VaultTab({ client }) {
   const [uploadProgress, setUploadProgress] = useState(0)
   const fileInputRef = useRef(null)
   const [vaultMap, setVaultMap] = useState({}) // { folderId: label } — vault-mapped folders
+  const [downloading, setDownloading] = useState(null)
+  const [editorFile, setEditorFile] = useState(null) // { id, name, size } for DocumentEditor
+  const { token } = useAuth() || {}
 
   const currentFolderId = folderStack.length > 0
     ? folderStack[folderStack.length - 1].id
     : rootFolderId
+
+  const currentFolderIdRef = useRef(currentFolderId)
+  currentFolderIdRef.current = currentFolderId
 
   const fetchContents = useCallback(async (folderId) => {
     if (!folderId) return
@@ -216,6 +223,8 @@ function VaultTab({ client }) {
   }, [currentFolderId, fetchContents])
 
   const navigateInto = (folder) => {
+    // Prevent navigating into the folder we're already viewing
+    if (folder.id === currentFolderIdRef.current) return
     setFolderStack(prev => [...prev, { id: folder.id, name: folder.name }])
   }
 
@@ -301,6 +310,20 @@ function VaultTab({ client }) {
     if (fileInputRef.current) fileInputRef.current.value = ''
   }
 
+  const handleDownload = async (fileId) => {
+    setDownloading(fileId)
+    try {
+      const data = await vaultApi.getDownloadUrl(fileId)
+      if (data.downloadUrl) {
+        window.open(data.downloadUrl, '_blank', 'noopener,noreferrer')
+      }
+    } catch (err) {
+      setActionError(err.message || 'Download failed')
+    } finally {
+      setDownloading(null)
+    }
+  }
+
   if (!rootFolderId) {
     return (
       <GlassPanel>
@@ -318,6 +341,7 @@ function VaultTab({ client }) {
   const files = items.filter(i => i.type === 'file')
 
   return (
+    <>
     <GlassPanel>
       {/* Breadcrumb navigation */}
       <div className="flex items-center gap-2 mb-4 flex-wrap">
@@ -481,7 +505,7 @@ function VaultTab({ client }) {
                 <>
                   <div
                     className="flex items-center gap-3 flex-1 min-w-0 cursor-pointer"
-                    onClick={() => navigateInto(folder)}
+                    onClick={() => { if (!loading) navigateInto(folder) }}
                   >
                     <div className="w-9 h-9 rounded-[10px] bg-[var(--color-primary)]/10 flex items-center justify-center shrink-0">
                       <FolderOpen size={18} className="text-[var(--color-primary)]" />
@@ -514,7 +538,7 @@ function VaultTab({ client }) {
           {files.map(file => (
             <div
               key={file.id}
-              className="flex items-center gap-3 p-3 rounded-[14px] bg-[var(--color-surface-high)] ring-1 ring-[var(--color-outline-variant)]"
+              className="flex items-center gap-3 p-3 rounded-[14px] bg-[var(--color-surface-high)] ring-1 ring-[var(--color-outline-variant)] transition-all duration-200 hover:bg-[var(--color-surface-highest)] hover:ring-[var(--color-outline)] group"
             >
               <div className="w-9 h-9 rounded-[10px] bg-[var(--color-surface-container)] flex items-center justify-center border border-[var(--color-outline-variant)] shrink-0">
                 <FileText size={18} className="text-[var(--color-on-surface-variant)]" />
@@ -523,11 +547,44 @@ function VaultTab({ client }) {
                 <p className="m-0 text-[13px] font-semibold text-[var(--color-on-surface)] truncate">{file.name}</p>
                 {file.size && <span className="text-[11px] text-[var(--color-on-surface-variant)]">{(file.size / 1024).toFixed(1)} KB</span>}
               </div>
+              <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity shrink-0">
+                <button
+                  onClick={() => setEditorFile(file)}
+                  className="w-7 h-7 rounded-md flex items-center justify-center bg-transparent border border-[var(--color-outline-variant)] text-[var(--color-on-surface-variant)] cursor-pointer transition-all hover:bg-[var(--color-tertiary)]/10 hover:text-[var(--color-tertiary)]"
+                  title="Preview & Edit"
+                >
+                  <Eye size={12} />
+                </button>
+                <button
+                  onClick={() => handleDownload(file.id)}
+                  disabled={downloading === file.id}
+                  className="w-7 h-7 rounded-md flex items-center justify-center bg-transparent border border-[var(--color-outline-variant)] text-[var(--color-on-surface-variant)] cursor-pointer transition-all hover:bg-[var(--color-primary)]/10 hover:text-[var(--color-primary)] disabled:opacity-40"
+                  title="Download"
+                >
+                  {downloading === file.id ? <Loader2 size={12} className="animate-spin" /> : <Download size={12} />}
+                </button>
+              </div>
             </div>
           ))}
         </div>
       )}
     </GlassPanel>
+
+      {/* Document Editor Modal — rendered outside GlassPanel to avoid overflow clipping */}
+      {editorFile && (
+        <DocumentEditor
+          fileId={editorFile.id}
+          fileName={editorFile.name}
+          fileSize={editorFile.size || 0}
+          sessionToken={token}
+          onClose={() => setEditorFile(null)}
+          onVersionUploaded={() => {
+            setEditorFile(null)
+            fetchContents(currentFolderId)
+          }}
+        />
+      )}
+    </>
   )
 }
 

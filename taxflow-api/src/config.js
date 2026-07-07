@@ -37,6 +37,7 @@ export const config = {
   boxRootFolderId: process.env.BOX_ROOT_FOLDER_ID || '0',
   boxEnterpriseId: process.env.BOX_ENTERPRISE_ID || '',
   boxAdminEmail: process.env.BOX_ADMIN_EMAIL || '',
+  boxEditAccountEmail: process.env.BOX_EDIT_ACCOUNT_EMAIL || process.env.BOX_ADMIN_EMAIL || '',
   frontendUrl: process.env.FRONTEND_URL || 'http://localhost:5173',
 
   // Webhooks

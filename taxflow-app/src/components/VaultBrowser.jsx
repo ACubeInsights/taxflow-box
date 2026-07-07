@@ -2,11 +2,11 @@ import { useState, useEffect, useCallback } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import {
   Upload, FileText, FileSpreadsheet, Image, File,
-  Download, Loader2, AlertCircle, RefreshCw, FolderOpen, Eye, X,
+  Download, Loader2, AlertCircle, RefreshCw, FolderOpen, Eye, X, Edit3,
 } from 'lucide-react'
 import { GlassPanel, PanelTitle } from './ui'
 import { useAuth } from '../context/AuthContext'
-import { vaultApi } from '../services/api'
+import { vaultApi, documentApi, getAuthToken } from '../services/api'
 import { formatFileSize, getFileIcon, sortFilesByDate } from '../utils/fileUtils'
 import UploadDropzone from './UploadDropzone'
 
@@ -24,12 +24,14 @@ function FileIcon({ fileName, size = 18 }) {
   return <IconComponent size={size} className="text-[var(--color-on-surface-variant)] shrink-0" />
 }
 
-function FileEntry({ file, onDownload, onPreview, downloading }) {
+function FileEntry({ file, onDownload, onPreview, onEdit, downloading }) {
   const modified = file.modified_at
     ? new Date(file.modified_at).toLocaleDateString('en-US', {
         month: 'short', day: 'numeric', year: 'numeric',
       })
     : ''
+
+  const canEdit = file.accessLevel === 'writer' || file.accessLevel === 'delete'
 
   return (
     <div
@@ -55,6 +57,16 @@ function FileEntry({ file, onDownload, onPreview, downloading }) {
           )}
         </div>
       </div>
+
+      {canEdit && (
+        <button
+          onClick={(e) => { e.stopPropagation(); onEdit(file); }}
+          className="w-8 h-8 rounded-[8px] flex items-center justify-center bg-transparent border border-[var(--color-outline-variant)] text-[var(--color-on-surface-variant)] transition-all duration-200 hover:bg-[var(--color-primary)]/10 hover:border-[var(--color-primary)]/30 hover:text-[var(--color-primary)] shrink-0 cursor-pointer"
+          title="Edit (Download & Re-upload)"
+        >
+          <Edit3 size={14} />
+        </button>
+      )}
 
       <button
         onClick={(e) => { e.stopPropagation(); onPreview(file); }}
@@ -95,6 +107,9 @@ export default function VaultBrowser() {
   const [previewContent, setPreviewContent] = useState(null)
   const [previewLoading, setPreviewLoading] = useState(false)
   const [previewError, setPreviewError] = useState(null)
+  const [editFile, setEditFile] = useState(null) // file being edited (download + re-upload)
+  const [editUploading, setEditUploading] = useState(false)
+  const editFileInputRef = useCallback(node => { if (node) node.click() }, [])
 
   const getFolderId = useCallback((tabKey) => {
     if (!vault) return null
@@ -158,6 +173,54 @@ export default function VaultBrowser() {
 
   const handleUploadComplete = () => {
     fetchFiles(activeTab, true)
+  }
+
+  const handleEdit = async (file) => {
+    // Step 1: Download the file so the client can edit locally
+    try {
+      const data = await vaultApi.getDownloadUrl(file.id)
+      if (data.downloadUrl) {
+        window.open(data.downloadUrl, '_blank', 'noopener,noreferrer')
+      }
+    } catch (err) {
+      setDownloadError(err.message || 'Download failed')
+      return
+    }
+    // Step 2: Set the file as "being edited" so we show the re-upload prompt
+    setEditFile(file)
+  }
+
+  const handleEditReupload = async (e) => {
+    const newFile = e.target.files?.[0]
+    if (!newFile || !editFile) return
+
+    setEditUploading(true)
+    setDownloadError(null)
+    try {
+      const formData = new FormData()
+      formData.append('file', newFile)
+
+      const API_BASE = import.meta.env.VITE_API_URL || 'http://localhost:3001/api'
+      const token = getAuthToken()
+      const res = await fetch(`${API_BASE}/documents/${editFile.id}/upload-version`, {
+        method: 'POST',
+        headers: token ? { 'Authorization': `Bearer ${token}` } : {},
+        body: formData,
+      })
+
+      if (!res.ok) {
+        const body = await res.json().catch(() => ({}))
+        throw new Error(body.error || `Upload failed: HTTP ${res.status}`)
+      }
+
+      // Success — refresh file list
+      setEditFile(null)
+      fetchFiles(activeTab, true)
+    } catch (err) {
+      setDownloadError(err.message || 'Re-upload failed')
+    } finally {
+      setEditUploading(false)
+    }
   }
 
   const handlePreview = async (file) => {
@@ -316,9 +379,46 @@ export default function VaultBrowser() {
                   file={file}
                   onDownload={handleDownload}
                   onPreview={handlePreview}
+                  onEdit={handleEdit}
                   downloading={downloading}
                 />
               ))}
+            </div>
+          )}
+
+          {/* Edit re-upload prompt */}
+          {editFile && (
+            <div className="mt-4 p-4 rounded-[16px] border border-[var(--color-primary)]/30 bg-[var(--color-primary)]/5">
+              <div className="flex items-center justify-between gap-3">
+                <div className="flex-1 min-w-0">
+                  <p className="m-0 text-[13px] font-semibold text-[var(--color-on-surface)]">
+                    Editing: {editFile.name}
+                  </p>
+                  <p className="m-0 mt-1 text-[11px] text-[var(--color-on-surface-variant)]">
+                    The file has been downloaded. Edit it locally, then upload the updated version below.
+                  </p>
+                </div>
+                <button
+                  onClick={() => setEditFile(null)}
+                  className="w-7 h-7 rounded-md flex items-center justify-center bg-transparent border border-[var(--color-outline-variant)] text-[var(--color-on-surface-variant)] cursor-pointer hover:bg-[var(--color-surface-highest)]"
+                >
+                  <X size={12} />
+                </button>
+              </div>
+              <label className={`mt-3 h-10 px-5 rounded-xl flex items-center justify-center gap-2 text-[13px] font-bold cursor-pointer transition-all w-full ${
+                editUploading
+                  ? 'opacity-50 pointer-events-none bg-[var(--color-primary)]/10 text-[var(--color-primary)] border border-[var(--color-primary)]/30'
+                  : 'bg-[var(--color-primary)] text-white hover:opacity-90'
+              }`}>
+                {editUploading ? <Loader2 size={14} className="animate-spin" /> : <Upload size={14} />}
+                {editUploading ? 'Uploading...' : 'Upload Updated File'}
+                <input
+                  type="file"
+                  className="hidden"
+                  onChange={handleEditReupload}
+                  disabled={editUploading}
+                />
+              </label>
             </div>
           )}
 

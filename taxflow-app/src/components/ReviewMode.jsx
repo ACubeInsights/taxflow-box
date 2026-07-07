@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef } from 'react'
 import { motion } from 'framer-motion'
-import { ArrowLeft, FileText, Loader2 } from 'lucide-react'
+import { ArrowLeft, FileText, Loader2, Bot } from 'lucide-react'
 import { StatusBadge, GlassPanel } from './ui'
 import AIExtractionCard from './AIExtractionCard'
 import ApprovalActions from './ApprovalActions'

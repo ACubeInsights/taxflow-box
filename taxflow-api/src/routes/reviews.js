@@ -154,7 +154,7 @@ router.post('/:fileId/undo-approve', async (req, res, next) => {
       return res.status(400).json({ error: 'Missing required field: version' });
     }
 
-    const result = statusTransitionService.undoApproval(fileId, employeeId, version);
+    const result = await statusTransitionService.undoApproval(fileId, employeeId, version);
     res.json(result);
   } catch (error) {
     if (error.statusCode) {
@@ -183,7 +183,7 @@ router.post('/documents/:documentId/transition', async (req, res, next) => {
       return res.status(400).json({ error: 'Missing required field: version' });
     }
 
-    const result = statusTransitionService.transitionStatus(documentId, {
+    const result = await statusTransitionService.transitionStatus(documentId, {
       toStatus, employeeId, version, comment,
     });
     res.json(result);
@@ -213,7 +213,7 @@ router.post('/documents/bulk-transition', async (req, res, next) => {
       return res.status(400).json({ error: 'Missing required field: employeeId' });
     }
 
-    const result = statusTransitionService.bulkTransition(documentIds, { toStatus, employeeId });
+    const result = await statusTransitionService.bulkTransition(documentIds, { toStatus, employeeId });
     res.json(result);
   } catch (error) {
     next(error);
