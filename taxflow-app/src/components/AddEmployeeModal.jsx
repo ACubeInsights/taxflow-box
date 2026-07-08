@@ -1,13 +1,14 @@
 import { useState } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import { X, UserCog, Loader2, CheckCircle2, AlertCircle } from 'lucide-react'
-import { employeeApi } from '../services/api'
+import { employeeApi, collaborationApi } from '../services/api'
 import FloatingLabel from './FloatingLabel'
 
 export default function AddEmployeeModal({ open, onClose }) {
   const [name, setName] = useState('')
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
+  const [boxEmail, setBoxEmail] = useState('')
   const [loading, setLoading] = useState(false)
   const [result, setResult] = useState(null)
   const [error, setError] = useState(null)
@@ -22,6 +23,16 @@ export default function AddEmployeeModal({ open, onClose }) {
     setResult(null)
     try {
       const res = await employeeApi.createEmployee(name.trim(), email.trim(), 'employee', password)
+
+      // If Box email was provided, set it on the new employee
+      if (boxEmail.trim() && res.dbUserId) {
+        try {
+          await collaborationApi.setBoxEmail(res.dbUserId, boxEmail.trim())
+        } catch (boxErr) {
+          console.warn('Box email set failed:', boxErr.message)
+        }
+      }
+
       setResult(res)
     } catch (err) {
       setError(err.message || 'Failed to create employee')
@@ -34,6 +45,7 @@ export default function AddEmployeeModal({ open, onClose }) {
     setName('')
     setEmail('')
     setPassword('')
+    setBoxEmail('')
     setResult(null)
     setError(null)
     setLoading(false)
@@ -106,6 +118,14 @@ export default function AddEmployeeModal({ open, onClose }) {
                 <FloatingLabel label="Full Name" type="text" value={name} onChange={(e) => setName(e.target.value)} />
                 <FloatingLabel label="Email Address" type="email" value={email} onChange={(e) => setEmail(e.target.value)} />
                 <FloatingLabel label="Initial Password (min 6 chars)" type="password" value={password} onChange={(e) => setPassword(e.target.value)} />
+
+                <div className="pt-2 border-t border-[var(--color-outline-variant)]">
+                  <p className="m-0 mb-2 text-[11px] font-semibold text-[var(--color-on-surface-variant)] uppercase tracking-wider">Box Editing Access (Optional)</p>
+                  <FloatingLabel label="Box Login Email (free box.com account)" type="email" value={boxEmail} onChange={(e) => setBoxEmail(e.target.value)} />
+                  <p className="m-0 mt-1.5 text-[10px] text-[var(--color-on-surface-variant)] leading-relaxed">
+                    Employee needs a free Box account to edit documents. They can sign up at box.com.
+                  </p>
+                </div>
 
                 <AnimatePresence>
                   {error && (

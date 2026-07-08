@@ -352,11 +352,7 @@ export default function DocumentEditor({
                   <div className="w-2 h-2 rounded-full bg-[#22c55e] shrink-0 animate-pulse" />
                   <p className="m-0 text-[12px] text-[var(--color-on-surface-variant)] leading-snug">
                     <span className="font-semibold text-[var(--color-on-surface)]">Click "Open" below to edit.</span>
-                    {boxEditAccount && (
-                      <span className="text-[var(--color-on-surface-variant)]">
-                        {' '}Sign into Box with <span className="font-mono font-semibold text-[var(--color-primary)]">{boxEditAccount}</span> if prompted.
-                      </span>
-                    )}
+                    {' '}Log into your Box account if prompted.
                   </p>
                 </div>
               </div>

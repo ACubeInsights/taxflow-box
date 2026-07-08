@@ -272,6 +272,33 @@ export class BoxService {
   }
 
   /**
+   * Adds a collaborator and returns the Box collaboration ID.
+   * Used by the collaborations management system to track and revoke access.
+   * @param {string} folderId - Box folder ID
+   * @param {string} email - Collaborator's Box login email
+   * @param {string} role - Collaboration role (default: 'editor')
+   * @returns {Promise<string|null>} Box collaboration ID, or null if already existed
+   */
+  async addCollaboratorWithId(folderId, email, role = 'editor') {
+    this.ensureInitialized();
+    const client = this.getBoxClient();
+    try {
+      const result = await client.userCollaborations.createCollaboration({
+        item: { type: 'folder', id: folderId },
+        accessibleBy: { type: 'user', login: email },
+        role,
+      });
+      return result.id || null;
+    } catch (error) {
+      const status = error.statusCode || error.status || 0;
+      const msg = String(error.message || error || '');
+      // Already a collaborator — treat as success
+      if (status === 409 || status === 400 || msg.includes('already')) return null;
+      throw error;
+    }
+  }
+
+  /**
    * Lightweight health check — verifies Box API connectivity.
    * Caches result for 60 seconds to avoid rate limit consumption.
    * @returns {Promise<{ connected: boolean, tier: string, enterpriseId: string, serviceAccount?: string, error?: string }>}
