@@ -11,6 +11,7 @@
 import boxService from './boxService.js';
 import { config } from '../config.js';
 import { TAXFLOW_DOCUMENT_TEMPLATE } from './metadataTemplateDefinition.js';
+import { logger } from '../utils/logger.js';
 
 const METADATA_SCOPE = 'enterprise';
 const METADATA_TEMPLATE = 'taxflow_document';
@@ -61,7 +62,7 @@ export class AIExtractionService {
         fields: extractionFields,
       });
     } catch (err) {
-      console.error(`AI extraction failed for file ${fileId}:`, err.message);
+      logger.error('AI extraction failed', { fileId, error: err.message });
       // Flag for manual review on failure (Req 32.5)
       await this._flagForManualReview(client, fileId);
       return {
@@ -115,7 +116,7 @@ export class AIExtractionService {
         );
       }
     } catch (err) {
-      console.error(`Metadata update with AI results failed for file ${fileId}:`, err.message);
+      logger.error('Metadata update with AI results failed', { fileId, error: err.message });
     }
 
     return {
@@ -150,7 +151,7 @@ export class AIExtractionService {
         items: [{ type: 'file', id: fileId }],
       });
     } catch (err) {
-      console.error(`AI validation failed for file ${fileId}:`, err.message);
+      logger.error('AI validation failed', { fileId, error: err.message });
       return {
         fileId,
         isComplete: false,
@@ -173,7 +174,7 @@ export class AIExtractionService {
           [{ op: 'replace', path: '/priority', value: 'high' }]
         );
       } catch (err) {
-        console.error(`Priority update failed for file ${fileId}:`, err.message);
+        logger.error('Priority update failed', { fileId, error: err.message });
       }
     }
 
@@ -207,11 +208,11 @@ export class AIExtractionService {
       });
 
       this._agentId = agent.id;
-      console.log(`Created AI agent: ${agent.id}`);
+      logger.info('Created AI agent', { agentId: agent.id });
       return { agentId: agent.id };
     } catch (err) {
       // Fall back on failure (Req 34.4)
-      console.warn(`AI agent creation failed, falling back to default extraction: ${err.message}`);
+      logger.warn('AI agent creation failed, falling back to default extraction', { error: err.message });
       return null;
     }
   }
@@ -230,7 +231,7 @@ export class AIExtractionService {
         [{ op: 'replace', path: '/priority', value: 'high' }]
       );
     } catch (err) {
-      console.error(`Failed to flag file ${fileId} for manual review:`, err.message);
+      logger.error('Failed to flag file for manual review', { fileId, error: err.message });
     }
   }
 

@@ -6,6 +6,7 @@
 import authService from '../services/authService.js';
 import { getRepositories } from '../db/repositories/index.js';
 import permissionService from '../services/permissionService.js';
+import { config } from '../config.js';
 
 /**
  * Requires a valid session. Rejects with 401 if missing/expired.
@@ -18,16 +19,18 @@ export async function requireAuth(req, res, next) {
 
   const token = header.slice(7);
 
-  // Support demo/mock tokens (format: mock-token-{role}-{timestamp})
-  const mockMatch = token.match(/^mock-token-(superadmin|employee|client)-/);
-  if (mockMatch) {
-    req.user = {
-      userId: `demo-${mockMatch[1]}`,
-      email: `${mockMatch[1]}@demo.taxflow`,
-      name: `Demo ${mockMatch[1]}`,
-      role: mockMatch[1],
-    };
-    return next();
+  // Support demo/mock tokens in development only (format: mock-token-{role}-{timestamp})
+  if (config.nodeEnv !== 'production') {
+    const mockMatch = token.match(/^mock-token-(superadmin|employee|client)-/);
+    if (mockMatch) {
+      req.user = {
+        userId: `demo-${mockMatch[1]}`,
+        email: `${mockMatch[1]}@demo.taxflow`,
+        name: `Demo ${mockMatch[1]}`,
+        role: mockMatch[1],
+      };
+      return next();
+    }
   }
 
   const session = await authService.validateSession(token);

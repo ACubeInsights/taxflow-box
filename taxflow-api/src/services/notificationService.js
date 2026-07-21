@@ -20,6 +20,7 @@ import { retryWithBackoff } from '../utils/retryWithBackoff.js';
 import deepLinkTokenService from './deepLinkTokenService.js';
 import emailService from './emailService.js';
 import inAppNotificationStore from './inAppNotificationStore.js';
+import { logger } from '../utils/logger.js';
 
 /** Event type to human-readable message templates */
 const EVENT_TEMPLATES = {
@@ -88,7 +89,7 @@ export class NotificationService {
         fileName: context.fileName || '',
       });
     } catch (err) {
-      console.error(`Email dispatch failed for ${recipientId}:`, err.message);
+      logger.error('Email dispatch failed', { recipientId, error: err.message });
     }
   }
 
@@ -176,6 +177,9 @@ export class NotificationService {
     const deepLinkUrl = `${config.frontendUrl}/api/deep-link?token=${token}`;
 
     try {
+      // Outer retry wraps the email dispatch for the critical revision path.
+      // emailService internally retries transient SMTP failures; this outer layer
+      // catches higher-level failures (e.g., network partition, service restart).
       await retryWithBackoff(
         () => this.sendEmail(clientEmail, 'revision_requested', {
           message: `Revision requested: ${revisionComment}`,
@@ -186,7 +190,7 @@ export class NotificationService {
       return; // Success — exit
     } catch (_err) {
       // All retries failed — create in-app notification for the employee
-      console.error(`All revision email retries failed for document ${documentId}`);
+      logger.error('All revision email retries failed', { documentId });
       await this.storeInAppNotification({
         id: this._store.nextId(),
         recipientId: clientEmail, // use clientEmail as fallback recipientId
@@ -240,15 +244,6 @@ export class NotificationService {
     });
   }
 
-  /**
-   * Base64url encode a string (no padding).
-   * Delegates to deepLinkTokenService.
-   * @param {string} str
-   * @returns {string}
-   */
-  _base64url(str) {
-    return deepLinkTokenService._base64url(str);
-  }
 }
 
 // Singleton instance

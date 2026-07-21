@@ -11,6 +11,7 @@ import { requireAuth, requireRole } from '../middleware/authMiddleware.js';
 import { getRepositories } from '../db/repositories/index.js';
 import boxService from '../services/boxService.js';
 import { extractOriginalEmail, extractRole } from '../utils/authUtils.js';
+import { logger } from '../utils/logger.js';
 
 const router = express.Router();
 
@@ -60,22 +61,20 @@ router.post('/', requireAuth, requireRole('employee', 'superadmin'), async (req,
     let registeredClient = null;
     let targetEmployeeId = 'employee-1'; // fallback
 
-    console.log(`[Onboarding] Resolving employee for email: "${employeeEmail}"`);
+    logger.info('Resolving employee for onboarding', { employeeEmail });
     try {
       const repos = getRepositories();
       const hasRepos = !!(repos && repos.userRepo);
-      console.log(`[Onboarding] Repos available: ${hasRepos}`);
 
       if (hasRepos && employeeEmail) {
         // Find the employee by email in the users table
         let empUser = await repos.userRepo.findByEmail(employeeEmail);
-        console.log(`[Onboarding] DB lookup result: ${empUser ? `found ${empUser.id} (${empUser.name})` : 'NOT FOUND'}`);
 
         // Auto-sync: if the employee exists in Box but not in the local DB
         // (e.g., they were created but never logged in), create a local record
         // so the FK constraint on employee_clients is satisfied.
         if (!empUser) {
-          console.log('[Onboarding] Employee not in DB, attempting Box auto-sync...');
+          logger.info('Employee not in DB, attempting Box auto-sync', { employeeEmail });
           try {
             const boxClient = boxService.getBoxClient();
             const allUsers = await boxClient.users.getUsers({
@@ -83,7 +82,6 @@ router.post('/', requireAuth, requireRole('employee', 'superadmin'), async (req,
               fields: ['id', 'name', 'external_app_user_id'],
             });
             const normalizedEmail = employeeEmail.toLowerCase();
-            console.log(`[Onboarding] Box returned ${allUsers.entries?.length || 0} users, searching for "${normalizedEmail}"`);
             const boxUser = (allUsers.entries || []).find((u) => {
               const extId = u.externalAppUserId || '';
               const em = extractOriginalEmail(extId);
@@ -92,7 +90,6 @@ router.post('/', requireAuth, requireRole('employee', 'superadmin'), async (req,
             if (boxUser) {
               const extId = boxUser.externalAppUserId || '';
               const role = extractRole(extId);
-              console.log(`[Onboarding] Found Box user: ${boxUser.id} ${boxUser.name}, role=${role}`);
               empUser = await repos.userRepo.create({
                 box_user_id: boxUser.id,
                 email: normalizedEmail,
@@ -100,42 +97,39 @@ router.post('/', requireAuth, requireRole('employee', 'superadmin'), async (req,
                 role,
                 password_hash: extId,
               });
-              console.log(`[Onboarding] Auto-synced employee ${normalizedEmail} to local DB (${empUser.id})`);
+              logger.info('Auto-synced employee to local DB', { email: normalizedEmail, userId: empUser.id });
             } else {
-              console.warn(`[Onboarding] Employee "${normalizedEmail}" NOT found in Box either!`);
+              logger.warn('Employee not found in Box either', { employeeEmail: normalizedEmail });
             }
           } catch (syncErr) {
-            console.warn(`[Onboarding] Auto-sync error: ${syncErr.message}`);
+            logger.warn('Auto-sync error', { error: syncErr.message });
             // If auto-sync fails (e.g., UNIQUE constraint), try finding again
             if (syncErr.message?.includes('UNIQUE constraint')) {
               empUser = await repos.userRepo.findByEmail(employeeEmail);
-              console.log(`[Onboarding] Re-lookup after UNIQUE: ${empUser ? empUser.id : 'still not found'}`);
             }
           }
         }
 
         if (empUser) {
           targetEmployeeId = empUser.id;
-          console.log(`[Onboarding] ✅ Resolved targetEmployeeId = ${targetEmployeeId}`);
+          logger.info('Resolved target employee', { targetEmployeeId });
         } else {
-          console.warn(`[Onboarding] ⚠️ Could not resolve employee, using fallback: ${targetEmployeeId}`);
+          logger.warn('Could not resolve employee, using fallback', { targetEmployeeId });
         }
       }
     } catch (outerErr) {
-      console.error(`[Onboarding] ❌ Employee resolution FAILED: ${outerErr.message}`, outerErr.stack);
+      logger.error('Employee resolution failed', { error: outerErr.message });
       // Still use fallback
     }
-    console.log(`[Onboarding] Final targetEmployeeId = ${targetEmployeeId}`);
+    logger.info('Onboarding employee resolved', { targetEmployeeId });
 
     // Also determine the logged-in user's ID for secondary assignment
     let loggedInEmployeeId = req.user?.userId;
-    console.log(`[Onboarding] Logged-in user: ${loggedInEmployeeId}, targetEmployee: ${targetEmployeeId}`);
     if (!loggedInEmployeeId || loggedInEmployeeId.startsWith('demo-')) {
       loggedInEmployeeId = null; // don't try to assign to demo users
     }
 
     try {
-      console.log(`[Onboarding] Calling registerOnboardedClient with targetEmployeeId=${targetEmployeeId}`);
       registeredClient = await projectService.registerOnboardedClient(
         {
           name: clientName,
@@ -157,7 +151,7 @@ router.post('/', requireAuth, requireRole('employee', 'superadmin'), async (req,
           }
         } catch (assignErr) {
           if (!assignErr.message?.includes('UNIQUE constraint')) {
-            console.warn('Secondary employee assignment failed:', assignErr.message);
+            logger.warn('Secondary employee assignment failed', { error: assignErr.message });
           }
         }
       }
@@ -171,12 +165,12 @@ router.post('/', requireAuth, requireRole('employee', 'superadmin'), async (req,
           }
         } catch (assignErr) {
           if (!assignErr.message?.includes('UNIQUE constraint')) {
-            console.warn('employee-1 assignment failed:', assignErr.message);
+            logger.warn('employee-1 assignment failed', { error: assignErr.message });
           }
         }
       }
     } catch (regErr) {
-      console.error('Project service registration failed:', regErr.message, regErr.stack);
+      logger.error('Project service registration failed', { error: regErr.message });
       throw new Error(`Client onboarding succeeded in Box but failed to register locally: ${regErr.message}`);
     }
 
@@ -214,7 +208,7 @@ router.post('/', requireAuth, requireRole('employee', 'superadmin'), async (req,
             });
           }
         } catch (vaultErr) {
-          console.error('Vault persistence failed during onboarding:', vaultErr.message);
+          logger.error('Vault persistence failed during onboarding', { error: vaultErr.message });
           throw vaultErr;
         }
       }
@@ -256,13 +250,13 @@ router.post('/', requireAuth, requireRole('employee', 'superadmin'), async (req,
             } catch (permErr) {
               // Ignore duplicate key errors (idempotent)
               if (!permErr.message?.includes('UNIQUE constraint')) {
-                console.warn(`Permission grant failed for folder ${folder.name}:`, permErr.message);
+                logger.warn('Permission grant failed for folder', { folder: folder.name, error: permErr.message });
               }
             }
           }
         }
       } catch (permErr) {
-        console.warn('Resource permissions setup failed (non-fatal):', permErr.message);
+        logger.warn('Resource permissions setup failed (non-fatal)', { error: permErr.message });
       }
     }
 
@@ -272,7 +266,7 @@ router.post('/', requireAuth, requireRole('employee', 'superadmin'), async (req,
       projectId: registeredClient?.projectId || null,
     });
   } catch (error) {
-    console.error('Onboarding error:', error.message || error);
+    logger.error('Onboarding error', { error: error.message });
     next(error);
   }
 });

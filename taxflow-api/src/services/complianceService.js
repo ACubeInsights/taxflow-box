@@ -11,6 +11,8 @@
  */
 
 import boxService from './boxService.js';
+import { logger } from '../utils/logger.js';
+import { createHttpError } from '../utils/httpError.js';
 
 const RETENTION_POLICY_NAME = 'TaxFlow 7-Year Retention';
 const RETENTION_DAYS = 2555; // 7 years
@@ -50,7 +52,7 @@ export class ComplianceService {
       });
 
       this._retentionPolicyId = policy.id;
-      console.log(`Created retention policy: ${policy.id}`);
+      logger.info('Created retention policy', { policyId: policy.id });
 
       return {
         policyId: policy.id,
@@ -83,7 +85,7 @@ export class ComplianceService {
 
       if (match) {
         this._retentionPolicyId = match.id;
-        console.log(`Found existing retention policy: ${match.id}`);
+        logger.info('Found existing retention policy', { policyId: match.id });
         return {
           policyId: match.id,
           policyName: RETENTION_POLICY_NAME,
@@ -91,10 +93,10 @@ export class ComplianceService {
         };
       }
     } catch (err) {
-      console.error('Failed to retrieve existing retention policy:', err.message);
+      logger.error('Failed to retrieve existing retention policy', { error: err.message });
     }
 
-    throw new Error('Retention policy conflict but could not retrieve existing policy');
+    throw createHttpError('Retention policy conflict but could not retrieve existing policy', 502);
   }
 
   /**
@@ -112,7 +114,7 @@ export class ComplianceService {
       assignTo: { type: 'file', id: fileId },
     });
 
-    console.log(`Retention policy assigned to file ${fileId}: assignment ${assignment.id}`);
+    logger.info('Retention policy assigned', { fileId, assignmentId: assignment.id });
     return { assignmentId: assignment.id };
   }
 
@@ -140,7 +142,7 @@ export class ComplianceService {
       assignTo: { type: targetType, id: targetId },
     });
 
-    console.log(`Legal hold "${policyName}" assigned to ${targetType} ${targetId}`);
+    logger.info('Legal hold assigned', { policyName, targetType, targetId });
 
     return {
       policyId: policy.id,
@@ -160,7 +162,7 @@ export class ComplianceService {
     const client = boxService.getBoxClient();
 
     await client.legalHoldPolicyAssignments.deleteLegalHoldPolicyAssignmentById(assignmentId);
-    console.log(`Legal hold assignment ${assignmentId} released at ${new Date().toISOString()}`);
+    logger.info('Legal hold assignment released', { assignmentId });
   }
 
   /**
@@ -174,7 +176,7 @@ export class ComplianceService {
   async applyClassification(fileId, level) {
     const validLevels = ['Public', 'Internal', 'Confidential'];
     if (!validLevels.includes(level)) {
-      throw new Error(`Invalid classification level: ${level}. Must be one of: ${validLevels.join(', ')}`);
+      throw createHttpError(`Invalid classification level: ${level}. Must be one of: ${validLevels.join(', ')}`, 400);
     }
 
     const client = boxService.getBoxClient();
@@ -201,7 +203,7 @@ export class ComplianceService {
       }
     }
 
-    console.log(`Classification "${level}" applied to file ${fileId}`);
+    logger.info('Classification applied', { fileId, level });
   }
 }
 

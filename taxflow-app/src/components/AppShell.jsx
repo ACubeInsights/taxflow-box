@@ -25,47 +25,45 @@ export default function AppShell() {
   const Dashboard = DASHBOARDS[user?.role] || EmployeeDashboard
 
   return (
-    <div className="flex min-h-screen bg-[var(--color-surface-lowest)] relative overflow-hidden font-sans">
-      {/* Ambient Deep Void Background Glows */}
+    <div className="flex flex-col min-h-screen bg-[var(--color-surface-lowest)] relative overflow-hidden">
+      {/* Ambient background — extremely subtle */}
       <div
-        className="fixed inset-0 pointer-events-none z-0 opacity-40"
+        className="fixed inset-0 pointer-events-none z-0"
         style={{
           background: `
-            radial-gradient(ellipse at 0% 0%, color-mix(in srgb, var(--color-primary) 8%, transparent) 0%, transparent 40%),
-            radial-gradient(ellipse at 100% 100%, color-mix(in srgb, var(--color-secondary) 8%, transparent) 0%, transparent 40%),
-            var(--color-surface-lowest)
+            radial-gradient(ellipse 60% 40% at 20% 0%, rgba(129, 140, 248, 0.04) 0%, transparent 50%),
+            radial-gradient(ellipse 40% 30% at 80% 100%, rgba(196, 181, 253, 0.03) 0%, transparent 50%)
           `,
         }}
       />
 
-      <div className="flex-1 flex flex-col relative z-[1] min-w-0">
-        <TopNav />
-        <AnimatePresence mode="wait">
-          <motion.main
-            key={user?.role}
-            initial={{ opacity: 0, scale: 0.99, y: 10 }}
-            animate={{ opacity: 1, scale: 1, y: 0 }}
-            exit={{ opacity: 0, scale: 0.99, y: -10 }}
-            transition={{ duration: 0.3, ease: 'easeOut' }}
-            className="flex-1 p-8 overflow-y-auto"
-          >
-            {hasRouting ? (
-              <Routes>
-                <Route path="/" element={<Navigate to="/dashboard" replace />} />
-                <Route path="/dashboard" element={<Dashboard />} />
-                <Route path="/clients/:clientId" element={<ClientDetailView />} />
-                <Route path="/clients/:clientId/projects/:projectId" element={<ProjectDetailView />} />
-                <Route path="/clients/:clientId/projects/:projectId/documents/:documentId" element={<DocumentDetailView />} />
-                <Route path="*" element={<NotFoundView />} />
-              </Routes>
-            ) : (
-              <Dashboard />
-            )}
-          </motion.main>
-        </AnimatePresence>
-      </div>
+      {/* Top navigation */}
+      <TopNav />
+
+      {/* Main content area */}
+      <AnimatePresence mode="wait">
+        <motion.main
+          key={user?.role}
+          initial={{ opacity: 0, y: 8 }}
+          animate={{ opacity: 1, y: 0 }}
+          exit={{ opacity: 0, y: -4 }}
+          transition={{ duration: 0.25, ease: [0.22, 1, 0.36, 1] }}
+          className="flex-1 relative z-[1] px-6 py-6 lg:px-8 lg:py-8 overflow-y-auto"
+        >
+          {hasRouting ? (
+            <Routes>
+              <Route path="/" element={<Navigate to="/dashboard" replace />} />
+              <Route path="/dashboard" element={<Dashboard />} />
+              <Route path="/clients/:clientId" element={<ClientDetailView />} />
+              <Route path="/clients/:clientId/projects/:projectId" element={<ProjectDetailView />} />
+              <Route path="/clients/:clientId/projects/:projectId/documents/:documentId" element={<DocumentDetailView />} />
+              <Route path="*" element={<NotFoundView />} />
+            </Routes>
+          ) : (
+            <Dashboard />
+          )}
+        </motion.main>
+      </AnimatePresence>
     </div>
   )
 }
-
-

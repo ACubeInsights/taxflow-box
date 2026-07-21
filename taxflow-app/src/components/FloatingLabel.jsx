@@ -3,42 +3,22 @@ import { Eye, EyeOff } from 'lucide-react'
 
 export default function FloatingLabel({ label, type, value, onChange, autoComplete }) {
   const [focused, setFocused] = useState(false)
-  const [hovered, setHovered] = useState(false)
   const [showPass, setShowPass] = useState(false)
   const lifted = focused || value.length > 0
 
-  const borderColor = focused
-    ? 'color-mix(in srgb, var(--color-primary) 50%, transparent)'
-    : hovered
-      ? 'color-mix(in srgb, var(--color-primary) 28%, transparent)'
-      : 'var(--color-outline-variant)'
-
-  const boxShadow = focused
-    ? '0 0 0 3px color-mix(in srgb, var(--color-primary) 12%, transparent), inset 0 1px 0 rgba(255,255,255,0.05)'
-    : hovered
-      ? '0 0 0 2px color-mix(in srgb, var(--color-primary) 8%, transparent), inset 0 1px 0 rgba(255,255,255,0.04)'
-      : 'inset 0 1px 0 rgba(255,255,255,0.03)'
-
   return (
-    <div
-      style={{ position: 'relative' }}
-      onMouseEnter={() => setHovered(true)}
-      onMouseLeave={() => setHovered(false)}
-    >
+    <div className="relative group">
       <label
+        className="absolute left-4 pointer-events-none z-[2] font-medium transition-all duration-200 ease-out"
         style={{
-          position: 'absolute',
-          left: 16,
-          top: lifted ? 9 : '50%',
-          transform: lifted ? 'translateY(0) scale(0.75)' : 'translateY(-50%) scale(1)',
+          top: lifted ? '10px' : '50%',
+          transform: lifted ? 'translateY(0) scale(0.72)' : 'translateY(-50%) scale(1)',
           transformOrigin: 'left top',
-          color: focused ? 'color-mix(in srgb, var(--color-primary) 85%, transparent)' : 'var(--color-on-surface-variant)',
-          fontSize: 14,
-          fontWeight: 500,
+          color: focused
+            ? 'var(--color-primary)'
+            : 'var(--color-on-surface-variant)',
+          fontSize: '14px',
           letterSpacing: '0.01em',
-          transition: 'all 0.22s cubic-bezier(0.4,0,0.2,1)',
-          pointerEvents: 'none',
-          zIndex: 2,
         }}
       >
         {label}
@@ -50,18 +30,16 @@ export default function FloatingLabel({ label, type, value, onChange, autoComple
         onFocus={() => setFocused(true)}
         onBlur={() => setFocused(false)}
         autoComplete={autoComplete}
+        className="w-full outline-none text-[var(--color-on-surface)] text-[15px] font-normal rounded-xl border transition-all duration-200"
         style={{
-          width: '100%',
-          background: focused ? 'var(--color-surface-highest)' : 'var(--color-surface-high)',
-          border: `1px solid ${borderColor}`,
-          borderRadius: 14,
-          outline: 'none',
-          color: 'var(--color-on-surface)',
-          fontSize: 15,
-          fontWeight: 400,
-          padding: lifted ? '24px 44px 10px 16px' : '18px 44px 18px 16px',
-          transition: 'all 0.22s',
-          boxShadow,
+          background: 'var(--color-surface-high)',
+          borderColor: focused
+            ? 'rgba(129, 140, 248, 0.5)'
+            : 'var(--color-outline-variant)',
+          padding: lifted ? '26px 44px 10px 16px' : '18px 44px 18px 16px',
+          boxShadow: focused
+            ? '0 0 0 3px rgba(129, 140, 248, 0.08), 0 1px 2px rgba(0,0,0,0.2)'
+            : '0 1px 2px rgba(0,0,0,0.1)',
         }}
       />
       {type === 'password' && (
@@ -69,25 +47,9 @@ export default function FloatingLabel({ label, type, value, onChange, autoComple
           type="button"
           tabIndex={-1}
           onClick={() => setShowPass(p => !p)}
-          style={{
-            position: 'absolute',
-            right: 14,
-            top: '50%',
-            transform: 'translateY(-50%)',
-            background: 'none',
-            border: 'none',
-            color: 'var(--color-on-surface-variant)',
-            cursor: 'pointer',
-            padding: 4,
-            display: 'flex',
-            alignItems: 'center',
-            transition: 'color 0.18s',
-            zIndex: 2,
-          }}
-          onMouseEnter={e => (e.currentTarget.style.color = 'var(--color-on-surface)')}
-          onMouseLeave={e => (e.currentTarget.style.color = 'var(--color-on-surface-variant)')}
+          className="absolute right-3.5 top-1/2 -translate-y-1/2 bg-transparent border-none text-[var(--color-on-surface-variant)] cursor-pointer p-1 flex items-center rounded-md hover:text-[var(--color-on-surface)] hover:bg-[var(--color-surface-highest)] z-[2]"
         >
-          {showPass ? <EyeOff size={15} /> : <Eye size={15} />}
+          {showPass ? <EyeOff size={16} /> : <Eye size={16} />}
         </button>
       )}
     </div>

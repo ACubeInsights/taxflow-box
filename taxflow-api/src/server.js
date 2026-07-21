@@ -4,6 +4,7 @@ dotenv.config();
 import express from 'express';
 import cors from 'cors';
 import { config } from './config.js';
+import { logger } from './utils/logger.js';
 import { initDatabase, shutdownDatabase } from './db/db.js';
 import { initRepositories, injectRepositories } from './db/repositories/index.js';
 import clientRoutes from './routes/clients.js';
@@ -55,19 +56,6 @@ app.get('/health', async (req, res) => {
   });
 });
 
-// Temporary test endpoint for email debugging
-app.get('/api/test-email', async (req, res) => {
-  const { to } = req.query;
-  if (!to) return res.status(400).json({ error: 'Missing ?to= param' });
-  try {
-    const { default: emailService } = await import('./services/emailService.js');
-    await emailService.sendEmail(to, 'Test Email from Render', { message: 'If you see this, SMTP from Render is working.' });
-    res.json({ ok: true, sentTo: to });
-  } catch (err) {
-    res.status(500).json({ ok: false, error: err.message });
-  }
-});
-
 app.use('/api/auth', authRoutes);
 app.use('/api/employees', employeeRoutes);
 app.use('/api/invites', inviteRoutes);
@@ -77,7 +65,6 @@ app.use('/api/clients', clientRoutes);
 app.use('/api/documents', documentRoutes);
 app.use('/api/vaults', vaultRoutes);
 app.use('/api/onboarding', onboardingRoutes);
-app.use('/api/invites', inviteRoutes);
 app.use('/api/webhooks', webhookRoutes);
 app.use('/api/reviews', reviewRoutes);
 app.use('/api/portal', portalRoutes);
@@ -97,12 +84,12 @@ app.use((req, res) => {
 });
 
 process.on('SIGTERM', async () => {
-  console.log('SIGTERM received, shutting down...');
+  logger.info('SIGTERM received, shutting down');
   await shutdownDatabase();
   process.exit(0);
 });
 process.on('SIGINT', async () => {
-  console.log('SIGINT received, shutting down...');
+  logger.info('SIGINT received, shutting down');
   await shutdownDatabase();
   process.exit(0);
 });
@@ -120,21 +107,21 @@ async function startServer() {
       const client = boxService.getBoxClient();
       await syncTaxflowDocumentTemplate(client);
     } catch (err) {
-      console.warn('Metadata template sync skipped:', err.message);
+      logger.warn('Metadata template sync skipped', { error: err.message });
     }
 
     // Ensure retention policy exists (non-fatal)
     try {
       await complianceService.ensureRetentionPolicy();
     } catch (err) {
-      console.warn('Retention policy setup skipped:', err.message);
+      logger.warn('Retention policy setup skipped', { error: err.message });
     }
 
     // Ensure AI agent exists (non-fatal)
     try {
       await aiExtractionService.ensureAIAgent();
     } catch (err) {
-      console.warn('AI agent setup skipped:', err.message);
+      logger.warn('AI agent setup skipped', { error: err.message });
     }
 
     // Wire webhook event handlers
@@ -146,19 +133,19 @@ async function startServer() {
       await webhookService.loadFromDb();
       const health = await webhookService.verifyWebhooksHealthy();
       if (health.missing > 0) {
-        console.warn(`[Startup] Webhook health: ${health.missing} missing, ${health.reregistered} re-registered`);
+        logger.warn('Webhook health check found missing webhooks', { missing: health.missing, reregistered: health.reregistered });
       } else if (health.total > 0) {
-        console.log(`[Startup] Webhook health: ${health.healthy}/${health.total} healthy`);
+        logger.info('Webhook health check passed', { healthy: health.healthy, total: health.total });
       }
     } catch (err) {
-      console.warn('Webhook health check skipped:', err.message);
+      logger.warn('Webhook health check skipped', { error: err.message });
     }
 
     app.listen(config.port, () => {
-      console.log(`TaxFlow API running on http://localhost:${config.port}`);
+      logger.info('TaxFlow API running', { port: config.port });
     });
   } catch (error) {
-    console.error('Failed to start server:', error);
+    logger.error('Failed to start server', { error: error.message });
     process.exit(1);
   }
 }

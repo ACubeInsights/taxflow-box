@@ -10,6 +10,15 @@ vi.mock('../../services/tokenService.js', () => {
   };
 });
 
+// Mock authMiddleware to bypass auth in tests
+vi.mock('../../middleware/authMiddleware.js', () => ({
+  requireAuth: (req, _res, next) => {
+    req.user = { userId: 'test-user', email: 'test@example.com', name: 'Test', role: 'employee' };
+    next();
+  },
+  requireRole: () => (_req, _res, next) => next(),
+}));
+
 import tokenService from '../../services/tokenService.js';
 import tokensRouter from '../tokens.js';
 

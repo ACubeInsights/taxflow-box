@@ -1,7 +1,9 @@
 import boxService from './boxService.js';
 import { config } from '../config.js';
 import { buildExternalId, isEmailRegistered } from '../utils/authUtils.js';
+import { createHttpError } from '../utils/httpError.js';
 import webhookService from './webhookService.js';
+import { logger } from '../utils/logger.js';
 import crypto from 'crypto';
 
 const DEFAULT_SPACE_AMOUNT = 10737418240; // 10 GB in bytes
@@ -24,8 +26,8 @@ export class OnboardingService {
    * @returns {Promise<{userId: string, login: string, name: string, isNew: boolean, dbUserId: string}>}
    */
   async createAppUser(name, email, spaceAmount = DEFAULT_SPACE_AMOUNT, password, dbUserId) {
-    if (!email) throw new Error('email is required to create an App User');
-    if (!password) throw new Error('password is required to create an App User');
+    if (!email) throw createHttpError('email is required to create an App User', 400);
+    if (!password) throw createHttpError('password is required to create an App User', 400);
 
     // Generate a stable DB user ID upfront so Box and DB use the same identifier
     const localUserId = dbUserId || crypto.randomUUID();
@@ -34,7 +36,7 @@ export class OnboardingService {
 
     // Check for duplicate email across all users
     if (await isEmailRegistered(client, email)) {
-      throw new Error(`Email ${email} is already registered. Each email can only be used once.`);
+      throw createHttpError(`Email ${email} is already registered. Each email can only be used once.`, 409);
     }
 
     try {
@@ -68,10 +70,10 @@ export class OnboardingService {
             dbUserId: localUserId,
           };
         }
-        throw new Error(`409 conflict creating App User but no existing user found for ${email}`);
+        throw createHttpError(`409 conflict creating App User but no existing user found for ${email}`, 502);
       }
-      throw new Error(
-        `Failed to create App User: HTTP ${error.statusCode || 'unknown'} — ${error.message}`
+      throw createHttpError(
+        `Failed to create App User: HTTP ${error.statusCode || 'unknown'} — ${error.message}`, 502
       );
     }
   }
@@ -107,7 +109,7 @@ export class OnboardingService {
           // Try to get the conflicting folder ID directly from the error response
           const conflicts = error.responseInfo?.body?.context_info?.conflicts || [];
           if (conflicts.length > 0 && conflicts[0].id) {
-            console.log(`[Onboarding] Reusing existing folder: ${name} (${conflicts[0].id})`);
+            logger.info('Reusing existing folder', { name, folderId: conflicts[0].id });
             return conflicts[0];
           }
           // Fallback: find it by listing parent's children
@@ -116,7 +118,7 @@ export class OnboardingService {
             (item) => item.type === 'folder' && item.name === name
           );
           if (existing) {
-            console.log(`[Onboarding] Reusing existing folder: ${name} (${existing.id})`);
+            logger.info('Reusing existing folder', { name, folderId: existing.id });
             return existing;
           }
           throw new Error(`409 conflict for folder "${name}" but could not find it in parent ${parentId}`);
@@ -185,7 +187,7 @@ export class OnboardingService {
         });
         results.push({ folderId, lockId: lock.id, success: true });
       } catch (error) {
-        console.error(`Failed to lock folder ${folderId}: ${error.message}`);
+        logger.error('Failed to lock folder', { folderId, error: error.message });
         results.push({ folderId, lockId: null, success: false, error: error.message });
       }
     }
@@ -277,7 +279,7 @@ export class OnboardingService {
       const failed = results.filter(r => !r.success);
       if (failed.length > 0) {
         const failedDetails = failed.map(r => `${r.folderId} (${r.role})`).join(', ');
-        console.warn(`[Onboarding] Collaboration setup had failures on enterprise tier: ${failedDetails}. Continuing onboarding.`);
+        logger.warn('Collaboration setup had failures on enterprise tier', { failedDetails, tier });
       }
     }
 
@@ -332,42 +334,42 @@ export class OnboardingService {
    * @returns {Promise<{appUser: object, folders: object, locks: Array, collaborations: Array, webhookId: string|null, fileRequestUrl: string|null, tier: string}>}
    */
   async onboardClient(clientName, externalId, email, employeeEmail, financialYear, password) {
-    if (!email) throw new Error('Client email is required for onboarding');
-    if (!password) throw new Error('Client password is required for onboarding');
+    if (!email) throw createHttpError('Client email is required for onboarding', 400);
+    if (!password) throw createHttpError('Client password is required for onboarding', 400);
 
     const year = financialYear || new Date().getFullYear().toString();
     const tier = boxService.getTier();
 
     // Phase 1: Create App User
-    console.log('[Onboarding] Phase 1: Creating App User...');
+    logger.info('Onboarding Phase 1: Creating App User');
     const appUser = await this.createAppUser(clientName, email, DEFAULT_SPACE_AMOUNT, password);
-    console.log('[Onboarding] Phase 1 complete:', appUser.userId, appUser.isNew ? '(new)' : '(existing)');
+    logger.info('Onboarding Phase 1 complete', { userId: appUser.userId, isNew: appUser.isNew });
 
     // Phase 2: Create folder hierarchy
-    console.log('[Onboarding] Phase 2: Creating folder hierarchy...');
+    logger.info('Onboarding Phase 2: Creating folder hierarchy');
     const folders = await this.createFolderHierarchy(
       clientName,
       externalId,
       config.boxRootFolderId,
       year
     );
-    console.log('[Onboarding] Phase 2 complete: root=', folders.root);
+    logger.info('Onboarding Phase 2 complete', { rootFolderId: folders.root });
 
     // Phase 3: Apply folder locks
     // Enterprise: mandatory — let errors propagate
     // Free: non-fatal — catch, warn, continue
     let locks = [];
     if (tier === 'enterprise') {
-      console.log('[Onboarding] Phase 3: Applying folder locks (enterprise — mandatory)...');
+      logger.info('Onboarding Phase 3: Applying folder locks (enterprise — mandatory)');
       locks = await this.applyFolderLocks(folders, tier);
-      console.log('[Onboarding] Phase 3 complete');
+      logger.info('Onboarding Phase 3 complete');
     } else {
       try {
-        console.log('[Onboarding] Phase 3: Applying folder locks...');
+        logger.info('Onboarding Phase 3: Applying folder locks');
         locks = await this.applyFolderLocks(folders, tier);
-        console.log('[Onboarding] Phase 3 complete');
+        logger.info('Onboarding Phase 3 complete');
       } catch (error) {
-        console.warn('[Onboarding] Phase 3 skipped (folder locks):', error.message);
+        logger.warn('Onboarding Phase 3 skipped (folder locks)', { error: error.message });
       }
     }
 
@@ -376,26 +378,26 @@ export class OnboardingService {
     // Free: non-fatal — catch, warn, continue
     let collaborations = [];
     if (tier === 'enterprise') {
-      console.log('[Onboarding] Phase 4: Setting up collaborations (enterprise — mandatory)...');
+      logger.info('Onboarding Phase 4: Setting up collaborations (enterprise — mandatory)');
       collaborations = await this.setupCollaborations(
         folders,
         appUser.userId,
         employeeEmail,
         tier
       );
-      console.log('[Onboarding] Phase 4 complete');
+      logger.info('Onboarding Phase 4 complete');
     } else {
       try {
-        console.log('[Onboarding] Phase 4: Setting up collaborations...');
+        logger.info('Onboarding Phase 4: Setting up collaborations');
         collaborations = await this.setupCollaborations(
           folders,
           appUser.userId,
           employeeEmail,
           tier
         );
-        console.log('[Onboarding] Phase 4 complete');
+        logger.info('Onboarding Phase 4 complete');
       } catch (error) {
-        console.warn('[Onboarding] Phase 4 skipped (collaborations):', error.message);
+        logger.warn('Onboarding Phase 4 skipped (collaborations)', { error: error.message });
       }
     }
 
@@ -403,12 +405,12 @@ export class OnboardingService {
     let webhookId = null;
     if (webhookService) {
       try {
-        console.log('[Onboarding] Phase 5: Registering webhook...');
+        logger.info('Onboarding Phase 5: Registering webhook');
         const registration = await webhookService.registerWebhook(folders.root);
         webhookId = registration.webhookId;
-        console.log('[Onboarding] Phase 5 complete:', webhookId);
+        logger.info('Onboarding Phase 5 complete', { webhookId });
       } catch (error) {
-        console.warn('[Onboarding] Phase 5 skipped (webhook):', error.message);
+        logger.warn('Onboarding Phase 5 skipped (webhook)', { error: error.message });
       }
     }
 
@@ -416,7 +418,7 @@ export class OnboardingService {
     let fileRequestUrl = null;
     if (config.fileRequestTemplateId) {
       try {
-        console.log('[Onboarding] Phase 6: Creating file request...');
+        logger.info('Onboarding Phase 6: Creating file request');
         const expiresAt = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString();
         const fileRequest = await this.createFileRequest(
           folders.uploads,
@@ -424,13 +426,13 @@ export class OnboardingService {
           expiresAt
         );
         fileRequestUrl = fileRequest.url;
-        console.log('[Onboarding] Phase 6 complete');
+        logger.info('Onboarding Phase 6 complete');
       } catch (error) {
-        console.warn('[Onboarding] Phase 6 skipped (file request):', error.message);
+        logger.warn('Onboarding Phase 6 skipped (file request)', { error: error.message });
       }
     }
 
-    console.log('[Onboarding] All phases complete for', clientName);
+    logger.info('Onboarding complete', { clientName });
 
     return {
       appUser,

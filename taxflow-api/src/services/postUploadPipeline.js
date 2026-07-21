@@ -13,6 +13,7 @@ import boxService from './boxService.js';
 import rateLimiter from './rateLimiter.js';
 import aiExtractionService from './aiExtractionService.js';
 import notificationService from './notificationService.js';
+import { logger } from '../utils/logger.js';
 
 const METADATA_SCOPE = 'enterprise';
 const METADATA_TEMPLATE = 'taxflow_document';
@@ -44,7 +45,7 @@ export class PostUploadPipeline {
     } catch (err) {
       // 404 means no metadata yet — this is a new upload
       if (err.statusCode !== 404 && err.status !== 404) {
-        console.error(`Error checking metadata for file ${fileId}:`, err.message);
+        logger.error('Error checking metadata for file', { fileId, error: err.message });
       }
     }
 
@@ -82,16 +83,16 @@ export class PostUploadPipeline {
 
         // Fire-and-forget AI extraction after successful metadata application (Req 32.1)
         aiExtractionService.extractStructuredData(fileId).catch((err) => {
-          console.error(`AI extraction failed for file ${fileId}:`, err.message);
+          logger.error('AI extraction failed', { fileId, error: err.message });
         });
       } catch (err) {
         // Queue for retry via rateLimiter on metadata failure (Req 9.6)
-        console.error(`Metadata application failed for file ${fileId}:`, err.message);
+        logger.error('Metadata application failed', { fileId, error: err.message });
         rateLimiter.enqueue(
           () => this.applyMetadata(fileId, clientId, financialYear),
           'high'
         ).catch((retryErr) => {
-          console.error(`Metadata retry failed for file ${fileId}:`, retryErr.message);
+          logger.error('Metadata retry failed', { fileId, error: retryErr.message });
         });
 
         return {
@@ -115,7 +116,7 @@ export class PostUploadPipeline {
       taskId = taskResult.taskId;
       taskAssignmentId = taskResult.assignmentId;
     } catch (err) {
-      console.error(`Task creation failed for file ${fileId}:`, err.message);
+      logger.error('Task creation failed', { fileId, error: err.message });
     }
 
     // Dispatch upload notification to assigned employee (Req 12.1)
@@ -129,7 +130,7 @@ export class PostUploadPipeline {
         notificationSent = true;
       }
     } catch (err) {
-      console.error(`Upload notification failed for file ${fileId}:`, err.message);
+      logger.error('Upload notification failed', { fileId, error: err.message });
     }
 
     return {
@@ -218,13 +219,13 @@ export class PostUploadPipeline {
         ]
       );
     } catch (err) {
-      console.error(`Revision metadata reset failed for file ${fileId}:`, err.message);
+      logger.error('Revision metadata reset failed', { fileId, error: err.message });
       // Queue for retry
       rateLimiter.enqueue(
         () => this.handleRevision(fileId, originalReviewer),
         'high'
       ).catch((retryErr) => {
-        console.error(`Revision retry failed for file ${fileId}:`, retryErr.message);
+        logger.error('Revision retry failed', { fileId, error: retryErr.message });
       });
 
       return {
@@ -243,7 +244,7 @@ export class PostUploadPipeline {
       taskId = taskResult.taskId;
       taskAssignmentId = taskResult.assignmentId;
     } catch (err) {
-      console.error(`Revision task creation failed for file ${fileId}:`, err.message);
+      logger.error('Revision task creation failed', { fileId, error: err.message });
     }
 
     // Add re-upload comment (Req 18.4)
@@ -253,7 +254,7 @@ export class PostUploadPipeline {
         message: 'Re-uploaded by client — pending re-review',
       });
     } catch (err) {
-      console.error(`Re-upload comment failed for file ${fileId}:`, err.message);
+      logger.error('Re-upload comment failed', { fileId, error: err.message });
     }
 
     return {
@@ -350,7 +351,7 @@ export class PostUploadPipeline {
       const match = rootFolder.name?.match(/\(([^)]+)\)$/);
       clientId = match ? match[1] : rootFolder.name || '';
     } catch (err) {
-      console.error(`Context extraction failed for file ${fileId}:`, err.message);
+      logger.error('Context extraction failed', { fileId, error: err.message });
     }
 
     return { clientId, financialYear };

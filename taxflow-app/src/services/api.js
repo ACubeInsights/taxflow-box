@@ -85,9 +85,6 @@ export const authApi = {
       body: JSON.stringify({ email, password }),
     });
   },
-  // Backward compatibility
-  async loginClient(email, password) { return this.login(email, password); },
-  async loginStaff(email, password) { return this.login(email, password); },
   async getMe() {
     return apiRequest('/auth/me');
   },

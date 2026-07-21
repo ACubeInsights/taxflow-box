@@ -8,6 +8,7 @@
 
 import { config } from '../config.js';
 import { retryWithBackoff } from '../utils/retryWithBackoff.js';
+import { logger } from '../utils/logger.js';
 
 const BREVO_API_KEY = process.env.BREVO_API_KEY || '';
 const FROM_EMAIL = config.smtpFrom || 'agarwalayush1412@gmail.com';
@@ -16,10 +17,10 @@ const FROM_NAME = 'TaxFlow Pro';
 export class EmailService {
   async sendEmail(recipientEmail, templateId, context) {
     if (!BREVO_API_KEY) {
-      console.log(
-        `[Email-NoKey] To: ${recipientEmail}, Template: ${templateId}, ` +
-        `Message: ${context.message || ''}, DeepLink: ${context.deepLinkUrl || ''}`
-      );
+      logger.warn('Email not sent (no BREVO_API_KEY configured)', {
+        to: recipientEmail,
+        template: templateId,
+      });
       return;
     }
 
@@ -51,7 +52,7 @@ export class EmailService {
           throw new Error(`Brevo error: ${response.status} ${JSON.stringify(data)}`);
         }
 
-        console.log(`[Email] Sent to ${recipientEmail} (template: ${templateId}, messageId: ${data.messageId})`);
+        logger.info('Email sent', { to: recipientEmail, template: templateId, messageId: data.messageId });
       },
       { maxRetries: 3, baseDelayMs: 2000 }
     );

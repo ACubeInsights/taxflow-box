@@ -19,6 +19,7 @@
 import boxService from './boxService.js';
 import complianceService from './complianceService.js';
 import { createHttpError } from '../utils/httpError.js';
+import { logger } from '../utils/logger.js';
 
 const METADATA_SCOPE = 'enterprise';
 const METADATA_TEMPLATE = 'taxflow_document';
@@ -52,7 +53,7 @@ export class ReviewService {
 
     // Fire-and-forget retention policy assignment after approval (Req 29.3)
     complianceService.assignRetentionPolicy(fileId).catch((err) => {
-      console.error(`Retention policy assignment failed for file ${fileId}:`, err.message);
+      logger.error('Retention policy assignment failed', { fileId, error: err.message });
     });
 
     // Complete task assignment (Req 12.2)
@@ -61,7 +62,7 @@ export class ReviewService {
       await this._completeTaskForFile(client, fileId);
       taskCompleted = true;
     } catch (err) {
-      console.error(`Task completion failed for file ${fileId}:`, err.message);
+      logger.error('Task completion failed', { fileId, error: err.message });
     }
 
     return { fileId, status: 'approved', reviewer: employeeId, reviewedAt, taskCompleted };
@@ -105,7 +106,7 @@ export class ReviewService {
         message: rejectionReason,
       });
     } catch (err) {
-      console.error(`Comment creation failed for file ${fileId}:`, err.message);
+      logger.error('Comment creation failed', { fileId, error: err.message });
     }
 
     // Task NOT completed on rejection (Req 13.4)
@@ -143,7 +144,7 @@ export class ReviewService {
       await this._completeTaskForFile(client, fileId);
       taskCompleted = true;
     } catch (err) {
-      console.error(`Task completion failed for waived file ${fileId}:`, err.message);
+      logger.error('Task completion failed for waived file', { fileId, error: err.message });
     }
 
     return { fileId, status: 'waived', reviewer: employeeId, reviewedAt, taskCompleted };
@@ -226,7 +227,7 @@ export class ReviewService {
         }
       );
     } catch (err) {
-      console.error(`Metadata application failed for internal note ${file.id}:`, err.message);
+      logger.error('Metadata application failed for internal note', { fileId: file.id, error: err.message });
     }
 
     return {

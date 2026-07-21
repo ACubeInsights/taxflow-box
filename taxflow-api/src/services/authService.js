@@ -18,7 +18,8 @@ import emailService from './emailService.js';
 import crypto from 'crypto';
 import { config } from '../config.js';
 import { createHttpError } from '../utils/httpError.js';
-import { buildExternalId, buildExternalIdLegacy, hashPassword, hashPasswordLegacy, verifyPassword, extractOriginalEmail, extractRole } from '../utils/authUtils.js';
+import { logger } from '../utils/logger.js';
+import { buildExternalId, buildExternalIdLegacy, hashPassword, verifyPassword, extractOriginalEmail, extractRole } from '../utils/authUtils.js';
 
 // Re-export auth utilities for backward compatibility
 export { buildExternalId, buildExternalIdLegacy, hashPassword, verifyPassword, extractOriginalEmail };
@@ -215,7 +216,7 @@ export class AuthService {
         }
       }
     } catch (err) {
-      console.warn('[Auth] Vault lookup failed during login, continuing without vault:', err.message);
+      logger.warn('Vault lookup failed during login, continuing without vault', { error: err.message });
     }
 
     return session;
@@ -297,7 +298,7 @@ export class AuthService {
           });
         } catch (err) {
           if (!err.message?.includes('UNIQUE constraint')) {
-            console.error('Failed to auto-sync Box user to local DB:', err.message);
+            logger.error('Failed to auto-sync Box user to local DB', { error: err.message });
           }
         }
       } else if (boxVerifyResult.needsRehash && boxVerifyResult.newHash) {
@@ -328,8 +329,9 @@ export class AuthService {
     return this._enrichSessionWithVault(session, email);
   }
 
-  // Backward compatibility aliases
+  /** @deprecated Use login() directly. Will be removed in next major version. */
   async loginClient(email, password) { return this.login(email, password); }
+  /** @deprecated Use login() directly. Will be removed in next major version. */
   async loginStaff(email, password) { return this.login(email, password); }
 
   /**
@@ -393,7 +395,7 @@ export class AuthService {
       deepLinkUrl: resetUrl,
       fileName: '',
     }).catch((err) => {
-      console.error(`[Auth] Failed to send password reset email to ${email}:`, err.message);
+      logger.error('Failed to send password reset email', { email, error: err.message });
     });
 
     return { message: 'If an account exists with that email, a reset link has been sent.' };

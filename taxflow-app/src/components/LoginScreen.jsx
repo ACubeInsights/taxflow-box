@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import { useAuth } from '../context/AuthContext'
-import { Zap, Lock, AlertCircle, Loader2 } from 'lucide-react'
+import { Lock, AlertCircle, Loader2, ArrowRight } from 'lucide-react'
 import AnimatedBackground from './AnimatedBackground'
 import FloatingLabel from './FloatingLabel'
 import ForgotPasswordForm from './ForgotPasswordForm'
@@ -39,40 +39,50 @@ export default function LoginScreen() {
   const displayError = error || tokenError
 
   return (
-    <div className="relative w-screen h-screen flex items-center justify-center p-5 overflow-y-auto bg-[var(--color-surface-lowest)] font-sans">
+    <div className="relative w-screen h-screen flex items-center justify-center p-5 overflow-y-auto bg-[var(--color-surface-lowest)]">
       <AnimatedBackground />
 
       <motion.div
-        initial={{ opacity: 0, scale: 0.98, y: 15 }}
-        animate={{ opacity: 1, scale: 1, y: 0 }}
-        transition={{ type: 'spring', stiffness: 100, damping: 20, mass: 1 }}
-        className="relative z-10 w-full max-w-[460px]"
+        initial={{ opacity: 0, y: 20 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ duration: 0.6, ease: [0.22, 1, 0.36, 1] }}
+        className="relative z-10 w-full max-w-[420px]"
       >
+        {/* Card */}
         <div
-          className="rounded-[32px] bg-[var(--color-surface-container)]/40 backdrop-blur-[40px] border border-[var(--color-outline-variant)] relative overflow-hidden shadow-[0_40px_100px_rgba(0,0,0,0.8)]"
+          className="rounded-2xl relative overflow-hidden noise-overlay"
           style={{
-            padding: isMobile ? '32px 24px 24px' : '44px 44px 36px',
-            boxShadow: 'inset 0 1px 0 rgba(255,255,255,0.06), 0 40px 100px rgba(0,0,0,0.8)',
+            background: 'var(--color-surface-container)',
+            border: '1px solid var(--color-outline-variant)',
+            padding: isMobile ? '32px 24px' : '48px 40px 40px',
+            boxShadow: '0 0 0 1px rgba(255,255,255,0.03) inset, 0 25px 80px rgba(0,0,0,0.6)',
           }}
         >
-          {/* Top highlight */}
-          <div className="absolute top-0 left-[15%] right-[15%] h-[1px] bg-gradient-to-r from-transparent via-[var(--color-outline)] to-transparent opacity-50 rounded-full" />
+          {/* Top edge highlight */}
+          <div className="absolute top-0 left-[20%] right-[20%] h-[1px] bg-gradient-to-r from-transparent via-[var(--color-primary)]/30 to-transparent" />
 
           {/* Brand */}
-          <div className="text-center mb-7">
-            <div
-              className="inline-flex items-center justify-center w-14 h-14 rounded-[18px] border border-[var(--color-primary)]/40 mb-5 shadow-[0_0_32px_var(--color-primary)]/30"
-              style={{ background: 'linear-gradient(135deg, rgba(173,198,255,0.2), rgba(75,142,255,0.1))' }}
-            >
-              <Zap size={28} className="text-[var(--color-primary)]" strokeWidth={2.5} />
+          <motion.div
+            className="text-center mb-10"
+            initial={{ opacity: 0, y: 10 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ delay: 0.1, duration: 0.5 }}
+          >
+            <div className="inline-flex items-center justify-center w-12 h-12 rounded-xl mb-5 border border-[var(--color-primary)]/20 glow-sm">
+              <div
+                className="w-full h-full rounded-xl flex items-center justify-center"
+                style={{ background: 'linear-gradient(135deg, rgba(129,140,248,0.15), rgba(99,102,241,0.05))' }}
+              >
+                <Lock size={20} className="text-[var(--color-primary)]" strokeWidth={2} />
+              </div>
             </div>
-            <h1 className="m-0 text-[32px] font-bold text-[var(--color-on-surface)] leading-tight tracking-[-0.04em] font-display">
-              TaxFlow Pro
+            <h1 className="m-0 text-[28px] font-bold text-[var(--color-on-surface)] leading-tight tracking-[-0.03em] font-display">
+              Welcome back
             </h1>
-            <p className="mt-2 text-[10px] text-[var(--color-on-surface-variant)] tracking-[0.16em] font-bold uppercase">
-              Secure Document Management
+            <p className="mt-2 text-[13px] text-[var(--color-on-surface-variant)] font-medium">
+              Sign in to your TaxFlow Pro workspace
             </p>
-          </div>
+          </motion.div>
 
           {/* Login form or Forgot Password form */}
           {forgotMode ? (
@@ -88,20 +98,25 @@ export default function LoginScreen() {
           <AnimatePresence>
             {displayError && (
               <motion.div
-                initial={{ opacity: 0, height: 0 }}
-                animate={{ opacity: 1, height: 'auto' }}
-                exit={{ opacity: 0, height: 0 }}
-                className="mb-4 flex items-start gap-2 p-3 rounded-xl border border-red-500/30 bg-red-500/10"
+                initial={{ opacity: 0, height: 0, marginBottom: 0 }}
+                animate={{ opacity: 1, height: 'auto', marginBottom: 16 }}
+                exit={{ opacity: 0, height: 0, marginBottom: 0 }}
+                className="flex items-start gap-2.5 px-4 py-3 rounded-xl border border-[var(--color-error)]/20 bg-[var(--color-error-muted)]"
               >
-                <AlertCircle size={16} className="text-red-400 flex-shrink-0 mt-0.5" />
-                <p className="m-0 text-[12px] text-red-300 leading-relaxed">{displayError}</p>
+                <AlertCircle size={15} className="text-[var(--color-error)] flex-shrink-0 mt-0.5" />
+                <p className="m-0 text-[13px] text-[var(--color-error)] leading-relaxed font-medium">{displayError}</p>
               </motion.div>
             )}
           </AnimatePresence>
 
           {/* Login form */}
-          <form onSubmit={handleSubmit}>
-            <div className="flex flex-col gap-4 mb-4">
+          <motion.form
+            onSubmit={handleSubmit}
+            initial={{ opacity: 0, y: 10 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ delay: 0.2, duration: 0.5 }}
+          >
+            <div className="flex flex-col gap-3.5 mb-5">
               <FloatingLabel
                 label="Email address"
                 type="email"
@@ -118,14 +133,11 @@ export default function LoginScreen() {
               />
             </div>
 
-            <div className="flex items-center justify-between mb-4">
-              <p className="m-0 text-[11px] text-[var(--color-on-surface-variant)] leading-relaxed">
-                Sign in with your registered email and password.
-              </p>
+            <div className="flex items-center justify-end mb-5">
               <button
                 type="button"
                 onClick={() => { setForgotMode(true); setError(null) }}
-                className="bg-transparent border-none text-[11px] font-semibold text-[var(--color-primary)] cursor-pointer p-0 whitespace-nowrap ml-3 hover:text-white transition-colors"
+                className="bg-transparent border-none text-[12px] font-semibold text-[var(--color-on-surface-variant)] cursor-pointer p-0 hover:text-[var(--color-primary)] transition-colors"
               >
                 Forgot password?
               </button>
@@ -134,34 +146,48 @@ export default function LoginScreen() {
             <button
               type="submit"
               disabled={loginLoading || !isFormValid}
-              className="relative w-full py-4 rounded-xl text-[15px] font-bold tracking-tight text-[var(--color-surface-lowest)] transition-all duration-300 overflow-hidden group cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
+              className="relative w-full h-12 rounded-xl text-[14px] font-semibold tracking-tight overflow-hidden cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed group"
               style={{
-                background: !isFormValid
-                  ? 'var(--color-surface-highest)'
-                  : 'linear-gradient(180deg, var(--color-primary), var(--color-primary-container))',
-                boxShadow: !isFormValid
-                  ? 'none'
-                  : 'inset 0 1px 0 rgba(255,255,255,0.4), 0 8px 30px rgba(173,198,255,0.25)',
+                background: isFormValid
+                  ? 'linear-gradient(180deg, var(--color-primary) 0%, var(--color-primary-container) 100%)'
+                  : 'var(--color-surface-highest)',
+                color: isFormValid ? '#09090b' : 'var(--color-on-surface-variant)',
+                border: 'none',
+                boxShadow: isFormValid
+                  ? '0 1px 0 rgba(255,255,255,0.2) inset, 0 4px 16px rgba(129, 140, 248, 0.3)'
+                  : 'none',
               }}
             >
               <span className="relative z-10 flex items-center justify-center gap-2">
                 {loginLoading ? (
                   <>
-                    <Loader2 size={18} className="animate-spin" />
+                    <Loader2 size={16} className="animate-spin" />
                     Signing in...
                   </>
                 ) : (
-                  'Sign In'
+                  <>
+                    Sign in
+                    <ArrowRight size={15} className="transition-transform group-hover:translate-x-0.5" />
+                  </>
                 )}
               </span>
             </button>
-          </form>
+          </motion.form>
           </>
           )}
 
           <DemoLoginSection demoLogin={demoLogin} isMobile={isMobile} />
-
         </div>
+
+        {/* Footer text */}
+        <motion.p
+          className="text-center mt-6 text-[11px] text-[var(--color-on-surface-variant)]/50 font-medium"
+          initial={{ opacity: 0 }}
+          animate={{ opacity: 1 }}
+          transition={{ delay: 0.5 }}
+        >
+          Protected by end-to-end encryption
+        </motion.p>
       </motion.div>
     </div>
   )

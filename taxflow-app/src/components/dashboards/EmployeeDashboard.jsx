@@ -9,6 +9,13 @@ import OnboardClientModal from '../OnboardClientModal'
 import PermissionManagerPanel from '../PermissionManagerPanel'
 import ShareFileModal from '../ShareFileModal'
 
+const ACTION_BUTTONS = [
+  { id: 'request', label: 'New Request', icon: Plus, primary: true },
+  { id: 'share', label: 'Share File', icon: Upload },
+  { id: 'onboard', label: 'Onboard Client', icon: UserPlus },
+  { id: 'permissions', label: 'Permissions', icon: Shield },
+]
+
 export default function EmployeeDashboard() {
   const navigate = useNavigate()
   const { user } = useAuth()
@@ -17,84 +24,95 @@ export default function EmployeeDashboard() {
   const [permissionsOpen, setPermissionsOpen] = useState(false)
   const [shareFileOpen, setShareFileOpen] = useState(false)
 
+  const handleAction = (id) => {
+    switch (id) {
+      case 'request': setDrawerOpen(true); break
+      case 'share': setShareFileOpen(true); break
+      case 'onboard': setOnboardOpen(true); break
+      case 'permissions': setPermissionsOpen(true); break
+    }
+  }
+
   return (
-    <div className="max-w-[1200px] mx-auto py-6">
+    <div className="max-w-[1100px] mx-auto">
       {/* Header */}
-      <div className="mb-8">
-        <h1 className="m-0 text-[22px] font-semibold text-[var(--color-on-surface)]">
-          Welcome back{user?.name ? `, ${user.name}` : ''}
+      <motion.div
+        className="mb-8"
+        initial={{ opacity: 0, y: 10 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ duration: 0.4, ease: [0.22, 1, 0.36, 1] }}
+      >
+        <h1 className="m-0 text-[24px] font-bold text-[var(--color-on-surface)] tracking-tight font-display">
+          {user?.name ? `Welcome back, ${user.name.split(' ')[0]}` : 'Dashboard'}
         </h1>
-        <p className="m-0 mt-1 text-[14px] text-[var(--color-on-surface-variant)]">
-          Manage clients, documents, and permissions
+        <p className="m-0 mt-1 text-[13px] text-[var(--color-on-surface-variant)] font-medium">
+          Manage your clients, documents, and workflows
         </p>
-      </div>
+      </motion.div>
 
       {/* Action buttons */}
-      <div className="flex flex-wrap gap-3 mb-8">
-        <button
-          onClick={() => setDrawerOpen(true)}
-          className="flex items-center gap-2 px-5 py-2.5 rounded-lg text-[13px] font-semibold cursor-pointer bg-white text-[#1a1a1a] border-none transition-all hover:bg-white/90 active:scale-[0.98]"
-        >
-          <Plus size={15} />
-          New Document Request
-        </button>
-        <button
-          onClick={() => setShareFileOpen(true)}
-          className="flex items-center gap-2 px-5 py-2.5 rounded-lg text-[13px] font-semibold cursor-pointer bg-transparent border border-[var(--color-outline-variant)] text-[var(--color-on-surface)] transition-all hover:bg-[var(--color-surface-container-high)] active:scale-[0.98]"
-        >
-          <Upload size={15} />
-          Share File
-        </button>
-        <button
-          onClick={() => setOnboardOpen(true)}
-          className="flex items-center gap-2 px-5 py-2.5 rounded-lg text-[13px] font-semibold cursor-pointer bg-transparent border border-[var(--color-outline-variant)] text-[var(--color-on-surface)] transition-all hover:bg-[var(--color-surface-container-high)] active:scale-[0.98]"
-        >
-          <UserPlus size={15} />
-          Onboard Client
-        </button>
-        <button
-          onClick={() => setPermissionsOpen(true)}
-          className="flex items-center gap-2 px-5 py-2.5 rounded-lg text-[13px] font-semibold cursor-pointer bg-transparent border border-[var(--color-outline-variant)] text-[var(--color-on-surface)] transition-all hover:bg-[var(--color-surface-container-high)] active:scale-[0.98]"
-        >
-          <Shield size={15} />
-          Manage Permissions
-        </button>
-      </div>
+      <motion.div
+        className="flex flex-wrap gap-2.5 mb-8"
+        initial={{ opacity: 0, y: 10 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ delay: 0.05, duration: 0.4, ease: [0.22, 1, 0.36, 1] }}
+      >
+        {ACTION_BUTTONS.map((btn) => {
+          const Icon = btn.icon
+          return (
+            <button
+              key={btn.id}
+              onClick={() => handleAction(btn.id)}
+              className={`flex items-center gap-2 px-4 py-2 rounded-lg text-[13px] font-semibold cursor-pointer border transition-all duration-200 active:scale-[0.97] ${
+                btn.primary
+                  ? 'bg-[var(--color-primary)] text-[#09090b] border-transparent hover:brightness-110 shadow-[0_2px_8px_rgba(129,140,248,0.25)]'
+                  : 'bg-transparent border-[var(--color-outline-variant)] text-[var(--color-on-surface)] hover:bg-[var(--color-surface-high)] hover:border-[var(--color-outline)]'
+              }`}
+            >
+              <Icon size={14} strokeWidth={2.5} />
+              {btn.label}
+            </button>
+          )
+        })}
+      </motion.div>
 
-      {/* Client list */}
-      <ClientListPanel />
+      {/* Client list — the main content area */}
+      <motion.div
+        initial={{ opacity: 0, y: 12 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ delay: 0.1, duration: 0.4, ease: [0.22, 1, 0.36, 1] }}
+      >
+        <ClientListPanel />
+      </motion.div>
 
-      {/* Document Request Creator */}
+      {/* Modals and drawers */}
       <DocumentRequestCreator
         isOpen={drawerOpen}
         onClose={() => setDrawerOpen(false)}
       />
 
-      {/* Onboard Client Modal */}
       <OnboardClientModal
         open={onboardOpen}
         onClose={() => setOnboardOpen(false)}
         onSuccess={(result) => {
           setOnboardOpen(false)
-          const clientId = result.clientId
-          if (clientId) {
-            navigate(`/clients/${clientId}`)
-          }
+          if (result.clientId) navigate(`/clients/${result.clientId}`)
         }}
       />
 
-      {/* Permission Manager Panel */}
       {permissionsOpen && (
         <motion.div
           initial={{ opacity: 0 }}
           animate={{ opacity: 1 }}
-          className="fixed inset-0 z-[100] flex items-center justify-center p-8 bg-black/50 backdrop-blur-sm"
+          exit={{ opacity: 0 }}
+          className="fixed inset-0 z-[100] flex items-center justify-center p-6 bg-black/60 backdrop-blur-sm"
           onClick={() => setPermissionsOpen(false)}
         >
           <motion.div
-            initial={{ scale: 0.97, y: 10 }}
-            animate={{ scale: 1, y: 0 }}
-            className="w-full max-w-[750px] max-h-[85vh]"
+            initial={{ scale: 0.96, opacity: 0 }}
+            animate={{ scale: 1, opacity: 1 }}
+            transition={{ duration: 0.2, ease: [0.22, 1, 0.36, 1] }}
+            className="w-full max-w-[700px] max-h-[80vh] overflow-y-auto"
             onClick={(e) => e.stopPropagation()}
           >
             <PermissionManagerPanel onClose={() => setPermissionsOpen(false)} />
@@ -102,7 +120,6 @@ export default function EmployeeDashboard() {
         </motion.div>
       )}
 
-      {/* Share File Modal */}
       <ShareFileModal
         open={shareFileOpen}
         onClose={() => setShareFileOpen(false)}

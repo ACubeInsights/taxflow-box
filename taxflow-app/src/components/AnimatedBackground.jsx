@@ -1,91 +1,71 @@
+/**
+ * AnimatedBackground — Premium ambient atmosphere layer.
+ *
+ * Design philosophy: subtlety over spectacle. The background should feel
+ * like a living, breathing surface — not a light show. Think: the way
+ * expensive materials catch ambient light in a dark room.
+ */
 export default function AnimatedBackground() {
   return (
-    <div
-      style={{
-        position: 'fixed',
-        inset: 0,
-        overflow: 'hidden',
-        zIndex: 0,
-        background: 'var(--color-surface-lowest)',
-      }}
-    >
-      {/* Orb 1 — primary, top-left */}
+    <div className="fixed inset-0 overflow-hidden z-0 bg-[var(--color-surface-lowest)]">
+      {/* Base gradient mesh — warm, directional lighting from top-left */}
       <div
-        className="animate-float"
+        className="absolute inset-0"
         style={{
-          position: 'absolute',
-          width: 900,
-          height: 900,
-          borderRadius: '50%',
-          background:
-            'radial-gradient(circle, color-mix(in srgb, var(--color-primary) 18%, transparent) 0%, color-mix(in srgb, var(--color-primary) 6%, transparent) 35%, transparent 70%)',
-          top: '-300px',
-          left: '-250px',
-          filter: 'blur(60px)',
-        }}
-      />
-      {/* Orb 2 — secondary, bottom-right */}
-      <div
-        className="animate-float-d2"
-        style={{
-          position: 'absolute',
-          width: 800,
-          height: 800,
-          borderRadius: '50%',
-          background:
-            'radial-gradient(circle, color-mix(in srgb, var(--color-secondary) 18%, transparent) 0%, color-mix(in srgb, var(--color-secondary) 6%, transparent) 35%, transparent 70%)',
-          bottom: '-250px',
-          right: '-200px',
-          filter: 'blur(60px)',
-        }}
-      />
-      {/* Orb 3 — tertiary, center */}
-      <div
-        className="animate-float-d4"
-        style={{
-          position: 'absolute',
-          width: 600,
-          height: 600,
-          borderRadius: '50%',
-          background:
-            'radial-gradient(circle, color-mix(in srgb, var(--color-tertiary) 12%, transparent) 0%, transparent 65%)',
-          top: '30%',
-          left: '55%',
-          filter: 'blur(50px)',
-        }}
-      />
-      {/* Fine grid overlay */}
-      <div
-        style={{
-          position: 'absolute',
-          inset: 0,
-          backgroundImage: `
-            linear-gradient(rgba(255,255,255,0.018) 1px, transparent 1px),
-            linear-gradient(90deg, rgba(255,255,255,0.018) 1px, transparent 1px)
+          background: `
+            radial-gradient(ellipse 80% 60% at 10% -10%, rgba(129, 140, 248, 0.08) 0%, transparent 50%),
+            radial-gradient(ellipse 60% 50% at 90% 100%, rgba(196, 181, 253, 0.05) 0%, transparent 50%),
+            radial-gradient(ellipse 50% 40% at 50% 50%, rgba(94, 234, 212, 0.03) 0%, transparent 50%)
           `,
-          backgroundSize: '56px 56px',
         }}
       />
-      {/* Top-center radial glow */}
+
+      {/* Slow-moving gradient blob — subtle, large scale */}
       <div
+        className="absolute animate-float-slow"
         style={{
-          position: 'absolute',
-          top: 0,
-          left: '50%',
-          transform: 'translateX(-50%)',
-          width: 800,
-          height: 400,
-          background:
-            'radial-gradient(ellipse at 50% 0%, color-mix(in srgb, var(--color-primary) 9%, transparent) 0%, transparent 65%)',
+          width: '120%',
+          height: '120%',
+          top: '-10%',
+          left: '-10%',
+          background: `
+            radial-gradient(ellipse at 20% 30%, rgba(129, 140, 248, 0.04) 0%, transparent 40%),
+            radial-gradient(ellipse at 70% 70%, rgba(196, 181, 253, 0.03) 0%, transparent 35%)
+          `,
+          filter: 'blur(80px)',
         }}
       />
-      {/* Noise vignette */}
+
+      {/* Fine dot grid — architectural, grounding */}
       <div
+        className="absolute inset-0 opacity-[0.03]"
         style={{
-          position: 'absolute',
-          inset: 0,
-          background:
-            'radial-gradient(ellipse at 50% 50%, transparent 40%, rgba(0,0,0,0.55) 100%)',
+          backgroundImage: `radial-gradient(circle, rgba(255,255,255,0.8) 1px, transparent 1px)`,
+          backgroundSize: '32px 32px',
+        }}
+      />
+
+      {/* Top edge light — simulates ambient overhead illumination */}
+      <div
+        className="absolute top-0 left-0 right-0 h-[1px]"
+        style={{
+          background: 'linear-gradient(90deg, transparent, rgba(129, 140, 248, 0.2) 30%, rgba(196, 181, 253, 0.15) 70%, transparent)',
+        }}
+      />
+
+      {/* Vignette — draws focus to center content */}
+      <div
+        className="absolute inset-0"
+        style={{
+          background: 'radial-gradient(ellipse 70% 60% at 50% 50%, transparent 30%, rgba(9, 9, 11, 0.7) 100%)',
+        }}
+      />
+
+      {/* Film grain texture — adds materiality */}
+      <div
+        className="absolute inset-0 opacity-[0.015] pointer-events-none"
+        style={{
+          backgroundImage: `url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.75' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E")`,
         }}
       />
     </div>

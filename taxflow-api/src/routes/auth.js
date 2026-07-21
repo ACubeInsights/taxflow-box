@@ -15,14 +15,13 @@ const router = express.Router();
 
 /**
  * POST /api/auth/login
- * Body: { email, password?, loginType: 'client' | 'staff' }
+ * Body: { email, password }
  *
- * Clients log in with email only (their identity is the Box App User).
- * Staff log in with email + password.
+ * Unified login — authenticates any user (client, employee, superadmin) by email + password.
  */
 router.post('/login', async (req, res, next) => {
   try {
-    const { email, password, loginType } = req.body;
+    const { email, password } = req.body;
 
     if (!email) {
       return res.status(400).json({ error: 'Email is required' });

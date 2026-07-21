@@ -1,6 +1,14 @@
 /**
  * CircuitBreaker — Fault tolerance for Box API calls.
  *
+ * STATUS: Infrastructure-ready, not yet wired into the request path.
+ * The circuitBreaker singleton is tested and ready to wrap Box API calls
+ * (e.g., inside boxService.getBoxClient() or postUploadPipeline) but has
+ * not been activated to avoid changing runtime behavior until the team
+ * decides on the integration strategy (per-call vs. per-service).
+ *
+ * To activate, wrap Box SDK calls with: circuitBreaker.execute(() => boxApiCall())
+ *
  * Tracks failure rates over a rolling window and stops requests during
  * sustained failures, recovering gracefully via a half-open probe.
  *

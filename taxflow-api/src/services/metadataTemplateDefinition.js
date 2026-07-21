@@ -7,6 +7,8 @@
  * Requirements: 10.1, 10.2, 10.3, 10.4
  */
 
+import { logger } from '../utils/logger.js';
+
 /**
  * The taxflow_document metadata template definition.
  * Scope: enterprise, templateKey: taxflow_document
@@ -74,12 +76,12 @@ export async function syncTaxflowDocumentTemplate(client) {
       fields: TAXFLOW_DOCUMENT_TEMPLATE.fields,
     });
 
-    console.log('Created taxflow_document metadata template');
+    logger.info('Created taxflow_document metadata template');
     return { templateKey: TAXFLOW_DOCUMENT_TEMPLATE.templateKey, created: true };
   } catch (error) {
     // Handle 409 — template already exists (Req 10.4)
     if (error.statusCode === 409 || error.status === 409) {
-      console.log('taxflow_document metadata template already exists, verifying fields...');
+      logger.info('taxflow_document metadata template already exists, verifying fields');
 
       try {
         const existing = await client.metadataTemplates.getMetadataTemplate(
@@ -91,14 +93,12 @@ export async function syncTaxflowDocumentTemplate(client) {
         const missingKeys = REQUIRED_FIELD_KEYS.filter((k) => !existingKeys.includes(k));
 
         if (missingKeys.length > 0) {
-          console.warn(
-            `taxflow_document template missing fields: ${missingKeys.join(', ')}`
-          );
+          logger.warn('taxflow_document template missing fields', { missingKeys });
         } else {
-          console.log('taxflow_document template verified — all fields present');
+          logger.info('taxflow_document template verified — all fields present');
         }
       } catch (verifyErr) {
-        console.error('Failed to verify existing template:', verifyErr.message);
+        logger.error('Failed to verify existing template', { error: verifyErr.message });
       }
 
       return { templateKey: TAXFLOW_DOCUMENT_TEMPLATE.templateKey, created: false };
