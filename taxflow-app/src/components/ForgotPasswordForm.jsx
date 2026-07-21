@@ -42,7 +42,7 @@ export default function ForgotPasswordForm({ onBack, initialEmail = '', displayE
 
       {forgotSent ? (
         <div className="text-center py-4">
-          <p className="m-0 text-[14px] font-bold text-white mb-2">Check your email</p>
+          <p className="m-0 text-[14px] font-bold text-[var(--color-on-surface)] mb-2">Check your email</p>
           <p className="m-0 text-[12px] text-[var(--color-on-surface-variant)] leading-relaxed">
             If an account exists for {forgotEmail}, we've sent a password reset link. Check your inbox and spam folder.
           </p>
@@ -61,9 +61,9 @@ export default function ForgotPasswordForm({ onBack, initialEmail = '', displayE
 
           <AnimatePresence>
             {displayError && (
-              <motion.div initial={{ opacity: 0, height: 0 }} animate={{ opacity: 1, height: 'auto' }} exit={{ opacity: 0, height: 0 }} className="mb-4 flex items-start gap-2 p-3 rounded-xl border border-red-500/30 bg-red-500/10">
-                <AlertCircle size={16} className="text-red-400 flex-shrink-0 mt-0.5" />
-                <p className="m-0 text-[12px] text-red-300 leading-relaxed">{displayError}</p>
+              <motion.div initial={{ opacity: 0, height: 0 }} animate={{ opacity: 1, height: 'auto' }} exit={{ opacity: 0, height: 0 }} className="mb-4 flex items-start gap-2 p-3 rounded-xl border border-[var(--color-error)]/25 bg-[var(--color-error-muted)]">
+                <AlertCircle size={16} className="text-[var(--color-error)] shrink-0 mt-0.5" />
+                <p className="m-0 text-[12px] text-[var(--color-error)] leading-relaxed">{displayError}</p>
               </motion.div>
             )}
           </AnimatePresence>

@@ -81,7 +81,7 @@ function FileRow({ file, onAction, downloading, uploading }) {
       animate={{ opacity: 1, x: 0 }}
       transition={{ duration: 0.35, ease: 'easeOut' }}
       /* Elevated file card — matches GlassPanel inner-item styling */
-      className="flex items-center gap-4 p-4 rounded-[16px] ring-1 ring-[var(--color-outline-variant)] bg-[var(--color-surface-container)] transition-all duration-300 group cursor-default hover:ring-[var(--color-outline)] hover:bg-[var(--color-surface-container)]/80"
+      className="flex items-center gap-4 p-4 rounded-xl ring-1 ring-[var(--color-outline-variant)] bg-[var(--color-surface-container)] transition-all duration-300 group cursor-default hover:ring-[var(--color-outline)] hover:bg-[var(--color-surface-container)]/80"
       style={{ boxShadow: '0 4px 16px rgba(0,0,0,0.25)' }}
     >
       {/* File icon with themed container — matches StatCard icon style */}
@@ -111,7 +111,7 @@ function FileRow({ file, onAction, downloading, uploading }) {
           action.key === 'update' ? (
             <label
               key={action.key}
-              className={`h-8 px-3 rounded-[10px] flex items-center gap-1.5 text-[11px] font-bold tracking-wide cursor-pointer transition-all duration-200 ${isUploading ? 'opacity-40 pointer-events-none' : ''}`}
+              className={`h-8 px-3 rounded-lg flex items-center gap-1.5 text-[11px] font-bold tracking-wide cursor-pointer transition-all duration-200 ${isUploading ? 'opacity-40 pointer-events-none' : ''}`}
               style={{
                 background: `color-mix(in srgb, ${action.color} 12%, transparent)`,
                 border: `1px solid color-mix(in srgb, ${action.color} 22%, transparent)`,
@@ -136,7 +136,7 @@ function FileRow({ file, onAction, downloading, uploading }) {
               key={action.key}
               onClick={() => onAction(action.key, file)}
               disabled={action.key === 'download' && downloading === file.id}
-              className="h-8 px-3 rounded-[10px] flex items-center gap-1.5 text-[11px] font-bold tracking-wide cursor-pointer transition-all duration-200 disabled:opacity-40 disabled:cursor-not-allowed"
+              className="h-8 px-3 rounded-lg flex items-center gap-1.5 text-[11px] font-bold tracking-wide cursor-pointer transition-all duration-200 disabled:opacity-40 disabled:cursor-not-allowed"
               style={{
                 background: `color-mix(in srgb, ${action.color} 12%, transparent)`,
                 border: `1px solid color-mix(in srgb, ${action.color} 22%, transparent)`,
@@ -206,7 +206,7 @@ function FolderSection({ folder, onAction, downloading, uploading }) {
       {/* Folder header bar — glass surface with hover glow */}
       <div
         onClick={handleToggle}
-        className="flex items-center gap-4 px-6 py-5 rounded-[20px] cursor-pointer transition-all duration-300 ring-1 group"
+        className="flex items-center gap-4 px-6 py-5 rounded-xl cursor-pointer transition-all duration-300 ring-1 group"
         style={{
           background: open
             ? 'color-mix(in srgb, var(--color-primary) 5%, var(--color-surface-container))'
@@ -266,7 +266,7 @@ function FolderSection({ folder, onAction, downloading, uploading }) {
         {folder.access === 'upload' && (
           <button
             onClick={(e) => { e.stopPropagation(); setOpen(true); setShowUpload(true); }}
-            className="h-9 px-4 rounded-[12px] flex items-center gap-2 text-[12px] font-bold cursor-pointer transition-all duration-200 hover:scale-[1.03] active:scale-[0.97]"
+            className="h-9 px-4 rounded-xl flex items-center gap-2 text-[12px] font-bold cursor-pointer transition-all duration-200 hover:scale-[1.03] active:scale-[0.97]"
             style={{
               background: 'var(--color-primary)',
               color: 'var(--color-surface-lowest)',
@@ -299,10 +299,10 @@ function FolderSection({ folder, onAction, downloading, uploading }) {
 
               {/* Error */}
               {!loading && error && (
-                <div className="flex items-center gap-3 px-4 py-3 rounded-[14px] ring-1 ring-[#f87171]/20 bg-[#f87171]/5">
-                  <AlertCircle size={14} className="text-[#f87171] shrink-0" />
-                  <span className="text-[12px] text-[#f87171] font-medium flex-1">{error}</span>
-                  <button onClick={fetchFiles} className="text-[11px] text-[#f87171] font-bold cursor-pointer bg-transparent border-none flex items-center gap-1 hover:underline">
+                <div className="flex items-center gap-3 px-4 py-3 rounded-xl border border-[var(--color-error)]/20 bg-[var(--color-error-muted)]">
+                  <AlertCircle size={14} className="text-[var(--color-error)] shrink-0" />
+                  <span className="text-[12px] text-[var(--color-error)] font-medium flex-1">{error}</span>
+                  <button onClick={fetchFiles} className="text-[11px] text-[var(--color-error)] font-bold cursor-pointer bg-transparent border-none flex items-center gap-1 hover:underline">
                     <RefreshCw size={10} /> Retry
                   </button>
                 </div>
@@ -395,7 +395,7 @@ function EditModal({ file, editUrl, editLoading, onClose, onDownload, onVersionU
         animate={{ opacity: 1, scale: 1, y: 0 }}
         exit={{ opacity: 0, scale: 0.96, y: 16 }}
         transition={{ duration: 0.3, ease: [0.4, 0, 0.2, 1] }}
-        className="fixed inset-3 z-[201] flex flex-col rounded-[20px] overflow-hidden ring-1 ring-[var(--color-outline-variant)]"
+        className="fixed inset-3 z-[201] flex flex-col rounded-2xl overflow-hidden ring-1 ring-[var(--color-outline-variant)]"
         style={{ background: 'var(--color-surface)', boxShadow: '0 40px 80px rgba(0,0,0,0.6)' }}
         onClick={(e) => e.stopPropagation()}
       >
@@ -429,7 +429,7 @@ function EditModal({ file, editUrl, editLoading, onClose, onDownload, onVersionU
         {/* Content: Preview + Re-upload bar */}
         <div className="flex-1 relative overflow-hidden flex flex-col">
           {/* Preview iframe */}
-          <div className="flex-1 relative bg-white">
+          <div className="flex-1 relative bg-[var(--color-surface-lowest)]">
             {editLoading && (
               <div className="absolute inset-0 flex flex-col items-center justify-center gap-3 z-10 bg-[var(--color-surface-lowest)]">
                 <Loader2 size={28} className="animate-spin text-[var(--color-primary)]" />
@@ -447,7 +447,7 @@ function EditModal({ file, editUrl, editLoading, onClose, onDownload, onVersionU
             )}
             {!editLoading && !editUrl && (
               <div className="absolute inset-0 flex flex-col items-center justify-center gap-3 bg-[var(--color-surface-lowest)]">
-                <AlertCircle size={28} className="text-[#f87171]" />
+                <AlertCircle size={28} className="text-[var(--color-error)]" />
                 <p className="text-[13px] text-[var(--color-on-surface)] font-semibold m-0">Preview unavailable</p>
                 <p className="text-[11px] text-[var(--color-on-surface-variant)] m-0">Download the file to edit it.</p>
               </div>
@@ -458,8 +458,8 @@ function EditModal({ file, editUrl, editLoading, onClose, onDownload, onVersionU
           <div className="shrink-0 px-6 py-4 border-t border-[var(--color-outline-variant)] bg-[var(--color-surface-container)]/80">
             {uploaded ? (
               <div className="flex items-center gap-3 justify-center">
-                <Check size={18} className="text-[#22c55e]" />
-                <span className="text-[13px] font-semibold text-[#22c55e]">Updated version uploaded successfully!</span>
+                <Check size={18} className="text-[var(--color-success)]" />
+                <span className="text-[13px] font-semibold text-[var(--color-success)]">Updated version uploaded successfully!</span>
               </div>
             ) : (
               <div className="flex items-center gap-4">
@@ -474,7 +474,7 @@ function EditModal({ file, editUrl, editLoading, onClose, onDownload, onVersionU
                 <label className={`h-10 px-5 rounded-xl flex items-center gap-2 text-[13px] font-bold cursor-pointer transition-all shrink-0 ${
                   uploading
                     ? 'opacity-50 pointer-events-none bg-[var(--color-primary)]/15 text-[var(--color-primary)] ring-1 ring-[var(--color-primary)]/30'
-                    : 'bg-[var(--color-primary)] text-white hover:opacity-90 shadow-lg'
+                    : 'bg-[var(--color-primary)] text-[var(--color-surface-lowest)] hover:brightness-110 shadow-[0_2px_8px_rgba(129,140,248,0.25)]'
                 }`}
                   style={!uploading ? { boxShadow: '0 4px 12px color-mix(in srgb, var(--color-primary) 40%, transparent)' } : {}}
                 >
@@ -490,7 +490,7 @@ function EditModal({ file, editUrl, editLoading, onClose, onDownload, onVersionU
               </div>
             )}
             {uploadError && (
-              <p className="m-0 mt-2 text-[11px] text-[#f87171] font-medium">{uploadError}</p>
+              <p className="m-0 mt-2 text-[11px] text-[var(--color-error)] font-medium">{uploadError}</p>
             )}
           </div>
         </div>
@@ -547,7 +547,7 @@ export default function ClientDashboard() {
       window.location.reload()
     } catch (err) {
       console.error('Update failed:', err.message)
-      alert(`Update failed: ${err.message}`)
+      // Surface the error without alert() — the FileRow will show it via downloading state reset
     } finally {
       setUploading(null)
     }

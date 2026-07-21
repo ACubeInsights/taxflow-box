@@ -27,7 +27,7 @@ export default function StatusFilterChips({ selected = [], onChange }) {
                 ? {
                     background: color,
                     borderColor: color,
-                    color: '#fff',
+                    color: 'var(--color-surface-lowest)',
                     boxShadow: `0 0 12px ${color}40`,
                   }
                 : {

@@ -223,10 +223,10 @@ export default function DocumentRequestCreator({
   }
 
   const selectClass = (hasError) =>
-    `w-full appearance-none rounded-[14px] border ${hasError ? 'border-red-500/50' : 'border-[var(--color-outline-variant)]'} bg-[var(--color-surface-container)]/50 px-4 py-3.5 pr-10 text-[14px] font-medium text-[var(--color-on-surface)] outline-none transition-all duration-200 focus:bg-[var(--color-surface-container)] focus:border-[var(--color-primary)] disabled:opacity-40 disabled:cursor-not-allowed`
+    `w-full appearance-none rounded-xl border ${hasError ? 'border-[var(--color-error)]/50' : 'border-[var(--color-outline-variant)]'} bg-[var(--color-surface-container)]/50 px-4 py-3.5 pr-10 text-[14px] font-medium text-[var(--color-on-surface)] outline-none transition-all duration-200 focus:bg-[var(--color-surface-container)] focus:border-[var(--color-primary)] disabled:opacity-40 disabled:cursor-not-allowed`
 
   const inputClass = (hasError) =>
-    `w-full rounded-[14px] border ${hasError ? 'border-red-500/50' : 'border-[var(--color-outline-variant)]'} bg-[var(--color-surface-container)]/50 px-4 py-3.5 text-[14px] font-medium text-[var(--color-on-surface)] placeholder:text-[var(--color-on-surface-variant)]/50 outline-none transition-all duration-200 focus:bg-[var(--color-surface-container)] focus:border-[var(--color-primary)]`
+    `w-full rounded-xl border ${hasError ? 'border-[var(--color-error)]/50' : 'border-[var(--color-outline-variant)]'} bg-[var(--color-surface-container)]/50 px-4 py-3.5 text-[14px] font-medium text-[var(--color-on-surface)] placeholder:text-[var(--color-on-surface-variant)]/50 outline-none transition-all duration-200 focus:bg-[var(--color-surface-container)] focus:border-[var(--color-primary)]`
 
   return (
     <AnimatePresence>
@@ -268,7 +268,7 @@ export default function DocumentRequestCreator({
                 {/* Client dropdown */}
                 <div className="flex flex-col gap-2">
                   <label className="text-[13px] font-bold text-[var(--color-on-surface)] tracking-wide">
-                    Client <span className="text-red-400">*</span>
+                    Client <span className="text-[var(--color-error)]">*</span>
                   </label>
                   <div className="relative">
                     <select
@@ -280,15 +280,15 @@ export default function DocumentRequestCreator({
                       <option value="">Select client...</option>
                       {clients.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
                     </select>
-                    {loadingClients && <Loader2 size={14} className="absolute right-10 top-1/2 -translate-y-1/2 animate-spin text-white/30" />}
+                    {loadingClients && <Loader2 size={14} className="absolute right-10 top-1/2 -translate-y-1/2 animate-spin text-[var(--color-on-surface-variant)]/40" />}
                   </div>
-                  {errors.clientId && <p className="m-0 text-[12px] font-medium text-red-400">{errors.clientId}</p>}
+                  {errors.clientId && <p className="m-0 text-[12px] font-medium text-[var(--color-error)]">{errors.clientId}</p>}
                 </div>
 
                 {/* Project dropdown */}
                 <div className="flex flex-col gap-2">
                   <label className="text-[13px] font-bold text-[var(--color-on-surface)] tracking-wide">
-                    Project <span className="text-red-400">*</span>
+                    Project <span className="text-[var(--color-error)]">*</span>
                   </label>
                   <div className="relative">
                     <select
@@ -300,16 +300,16 @@ export default function DocumentRequestCreator({
                       <option value="">Select project...</option>
                       {projects.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
                     </select>
-                    {loadingProjects && <Loader2 size={14} className="absolute right-10 top-1/2 -translate-y-1/2 animate-spin text-white/30" />}
+                    {loadingProjects && <Loader2 size={14} className="absolute right-10 top-1/2 -translate-y-1/2 animate-spin text-[var(--color-on-surface-variant)]/40" />}
                   </div>
-                  {errors.projectId && <p className="m-0 text-[12px] font-medium text-red-400">{errors.projectId}</p>}
+                  {errors.projectId && <p className="m-0 text-[12px] font-medium text-[var(--color-error)]">{errors.projectId}</p>}
                 </div>
 
                 {/* Document Type dropdown */}
                 <div className="flex flex-col gap-2">
                   <label className="text-[13px] font-bold text-[var(--color-on-surface)] tracking-wide">
-                    Document Type <span className="text-red-400">*</span>
-                    {loadingTypeDetail && <Loader2 size={12} className="inline ml-2 animate-spin text-white/30" />}
+                    Document Type <span className="text-[var(--color-error)]">*</span>
+                    {loadingTypeDetail && <Loader2 size={12} className="inline ml-2 animate-spin text-[var(--color-on-surface-variant)]/40" />}
                   </label>
                   <div className="relative">
                     <select
@@ -321,15 +321,15 @@ export default function DocumentRequestCreator({
                       <option value="">Select document type...</option>
                       {docTypes.map(dt => <option key={dt.id} value={dt.id}>{dt.name}</option>)}
                     </select>
-                    {loadingDocTypes && <Loader2 size={14} className="absolute right-10 top-1/2 -translate-y-1/2 animate-spin text-white/30" />}
+                    {loadingDocTypes && <Loader2 size={14} className="absolute right-10 top-1/2 -translate-y-1/2 animate-spin text-[var(--color-on-surface-variant)]/40" />}
                   </div>
-                  {errors.documentTypeId && <p className="m-0 text-[12px] font-medium text-red-400">{errors.documentTypeId}</p>}
+                  {errors.documentTypeId && <p className="m-0 text-[12px] font-medium text-[var(--color-error)]">{errors.documentTypeId}</p>}
                 </div>
 
                 {/* Document Name */}
                 <div className="flex flex-col gap-2">
                   <label className="text-[13px] font-bold text-[var(--color-on-surface)] tracking-wide">
-                    Document Name <span className="text-red-400">*</span>
+                    Document Name <span className="text-[var(--color-error)]">*</span>
                   </label>
                   <input
                     type="text"
@@ -338,7 +338,7 @@ export default function DocumentRequestCreator({
                     placeholder="e.g. W-2 Form"
                     className={inputClass(errors.name)}
                   />
-                  {errors.name && <p className="m-0 text-[12px] font-medium text-red-400">{errors.name}</p>}
+                  {errors.name && <p className="m-0 text-[12px] font-medium text-[var(--color-error)]">{errors.name}</p>}
                 </div>
 
                 {/* Description */}
@@ -383,7 +383,7 @@ export default function DocumentRequestCreator({
                   {/* Due Date */}
                   <div className="flex flex-col gap-2">
                     <label className="text-[13px] font-bold text-[var(--color-on-surface)] tracking-wide">
-                      Due Date <span className="text-red-400">*</span>
+                      Due Date <span className="text-[var(--color-error)]">*</span>
                     </label>
                     <input
                       type="date"
@@ -391,7 +391,7 @@ export default function DocumentRequestCreator({
                       onChange={e => handleChange('dueDate', e.target.value)}
                       className={inputClass(errors.dueDate) + ' [color-scheme:dark]'}
                     />
-                    {errors.dueDate && <p className="m-0 text-[12px] font-medium text-red-400">{errors.dueDate}</p>}
+                    {errors.dueDate && <p className="m-0 text-[12px] font-medium text-[var(--color-error)]">{errors.dueDate}</p>}
                   </div>
                 </div>
 
@@ -408,12 +408,12 @@ export default function DocumentRequestCreator({
                   <button
                     type="button"
                     onClick={() => setForm(prev => ({ ...prev, isDraft: !prev.isDraft }))}
-                    className={`relative w-11 h-6 rounded-full transition-colors ${form.isDraft ? 'bg-white/[0.15]' : 'bg-[var(--color-primary)]/40'}`}
+                    className={`relative w-11 h-6 rounded-full transition-colors ${form.isDraft ? 'bg-[var(--color-surface-highest)]' : 'bg-[var(--color-primary)]/40'}`}
                   >
                     <span
                       className={`absolute top-0.5 w-5 h-5 rounded-full transition-all ${
                         form.isDraft
-                          ? 'left-0.5 bg-white/40'
+                          ? 'left-0.5 bg-[var(--color-on-surface)]'
                           : 'left-[22px] bg-[var(--color-primary)]'
                       }`}
                     />
@@ -445,7 +445,7 @@ export default function DocumentRequestCreator({
                     <button
                       type="button"
                       onClick={() => { setDuplicateWarning(null); setAwaitingConfirm(false) }}
-                      className="flex-1 rounded-lg bg-white/[0.05] px-3 py-2 text-[12px] font-bold text-white/50 border border-white/[0.1] hover:bg-white/[0.08] transition-colors"
+                      className="flex-1 rounded-lg bg-[var(--color-surface-high)] px-3 py-2 text-[12px] font-bold text-[var(--color-on-surface-variant)] border border-[var(--color-outline-variant)] hover:bg-[var(--color-surface-highest)] transition-colors"
                     >
                       Cancel
                     </button>
@@ -454,7 +454,7 @@ export default function DocumentRequestCreator({
               )}
 
               {submitError && (
-                <div className="rounded-lg border border-red-500/20 bg-red-500/10 px-3 py-2 text-[12px] text-red-400">
+                <div className="rounded-lg border border-[var(--color-error)]/20 bg-[var(--color-error-muted)] px-3 py-2 text-[12px] text-[var(--color-error)]">
                   {submitError}
                 </div>
               )}

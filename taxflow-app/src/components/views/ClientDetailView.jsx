@@ -11,23 +11,23 @@ import { projectApi, portalApi, reviewApi, vaultApi, documentApi, clientApi, col
 import DocumentEditor from '../DocumentEditor'
 import { useAuth } from '../../context/AuthContext'
 
+import { ENGAGEMENT_STATUS_COLORS } from '../../constants/roles'
+import { useToast } from '../../context/ToastContext'
+import EmptyState from '../EmptyState'
+import { SkeletonRow } from '../Skeleton'
+
 const TABS = [
   { key: 'projects', label: 'Projects', icon: FolderOpen },
   { key: 'vault', label: 'Vault', icon: FolderOpen },
   { key: 'team', label: 'Team', icon: Users },
 ]
 
-const STATUS_COLORS = {
-  Active: '#22c55e',
-  On_Hold: '#fbbf24',
-  Complete: '#64748b',
-}
-
 export default function ClientDetailView() {
   const { clientId } = useParams()
   const navigate = useNavigate()
   const { user } = useAuth()
   const employeeId = user?.id || 'employee-1'
+  const { error: toastError } = useToast()
   const [client, setClient] = useState(null)
   const [clientLoading, setClientLoading] = useState(true)
   const [clientError, setClientError] = useState(null)
@@ -52,6 +52,7 @@ export default function ClientDetailView() {
         setClient(found)
       }
     } catch (err) {
+      toastError(err.message || 'Failed to load client')
       setClientError(err.message || 'Failed to load client')
     } finally {
       setClientLoading(false)
@@ -63,10 +64,10 @@ export default function ClientDetailView() {
   if (clientLoading) {
     return (
       <div className="max-w-[1200px] mx-auto">
-        <div className="h-4 w-48 rounded mb-6" style={{ background: 'rgba(255,255,255,0.04)', animation: 'pulse 1.5s ease-in-out infinite' }} />
-        <div className="h-8 w-64 rounded mb-4" style={{ background: 'rgba(255,255,255,0.04)', animation: 'pulse 1.5s ease-in-out infinite' }} />
+        <div className="h-4 w-48 rounded mb-6 animate-pulse bg-[var(--color-surface-high)]" />
+        <div className="h-8 w-64 rounded mb-4 animate-pulse bg-[var(--color-surface-highest)]" />
         <GlassPanel>
-          <div className="h-[300px] rounded-xl" style={{ background: 'rgba(255,255,255,0.04)', animation: 'pulse 1.5s ease-in-out infinite' }} />
+          <div className="h-[300px] rounded-xl animate-pulse bg-[var(--color-surface-high)]" />
         </GlassPanel>
       </div>
     )
@@ -77,15 +78,14 @@ export default function ClientDetailView() {
       <div className="max-w-[1200px] mx-auto">
         <GlassPanel>
           <div className="py-12 text-center">
-            <AlertTriangle size={40} color="#f87171" style={{ margin: '0 auto 16px' }} />
-            <p className="text-[#f87171] text-lg font-bold m-0 mb-2">Client not found</p>
+            <AlertTriangle size={40} className="text-[var(--color-error)] mx-auto mb-4" />
+            <p className="text-[var(--color-error)] text-lg font-bold m-0 mb-2">Client not found</p>
             <p className="text-[var(--color-on-surface-variant)] text-sm m-0 mb-6">
               The client you are looking for does not exist or is not assigned to you.
             </p>
             <Link
               to="/dashboard"
-              className="inline-flex items-center gap-2 px-6 py-2.5 rounded-xl text-[13px] font-semibold no-underline"
-              style={{ background: 'rgba(173,198,255,0.15)', border: '1px solid rgba(173,198,255,0.25)', color: 'var(--color-primary)' }}
+              className="inline-flex items-center gap-2 px-6 py-2.5 rounded-xl text-[13px] font-semibold no-underline bg-[var(--color-primary-muted)] border border-[var(--color-primary)]/25 text-[var(--color-primary)]"
             >
               Back to Dashboard
             </Link>
@@ -99,14 +99,13 @@ export default function ClientDetailView() {
     return (
       <div className="max-w-[1200px] mx-auto">
         <GlassPanel>
-          <div className="py-8 text-center" style={{ background: 'rgba(248,113,113,0.05)', borderRadius: 16, border: '1px solid rgba(248,113,113,0.15)' }}>
-            <AlertTriangle size={32} color="#f87171" style={{ margin: '0 auto 12px' }} />
-            <p className="text-[#f87171] text-sm font-semibold m-0 mb-2">Failed to load client</p>
+          <div className="py-8 text-center rounded-xl bg-[var(--color-error-muted)] border border-[var(--color-error)]/15">
+            <AlertTriangle size={32} className="text-[var(--color-error)] mx-auto mb-3" />
+            <p className="text-[var(--color-error)] text-sm font-semibold m-0 mb-2">Failed to load client</p>
             <p className="text-[var(--color-on-surface-variant)] text-xs m-0 mb-4">{clientError}</p>
             <button
               onClick={fetchClient}
-              className="inline-flex items-center gap-1.5 px-5 py-2 rounded-xl text-[13px] font-semibold cursor-pointer"
-              style={{ background: 'rgba(248,113,113,0.15)', border: '1px solid rgba(248,113,113,0.25)', color: '#f87171' }}
+              className="inline-flex items-center gap-1.5 px-5 py-2 rounded-xl text-[13px] font-semibold cursor-pointer bg-[var(--color-error-muted)] border border-[var(--color-error)]/20 text-[var(--color-error)] hover:bg-[var(--color-error)]/20 transition-colors"
             >
               <RefreshCw size={14} /> Retry
             </button>
@@ -120,7 +119,7 @@ export default function ClientDetailView() {
     { label: 'Dashboard', path: '/dashboard' },
     { label: client.name, path: `/clients/${clientId}` },
   ]
-  const statusColor = STATUS_COLORS[client.engagementStatus] || '#6b7280'
+  const statusColor = ENGAGEMENT_STATUS_COLORS[client.engagementStatus] || 'var(--color-on-surface-variant)'
 
   return (
     <div className="max-w-[1200px] mx-auto">
@@ -169,8 +168,6 @@ export default function ClientDetailView() {
       {activeTab === 'projects' && <ProjectsTab clientId={clientId} navigate={navigate} />}
       {activeTab === 'vault' && <VaultTab client={client} />}
       {activeTab === 'team' && <TeamTab clientId={clientId} />}
-      {activeTab === 'activity' && <ActivityTab clientId={clientId} />}
-      {activeTab === 'notes' && <NotesTab client={client} />}
     </div>
   )
 }
@@ -189,6 +186,7 @@ function VaultTab({ client }) {
   const [renaming, setRenaming] = useState(null) // folder id being renamed
   const [renameValue, setRenameValue] = useState('')
   const [deleting, setDeleting] = useState(null)
+  const [pendingDelete, setPendingDelete] = useState(null) // { id, name }
   const [actionError, setActionError] = useState(null)
   const [uploading, setUploading] = useState(false)
   const [uploadProgress, setUploadProgress] = useState(0)
@@ -271,9 +269,9 @@ function VaultTab({ client }) {
     }
   }
 
-  const handleDelete = async (folderId, folderName) => {
-    if (!confirm(`Delete folder "${folderName}" and all its contents? This cannot be undone.`)) return
+  const handleDelete = async (folderId) => {
     setDeleting(folderId)
+    setPendingDelete(null)
     setActionError(null)
     try {
       await vaultApi.deleteFolder(folderId)
@@ -393,7 +391,7 @@ function VaultTab({ client }) {
         <button
           onClick={() => fileInputRef.current?.click()}
           disabled={uploading}
-          className="flex items-center gap-1.5 px-3 py-2 rounded-xl text-[12px] font-bold cursor-pointer transition-all border border-[var(--color-secondary,#22c55e)]/30 bg-[var(--color-secondary,#22c55e)]/10 text-[var(--color-secondary,#22c55e)] hover:bg-[var(--color-secondary,#22c55e)]/20 disabled:opacity-50 disabled:cursor-not-allowed"
+          className="flex items-center gap-1.5 px-3 py-2 rounded-xl text-[12px] font-bold cursor-pointer transition-all border border-[var(--color-secondary)]/30 bg-[var(--color-secondary)]/10 text-[var(--color-secondary)] hover:bg-[var(--color-secondary)]/20 disabled:opacity-50 disabled:cursor-not-allowed"
         >
           {uploading ? <Loader2 size={14} className="animate-spin" /> : <Upload size={14} />}
           {uploading ? `Uploading ${uploadProgress}%` : 'Upload File'}
@@ -445,10 +443,10 @@ function VaultTab({ client }) {
 
       {/* Action error */}
       {actionError && (
-        <div className="flex items-center gap-2 mb-3 px-3 py-2 rounded-xl bg-[#f87171]/10 border border-[#f87171]/20">
-          <AlertTriangle size={14} className="text-[#f87171] shrink-0" />
-          <span className="text-[12px] text-[#f87171] font-medium flex-1">{actionError}</span>
-          <button onClick={() => setActionError(null)} className="text-[11px] text-[#f87171] font-bold cursor-pointer bg-transparent border-none">Dismiss</button>
+        <div className="flex items-center gap-2 mb-3 px-3 py-2 rounded-xl bg-[var(--color-error-muted)] border border-[var(--color-error)]/20">
+          <AlertTriangle size={14} className="text-[var(--color-error)] shrink-0" />
+          <span className="text-[12px] text-[var(--color-error)] font-medium flex-1">{actionError}</span>
+          <button onClick={() => setActionError(null)} className="text-[11px] text-[var(--color-error)] font-bold cursor-pointer bg-transparent border-none">Dismiss</button>
         </div>
       )}
 
@@ -463,9 +461,12 @@ function VaultTab({ client }) {
       {/* Error */}
       {!loading && error && (
         <div className="py-8 text-center">
-          <AlertTriangle size={24} className="text-[#f87171] mx-auto mb-2" />
-          <p className="text-[#f87171] text-xs font-semibold m-0 mb-2">{error}</p>
-          <button onClick={() => fetchContents(currentFolderId)} className="inline-flex items-center gap-1.5 px-4 py-1.5 rounded-lg text-[12px] font-semibold cursor-pointer" style={{ background: 'rgba(248,113,113,0.15)', border: '1px solid rgba(248,113,113,0.25)', color: '#f87171' }}>
+          <AlertTriangle size={24} className="text-[var(--color-error)] mx-auto mb-2" />
+          <p className="text-[var(--color-error)] text-xs font-semibold m-0 mb-2">{error}</p>
+          <button
+            onClick={() => fetchContents(currentFolderId)}
+            className="inline-flex items-center gap-1.5 px-4 py-1.5 rounded-lg text-[12px] font-semibold cursor-pointer bg-[var(--color-error-muted)] border border-[var(--color-error)]/20 text-[var(--color-error)] hover:bg-[var(--color-error)]/20 transition-colors"
+          >
             <RefreshCw size={12} /> Retry
           </button>
         </div>
@@ -485,7 +486,7 @@ function VaultTab({ client }) {
           {folders.map(folder => (
             <div
               key={folder.id}
-              className="flex items-center gap-3 p-3 rounded-[14px] bg-[var(--color-surface-high)] ring-1 ring-[var(--color-outline-variant)] transition-all duration-200 hover:bg-[var(--color-surface-highest)] hover:ring-[var(--color-outline)] group"
+              className="flex items-center gap-3 p-3 rounded-xl bg-[var(--color-surface-high)] border border-[var(--color-outline-variant)] transition-all duration-200 hover:bg-[var(--color-surface-highest)] hover:border-[var(--color-outline)] group"
             >
               {renaming === folder.id ? (
                 <div className="flex items-center gap-2 flex-1">
@@ -509,7 +510,7 @@ function VaultTab({ client }) {
                     className="flex items-center gap-3 flex-1 min-w-0 cursor-pointer"
                     onClick={() => { if (!loading) navigateInto(folder) }}
                   >
-                    <div className="w-9 h-9 rounded-[10px] bg-[var(--color-primary)]/10 flex items-center justify-center shrink-0">
+                    <div className="w-9 h-9 rounded-lg bg-[var(--color-primary)]/10 flex items-center justify-center shrink-0">
                       <FolderOpen size={18} className="text-[var(--color-primary)]" />
                     </div>
                     <p className="m-0 text-[13px] font-semibold text-[var(--color-on-surface)] truncate">{folder.name}</p>
@@ -522,14 +523,32 @@ function VaultTab({ client }) {
                     >
                       <Pencil size={12} />
                     </button>
-                    <button
-                      onClick={() => handleDelete(folder.id, folder.name)}
-                      disabled={deleting === folder.id}
-                      className="w-7 h-7 rounded-md flex items-center justify-center bg-transparent border border-[var(--color-outline-variant)] text-[var(--color-on-surface-variant)] cursor-pointer transition-all hover:bg-[#f87171]/10 hover:border-[#f87171]/30 hover:text-[#f87171] disabled:opacity-40"
-                      title="Delete"
-                    >
-                      {deleting === folder.id ? <Loader2 size={12} className="animate-spin" /> : <Trash2 size={12} />}
-                    </button>
+                    {pendingDelete?.id === folder.id ? (
+                      <div className="flex items-center gap-1">
+                        <button
+                          onClick={() => handleDelete(folder.id)}
+                          disabled={deleting === folder.id}
+                          className="h-7 px-2 rounded-md text-[10px] font-bold bg-[var(--color-error-muted)] border border-[var(--color-error)]/30 text-[var(--color-error)] cursor-pointer transition-all hover:bg-[var(--color-error)]/20 disabled:opacity-40"
+                        >
+                          {deleting === folder.id ? <Loader2 size={10} className="animate-spin" /> : 'Delete'}
+                        </button>
+                        <button
+                          onClick={() => setPendingDelete(null)}
+                          className="h-7 px-2 rounded-md text-[10px] font-bold bg-transparent border border-[var(--color-outline-variant)] text-[var(--color-on-surface-variant)] cursor-pointer hover:bg-[var(--color-surface-highest)]"
+                        >
+                          Cancel
+                        </button>
+                      </div>
+                    ) : (
+                      <button
+                        onClick={() => setPendingDelete({ id: folder.id, name: folder.name })}
+                        disabled={deleting === folder.id}
+                        className="w-7 h-7 rounded-md flex items-center justify-center bg-transparent border border-[var(--color-outline-variant)] text-[var(--color-on-surface-variant)] cursor-pointer transition-all hover:bg-[var(--color-error-muted)] hover:border-[var(--color-error)]/30 hover:text-[var(--color-error)] disabled:opacity-40"
+                        title="Delete"
+                      >
+                        {deleting === folder.id ? <Loader2 size={12} className="animate-spin" /> : <Trash2 size={12} />}
+                      </button>
+                    )}
                   </div>
                 </>
               )}
@@ -540,7 +559,7 @@ function VaultTab({ client }) {
           {files.map(file => (
             <div
               key={file.id}
-              className="flex items-center gap-3 p-3 rounded-[14px] bg-[var(--color-surface-high)] ring-1 ring-[var(--color-outline-variant)] transition-all duration-200 hover:bg-[var(--color-surface-highest)] hover:ring-[var(--color-outline)] group"
+              className="flex items-center gap-3 p-3 rounded-xl bg-[var(--color-surface-high)] border border-[var(--color-outline-variant)] transition-all duration-200 hover:bg-[var(--color-surface-highest)] hover:border-[var(--color-outline)] group"
             >
               <div className="w-9 h-9 rounded-[10px] bg-[var(--color-surface-container)] flex items-center justify-center border border-[var(--color-outline-variant)] shrink-0">
                 <FileText size={18} className="text-[var(--color-on-surface-variant)]" />
@@ -601,6 +620,8 @@ function TeamTab({ clientId }) {
   const [addLoading, setAddLoading] = useState(false)
   const [addError, setAddError] = useState(null)
   const [employees, setEmployees] = useState([])
+  const [pendingRemove, setPendingRemove] = useState(null) // employeeId
+  const [removeError, setRemoveError] = useState(null)
 
   const fetchCollabs = useCallback(async () => {
     setLoading(true)
@@ -644,12 +665,14 @@ function TeamTab({ clientId }) {
   }
 
   const handleRemove = async (employeeId) => {
-    if (!confirm('Remove this employee\'s access to this client\'s vault?')) return
+    setRemoveError(null)
     try {
       await collaborationApi.removeCollaborator(clientId, employeeId)
+      setPendingRemove(null)
       fetchCollabs()
     } catch (err) {
-      alert('Failed to remove: ' + err.message)
+      setRemoveError(err.message || 'Failed to remove collaborator')
+      setPendingRemove(null)
     }
   }
 
@@ -702,7 +725,7 @@ function TeamTab({ clientId }) {
                 </button>
               ))}
           </div>
-          {addError && <p className="m-0 mt-2 text-[11px] text-red-400">{addError}</p>}
+          {addError && <p className="m-0 mt-2 text-[11px] text-[var(--color-error)]">{addError}</p>}
           <button
             onClick={() => { setAdding(false); setAddError(null) }}
             className="mt-3 text-[11px] font-semibold text-[var(--color-on-surface-variant)] cursor-pointer bg-transparent border-none hover:text-[var(--color-on-surface)]"
@@ -713,36 +736,59 @@ function TeamTab({ clientId }) {
       )}
 
       {error && (
-        <div className="mb-4 p-3 rounded-xl border border-red-500/20 bg-red-500/10">
-          <p className="m-0 text-[12px] text-red-400">{error}</p>
+        <div className="mb-4 p-3 rounded-xl border border-[var(--color-error)]/20 bg-[var(--color-error-muted)]">
+          <p className="m-0 text-[12px] text-[var(--color-error)]">{error}</p>
+        </div>
+      )}
+
+      {removeError && (
+        <div className="mb-4 p-3 rounded-xl border border-[var(--color-error)]/20 bg-[var(--color-error-muted)]">
+          <p className="m-0 text-[12px] text-[var(--color-error)]">{removeError}</p>
         </div>
       )}
 
       {/* Collaborator list */}
       {collabs.length === 0 && !adding ? (
-        <div className="flex flex-col items-center py-10 text-center">
-          <Users size={28} className="text-[var(--color-on-surface-variant)] opacity-40 mb-3" />
-          <p className="m-0 text-[13px] text-[var(--color-on-surface-variant)]">No team members assigned yet</p>
-          <p className="m-0 text-[11px] text-[var(--color-on-surface-variant)] mt-1">Add employees to give them editing access to this client's documents.</p>
-        </div>
+        <EmptyState
+          icon={Users}
+          title="No team members assigned"
+          subtitle="Add employees to give them editing access to this client's documents."
+        />
       ) : (
         <div className="flex flex-col gap-2">
           {collabs.map(collab => (
-            <div key={collab.collaborationId} className="flex items-center gap-3 p-3 rounded-[14px] bg-[var(--color-surface-high)] ring-1 ring-[var(--color-outline-variant)] group">
-              <div className="w-9 h-9 rounded-full bg-[var(--color-primary)]/15 flex items-center justify-center text-[11px] font-bold text-[var(--color-primary)]">
+            <div key={collab.collaborationId} className="flex items-center gap-3 p-3 rounded-xl bg-[var(--color-surface-high)] border border-[var(--color-outline-variant)] group">
+              <div className="w-9 h-9 rounded-full bg-[var(--color-primary)]/15 flex items-center justify-center text-[11px] font-bold text-[var(--color-primary)] shrink-0">
                 {(collab.employeeName || '').split(' ').map(w => w[0]).slice(0, 2).join('').toUpperCase()}
               </div>
               <div className="flex-1 min-w-0">
                 <p className="m-0 text-[13px] font-semibold text-[var(--color-on-surface)] truncate">{collab.employeeName}</p>
                 <p className="m-0 text-[10px] text-[var(--color-on-surface-variant)]">{collab.boxEmail} · {collab.role}</p>
               </div>
-              <button
-                onClick={() => handleRemove(collab.employeeId)}
-                className="w-7 h-7 rounded-md flex items-center justify-center bg-transparent border border-[var(--color-outline-variant)] text-[var(--color-on-surface-variant)] cursor-pointer opacity-0 group-hover:opacity-100 transition-all hover:bg-red-500/10 hover:border-red-500/30 hover:text-red-400"
-                title="Remove access"
-              >
-                <Trash2 size={12} />
-              </button>
+              {pendingRemove === collab.employeeId ? (
+                <div className="flex items-center gap-1 shrink-0">
+                  <button
+                    onClick={() => handleRemove(collab.employeeId)}
+                    className="h-7 px-2 rounded-md text-[10px] font-bold bg-[var(--color-error-muted)] border border-[var(--color-error)]/30 text-[var(--color-error)] cursor-pointer hover:bg-[var(--color-error)]/20 transition-colors"
+                  >
+                    Remove
+                  </button>
+                  <button
+                    onClick={() => setPendingRemove(null)}
+                    className="h-7 px-2 rounded-md text-[10px] font-bold bg-transparent border border-[var(--color-outline-variant)] text-[var(--color-on-surface-variant)] cursor-pointer hover:bg-[var(--color-surface-highest)] transition-colors"
+                  >
+                    Cancel
+                  </button>
+                </div>
+              ) : (
+                <button
+                  onClick={() => setPendingRemove(collab.employeeId)}
+                  className="w-7 h-7 rounded-md flex items-center justify-center bg-transparent border border-[var(--color-outline-variant)] text-[var(--color-on-surface-variant)] cursor-pointer opacity-0 group-hover:opacity-100 transition-all hover:bg-[var(--color-error-muted)] hover:border-[var(--color-error)]/30 hover:text-[var(--color-error)]"
+                  title="Remove access"
+                >
+                  <Trash2 size={12} />
+                </button>
+              )}
             </div>
           ))}
         </div>
@@ -774,24 +820,16 @@ function ProjectsTab({ clientId, navigate }) {
   useEffect(() => { fetchProjects() }, [fetchProjects])
 
   if (loading) {
-    return (
-      <GlassPanel>
-        <div className="flex flex-col gap-3">
-          {[0, 1, 2].map((i) => (
-            <div key={i} className="h-[60px] rounded-xl" style={{ background: 'rgba(255,255,255,0.04)', animation: 'pulse 1.5s ease-in-out infinite' }} />
-          ))}
-        </div>
-      </GlassPanel>
-    )
+    return <GlassPanel><SkeletonRow count={3} /></GlassPanel>
   }
 
   if (error) {
     return (
       <GlassPanel>
         <div className="py-6 text-center">
-          <AlertTriangle size={24} color="#f87171" style={{ margin: '0 auto 8px' }} />
-          <p className="text-[#f87171] text-xs font-semibold m-0 mb-2">Failed to load projects</p>
-          <button onClick={fetchProjects} className="inline-flex items-center gap-1.5 px-4 py-1.5 rounded-lg text-[12px] font-semibold cursor-pointer" style={{ background: 'rgba(248,113,113,0.15)', border: '1px solid rgba(248,113,113,0.25)', color: '#f87171' }}>
+          <AlertTriangle size={24} className="text-[var(--color-error)] mx-auto mb-2" />
+          <p className="text-[var(--color-error)] text-xs font-semibold m-0 mb-2">Failed to load projects</p>
+          <button onClick={fetchProjects} className="inline-flex items-center gap-1.5 px-4 py-1.5 rounded-lg text-[12px] font-semibold cursor-pointer bg-[var(--color-error-muted)] border border-[var(--color-error)]/20 text-[var(--color-error)] hover:bg-[var(--color-error)]/20 transition-colors">
             <RefreshCw size={12} /> Retry
           </button>
         </div>
@@ -800,25 +838,19 @@ function ProjectsTab({ clientId, navigate }) {
   }
 
   if (projects.length === 0) {
-    return (
-      <GlassPanel>
-        <p className="text-[var(--color-on-surface-variant)] text-sm m-0 py-6 text-center">No projects found for this client.</p>
-      </GlassPanel>
-    )
+    return <GlassPanel><EmptyState icon={FolderOpen} title="No projects yet" subtitle="Projects will appear here once created for this client." /></GlassPanel>
   }
-
-  const PROJECT_COLORS = { Active: '#22c55e', On_Hold: '#fbbf24', Complete: '#64748b' }
 
   return (
     <GlassPanel>
       <div className="flex flex-col gap-3">
-        {projects.map((project) => {
-          const pColor = PROJECT_COLORS[project.status] || '#6b7280'
+        {projects.map(project => {
+          const pColor = ENGAGEMENT_STATUS_COLORS[project.status] || 'var(--color-on-surface-variant)'
           return (
             <div
               key={project.id}
               onClick={() => navigate(`/clients/${clientId}/projects/${project.id}`)}
-              className="flex items-center gap-4 px-4 py-3.5 rounded-2xl bg-[var(--color-surface-high)] ring-1 ring-[var(--color-outline-variant)] cursor-pointer transition-all duration-300 hover:bg-[var(--color-surface-highest)] hover:-translate-y-[1px] group"
+              className="flex items-center gap-4 px-4 py-3.5 rounded-xl bg-[var(--color-surface-high)] border border-[var(--color-outline-variant)] cursor-pointer transition-all duration-200 hover:bg-[var(--color-surface-highest)] hover:border-[var(--color-outline)] group"
             >
               <div className="flex-1 min-w-0">
                 <p className="m-0 text-[14px] font-bold text-[var(--color-on-surface)] truncate">{project.name}</p>
@@ -871,8 +903,8 @@ function ActivityTab({ clientId }) {
     return (
       <GlassPanel>
         <div className="flex flex-col gap-3">
-          {[0, 1, 2].map((i) => (
-            <div key={i} className="h-[48px] rounded-xl" style={{ background: 'rgba(255,255,255,0.04)', animation: 'pulse 1.5s ease-in-out infinite' }} />
+          {[0, 1, 2].map(i => (
+            <div key={i} className="h-[48px] rounded-xl animate-pulse bg-[var(--color-surface-high)]" />
           ))}
         </div>
       </GlassPanel>
@@ -883,9 +915,12 @@ function ActivityTab({ clientId }) {
     return (
       <GlassPanel>
         <div className="py-6 text-center">
-          <AlertTriangle size={24} color="#f87171" style={{ margin: '0 auto 8px' }} />
-          <p className="text-[#f87171] text-xs font-semibold m-0 mb-2">Failed to load activity</p>
-          <button onClick={fetchActivity} className="inline-flex items-center gap-1.5 px-4 py-1.5 rounded-lg text-[12px] font-semibold cursor-pointer" style={{ background: 'rgba(248,113,113,0.15)', border: '1px solid rgba(248,113,113,0.25)', color: '#f87171' }}>
+          <AlertTriangle size={24} className="text-[var(--color-error)] mx-auto mb-2" />
+          <p className="text-[var(--color-error)] text-xs font-semibold m-0 mb-2">Failed to load activity</p>
+          <button
+            onClick={fetchActivity}
+            className="inline-flex items-center gap-1.5 px-4 py-1.5 rounded-lg text-[12px] font-semibold cursor-pointer bg-[var(--color-error-muted)] border border-[var(--color-error)]/20 text-[var(--color-error)] hover:bg-[var(--color-error)]/20 transition-colors"
+          >
             <RefreshCw size={12} /> Retry
           </button>
         </div>
@@ -972,8 +1007,8 @@ function NotesTab({ client }) {
     return (
       <GlassPanel>
         <div className="flex flex-col gap-3">
-          {[0, 1].map((i) => (
-            <div key={i} className="h-[60px] rounded-xl" style={{ background: 'rgba(255,255,255,0.04)', animation: 'pulse 1.5s ease-in-out infinite' }} />
+          {[0, 1].map(i => (
+            <div key={i} className="h-[60px] rounded-xl animate-pulse bg-[var(--color-surface-high)]" />
           ))}
         </div>
       </GlassPanel>
@@ -984,9 +1019,12 @@ function NotesTab({ client }) {
     return (
       <GlassPanel>
         <div className="py-6 text-center">
-          <AlertTriangle size={24} color="#f87171" style={{ margin: '0 auto 8px' }} />
-          <p className="text-[#f87171] text-xs font-semibold m-0 mb-2">Failed to load notes</p>
-          <button onClick={fetchNotes} className="inline-flex items-center gap-1.5 px-4 py-1.5 rounded-lg text-[12px] font-semibold cursor-pointer" style={{ background: 'rgba(248,113,113,0.15)', border: '1px solid rgba(248,113,113,0.25)', color: '#f87171' }}>
+          <AlertTriangle size={24} className="text-[var(--color-error)] mx-auto mb-2" />
+          <p className="text-[var(--color-error)] text-xs font-semibold m-0 mb-2">Failed to load notes</p>
+          <button
+            onClick={fetchNotes}
+            className="inline-flex items-center gap-1.5 px-4 py-1.5 rounded-lg text-[12px] font-semibold cursor-pointer bg-[var(--color-error-muted)] border border-[var(--color-error)]/20 text-[var(--color-error)] hover:bg-[var(--color-error)]/20 transition-colors"
+          >
             <RefreshCw size={12} /> Retry
           </button>
         </div>

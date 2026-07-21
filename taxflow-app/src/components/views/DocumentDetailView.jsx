@@ -7,25 +7,20 @@ import {
 } from 'lucide-react'
 import { projectApi, reviewApi, tokenApi } from '../../services/api'
 import Breadcrumb from '../Breadcrumb'
-import { GlassPanel, StatusBadge, Badge, ProgressBar } from '../ui'
+import { GlassPanel, StatusBadge, Badge } from '../ui'
 import CommentsThread from '../CommentsThread'
 import DocumentEditor from '../DocumentEditor'
 import { useAuth } from '../../context/AuthContext'
-
-const PRIORITY_COLORS = {
-  Urgent: '#ef4444',
-  High: '#f97316',
-  Medium: '#eab308',
-  Low: '#6b7280',
-}
+import { useToast } from '../../context/ToastContext'
+import { PRIORITY_COLORS } from '../../constants/roles'
 
 const leftPaneVariants = {
   hidden: { opacity: 0, y: 24 },
-  visible: { opacity: 1, y: 0, transition: { duration: 0.5, ease: 'easeOut', delay: 0 } },
+  visible: { opacity: 1, y: 0, transition: { duration: 0.4, ease: [0.22, 1, 0.36, 1], delay: 0 } },
 }
 const rightPaneVariants = {
   hidden: { opacity: 0, y: 24 },
-  visible: { opacity: 1, y: 0, transition: { duration: 0.5, ease: 'easeOut', delay: 0.15 } },
+  visible: { opacity: 1, y: 0, transition: { duration: 0.4, ease: [0.22, 1, 0.36, 1], delay: 0.12 } },
 }
 
 function formatDate(dateStr) {
@@ -70,15 +65,14 @@ function useUndoCountdown(approvedAt) {
   return { remaining, label: `${minutes}:${String(seconds).padStart(2, '0')}` }
 }
 
-// Skeleton for loading state
 function LoadingSkeleton() {
   return (
     <div className="max-w-[1400px] mx-auto">
-      <div className="h-3 w-64 rounded bg-white/[0.06] mb-4 animate-pulse" />
-      <div className="h-8 w-48 rounded bg-white/[0.08] mb-6 animate-pulse" />
+      <div className="h-3 w-64 rounded bg-[var(--color-surface-high)] mb-4 animate-pulse" />
+      <div className="h-8 w-48 rounded bg-[var(--color-surface-highest)] mb-6 animate-pulse" />
       <div className="grid grid-cols-1 lg:grid-cols-[1fr_400px] xl:grid-cols-[1fr_480px] gap-6">
-        <div className="rounded-[24px] bg-white/[0.03] h-[500px] animate-pulse" />
-        <div className="rounded-[24px] bg-white/[0.03] h-[500px] animate-pulse" />
+        <div className="rounded-xl bg-[var(--color-surface-container)] h-[500px] animate-pulse" />
+        <div className="rounded-xl bg-[var(--color-surface-container)] h-[500px] animate-pulse" />
       </div>
     </div>
   )
@@ -89,6 +83,7 @@ export default function DocumentDetailView() {
   const navigate = useNavigate()
   const { user, token } = useAuth()
   const employeeId = user?.id || 'employee-1'
+  const { error: toastError, success: toastSuccess } = useToast()
 
   const [doc, setDoc] = useState(null)
   const [clientName, setClientName] = useState('')
@@ -157,6 +152,7 @@ export default function DocumentDetailView() {
         setApprovedAt(found.approvedAt)
       }
     } catch (err) {
+      toastError(err.message || 'Failed to load document')
       setError(err.message || 'Failed to load document')
     } finally {
       setLoading(false)
@@ -245,6 +241,7 @@ export default function DocumentDetailView() {
       if (err.message?.includes('409') || err.message?.includes('modified')) {
         setConflictError(true)
       } else {
+        toastError(err.message || 'Action failed')
         setActionError(err.message || 'Action failed')
       }
       throw err
@@ -255,6 +252,7 @@ export default function DocumentDetailView() {
     setActionLoading('approve')
     try {
       await doTransition('Approved')
+      toastSuccess('Document approved')
       setShowApproveConfirm(false)
     } catch { /* error already set */ }
     finally { setActionLoading(null) }
@@ -273,6 +271,7 @@ export default function DocumentDetailView() {
     setActionLoading('revision')
     try {
       await doTransition('Revision_Requested', { comment: trimmed })
+      toastSuccess('Revision requested')
       setShowRevision(false)
       setRevisionComment('')
     } catch { /* error already set */ }
@@ -321,19 +320,19 @@ export default function DocumentDetailView() {
           ]}
         />
         <GlassPanel className="flex flex-col items-center justify-center py-16 text-center">
-          <AlertCircle size={40} className="text-red-400/60 mb-4" />
-          <p className="text-[15px] font-semibold text-red-400/80 mb-2">{error}</p>
+          <AlertCircle size={40} className="text-[var(--color-error)]/60 mb-4" />
+          <p className="text-[15px] font-semibold text-[var(--color-error)]/80 mb-2">{error}</p>
           {error === 'Document not found' ? (
             <button
               onClick={() => navigate(`/clients/${clientId}/projects/${projectId}`)}
-              className="mt-4 flex items-center gap-2 rounded-xl border border-[var(--color-outline-variant)] bg-[var(--color-surface-container)]/50 px-4 py-2 text-[13px] font-bold text-[var(--color-on-surface-variant)] transition-all hover:bg-[var(--color-surface-container)]"
+              className="mt-4 flex items-center gap-2 rounded-xl border border-[var(--color-outline-variant)] bg-[var(--color-surface-container)] px-4 py-2 text-[13px] font-bold text-[var(--color-on-surface-variant)] transition-all hover:bg-[var(--color-surface-high)]"
             >
               Back to Project
             </button>
           ) : (
             <button
               onClick={fetchData}
-              className="mt-4 flex items-center gap-2 rounded-xl border border-[var(--color-outline-variant)] bg-[var(--color-surface-container)]/50 px-4 py-2 text-[13px] font-bold text-[var(--color-on-surface-variant)] transition-all hover:bg-[var(--color-surface-container)]"
+              className="mt-4 flex items-center gap-2 rounded-xl border border-[var(--color-outline-variant)] bg-[var(--color-surface-container)] px-4 py-2 text-[13px] font-bold text-[var(--color-on-surface-variant)] transition-all hover:bg-[var(--color-surface-high)]"
             >
               <RefreshCw size={14} /> Retry
             </button>
@@ -363,14 +362,14 @@ export default function DocumentDetailView() {
         <motion.div
           initial={{ opacity: 0, y: -10 }}
           animate={{ opacity: 1, y: 0 }}
-          className="mb-4 flex items-center justify-between rounded-xl border border-yellow-500/30 bg-yellow-500/10 px-4 py-3"
+          className="mb-4 flex items-center justify-between rounded-xl border border-[var(--color-warning)]/30 bg-[var(--color-warning-muted)] px-4 py-3"
         >
-          <span className="text-[13px] font-medium text-yellow-300">
+          <span className="text-[13px] font-medium text-[var(--color-warning)]">
             This document was modified by another user.
           </span>
           <button
             onClick={() => { setConflictError(false); fetchData() }}
-            className="flex items-center gap-1.5 rounded-lg border border-yellow-500/30 bg-yellow-500/15 px-3 py-1.5 text-[12px] font-bold text-yellow-300 transition-all hover:bg-yellow-500/25"
+            className="flex items-center gap-1.5 rounded-lg border border-[var(--color-warning)]/30 bg-[var(--color-warning)]/15 px-3 py-1.5 text-[12px] font-bold text-[var(--color-warning)] transition-all hover:bg-[var(--color-warning)]/25"
           >
             <RefreshCw size={12} /> Reload
           </button>
@@ -389,13 +388,13 @@ export default function DocumentDetailView() {
               {doc.fileId && (
                 <button
                   onClick={() => setShowEditor(true)}
-                  className="flex items-center gap-1.5 rounded-[10px] border border-[var(--color-primary)]/30 bg-[var(--color-primary)]/10 px-3 py-1.5 text-[12px] font-bold text-[var(--color-primary)] transition-all hover:bg-[var(--color-primary)]/20 active:scale-95"
+                  className="flex items-center gap-1.5 rounded-lg border border-[var(--color-primary)]/30 bg-[var(--color-primary)]/10 px-3 py-1.5 text-[12px] font-bold text-[var(--color-primary)] transition-all hover:bg-[var(--color-primary)]/20 active:scale-95"
                 >
                   <Edit3 size={13} /> Edit Document
                 </button>
               )}
             </div>
-            <div className="flex flex-col items-center justify-center rounded-2xl border border-white/[0.05] bg-white/[0.02] p-10 min-h-[400px]">
+            <div className="flex flex-col items-center justify-center rounded-2xl border border-[var(--color-outline-variant)] bg-[var(--color-surface-highest)]/30 p-10 min-h-[400px]">
               {doc.fileId && previewToken ? (
                 <iframe
                   src={`https://app.box.com/embed/preview/${doc.fileId}?token=${previewToken.token}`}
@@ -405,22 +404,22 @@ export default function DocumentDetailView() {
                 />
               ) : doc.fileId && previewError ? (
                 <>
-                  <div className="mb-4 flex h-16 w-16 items-center justify-center rounded-2xl bg-red-500/[0.05] border border-red-500/[0.07]">
-                    <FileText size={28} className="text-red-400/50" />
+                  <div className="mb-4 flex h-16 w-16 items-center justify-center rounded-2xl bg-[var(--color-error-muted)] border border-[var(--color-error)]/10">
+                    <FileText size={28} className="text-[var(--color-error)]/50" />
                   </div>
-                  <p className="mb-1 text-sm font-semibold text-red-400/70">Preview unavailable</p>
-                  <p className="text-xs text-white/30">{previewError}</p>
+                  <p className="mb-1 text-sm font-semibold text-[var(--color-error)]/70">Preview unavailable</p>
+                  <p className="text-xs text-[var(--color-on-surface-variant)]/50">{previewError}</p>
                 </>
               ) : !doc.fileId ? (
                 <>
-                  <div className="mb-4 flex h-16 w-16 items-center justify-center rounded-2xl bg-white/[0.05] border border-white/[0.07]">
-                    <FileText size={28} className="text-white/25" />
+                  <div className="mb-4 flex h-16 w-16 items-center justify-center rounded-2xl bg-[var(--color-surface-high)] border border-[var(--color-outline-variant)]">
+                    <FileText size={28} className="text-[var(--color-on-surface-variant)]/40" />
                   </div>
-                  <p className="mb-1 text-sm font-semibold text-white/50">No file uploaded yet</p>
-                  <p className="text-xs text-white/30">Status: {doc.status?.replace(/_/g, ' ')}</p>
+                  <p className="mb-1 text-sm font-semibold text-[var(--color-on-surface-variant)]/60">No file uploaded yet</p>
+                  <p className="text-xs text-[var(--color-on-surface-variant)]/40">Status: {doc.status?.replace(/_/g, ' ')}</p>
                 </>
               ) : (
-                <Loader2 size={24} className="animate-spin text-white/30" />
+                <Loader2 size={24} className="animate-spin text-[var(--color-primary)]/40" />
               )}
             </div>
           </GlassPanel>
@@ -459,10 +458,10 @@ export default function DocumentDetailView() {
               {doc.dueDate && (
                 <div>
                   <p className="m-0 text-[11px] font-bold uppercase tracking-wide text-[var(--color-on-surface-variant)]">Due Date</p>
-                  <p className={`m-0 mt-1 text-[13px] flex items-center gap-1.5 ${isOverdue(doc.dueDate) ? 'text-red-400 font-semibold' : 'text-[var(--color-on-surface)]'}`}>
+                  <p className={`m-0 mt-1 text-[13px] flex items-center gap-1.5 ${isOverdue(doc.dueDate) ? 'text-[var(--color-error)] font-semibold' : 'text-[var(--color-on-surface)]'}`}>
                     <Calendar size={12} />
                     {formatDate(doc.dueDate)}
-                    {isOverdue(doc.dueDate) && <span className="text-[10px] font-bold uppercase tracking-wider text-red-400/80">Overdue</span>}
+                    {isOverdue(doc.dueDate) && <span className="text-[10px] font-bold uppercase tracking-wider text-[var(--color-error)]/80">Overdue</span>}
                   </p>
                 </div>
               )}
@@ -507,24 +506,24 @@ export default function DocumentDetailView() {
                   <button
                     onClick={() => setShowApproveConfirm(true)}
                     disabled={!!actionLoading}
-                    className="w-full flex items-center justify-center gap-2 rounded-[14px] border border-[#22c55e]/30 bg-[#22c55e]/15 px-6 py-3 text-[13px] font-bold text-[#22c55e] transition-all hover:bg-[#22c55e]/25 disabled:opacity-50"
+                    className="w-full flex items-center justify-center gap-2 rounded-xl border border-[var(--color-success)]/30 bg-[var(--color-success-muted)] px-6 py-3 text-[13px] font-bold text-[var(--color-success)] transition-all hover:bg-[var(--color-success)]/20 disabled:opacity-50"
                   >
                     <CheckCircle size={16} /> Approve Document
                   </button>
                 ) : (
-                  <div className="rounded-xl border border-[#22c55e]/20 bg-[#22c55e]/5 p-4">
-                    <p className="m-0 text-[12px] font-semibold text-[#22c55e] mb-3">Confirm approval?</p>
+                  <div className="rounded-xl border border-[var(--color-success)]/20 bg-[var(--color-success-muted)] p-4">
+                    <p className="m-0 text-[12px] font-semibold text-[var(--color-success)] mb-3">Confirm approval?</p>
                     <div className="flex gap-2">
                       <button
                         onClick={handleApprove}
                         disabled={!!actionLoading}
-                        className="flex-1 rounded-lg bg-[#22c55e]/20 px-3 py-2 text-[12px] font-bold text-[#22c55e] border border-[#22c55e]/30 transition-all hover:bg-[#22c55e]/30 disabled:opacity-50"
+                        className="flex-1 rounded-lg bg-[var(--color-success)]/20 px-3 py-2 text-[12px] font-bold text-[var(--color-success)] border border-[var(--color-success)]/30 transition-all hover:bg-[var(--color-success)]/30 disabled:opacity-50"
                       >
                         {actionLoading === 'approve' ? <Loader2 size={14} className="animate-spin mx-auto" /> : 'Confirm'}
                       </button>
                       <button
                         onClick={() => setShowApproveConfirm(false)}
-                        className="flex-1 rounded-lg bg-white/[0.05] px-3 py-2 text-[12px] font-bold text-[var(--color-on-surface-variant)] border border-white/[0.1] transition-all hover:bg-white/[0.08]"
+                        className="flex-1 rounded-lg bg-[var(--color-surface-high)] px-3 py-2 text-[12px] font-bold text-[var(--color-on-surface-variant)] border border-[var(--color-outline-variant)] transition-all hover:bg-[var(--color-surface-highest)]"
                       >
                         Cancel
                       </button>
@@ -537,21 +536,21 @@ export default function DocumentDetailView() {
                   <button
                     onClick={() => setShowRevision(true)}
                     disabled={!!actionLoading}
-                    className="w-full flex items-center justify-center gap-2 rounded-[14px] border border-[#ef4444]/30 bg-[#ef4444]/15 px-6 py-3 text-[13px] font-bold text-[#ef4444] transition-all hover:bg-[#ef4444]/25 disabled:opacity-50"
+                    className="w-full flex items-center justify-center gap-2 rounded-xl border border-[var(--color-error)]/30 bg-[var(--color-error-muted)] px-6 py-3 text-[13px] font-bold text-[var(--color-error)] transition-all hover:bg-[var(--color-error)]/20 disabled:opacity-50"
                   >
                     <RotateCcw size={16} /> Request Revision
                   </button>
                 ) : (
-                  <div className="rounded-xl border border-[#ef4444]/20 bg-[#ef4444]/5 p-4 space-y-3">
+                  <div className="rounded-xl border border-[var(--color-error)]/20 bg-[var(--color-error-muted)] p-4 space-y-3">
                     <label className="text-[11px] font-bold uppercase tracking-widest text-[var(--color-on-surface-variant)]">
-                      Revision Comment <span className="text-[#ef4444]">*</span>
+                      Revision Comment <span className="text-[var(--color-error)]">*</span>
                     </label>
                     <textarea
                       value={revisionComment}
                       onChange={(e) => { setRevisionComment(e.target.value); setRevisionError('') }}
                       placeholder="Detail what needs to be changed (10-1000 chars)..."
                       rows={4}
-                      className="w-full resize-none rounded-xl border border-[var(--color-outline-variant)] bg-[var(--color-surface-high)] px-4 py-3 text-[13px] text-[var(--color-on-surface)] placeholder-[var(--color-on-surface-variant)]/50 outline-none focus:border-[#ef4444]/50"
+                      className="w-full resize-none rounded-xl border border-[var(--color-outline-variant)] bg-[var(--color-surface-high)] px-4 py-3 text-[13px] text-[var(--color-on-surface)] placeholder:text-[var(--color-on-surface-variant)]/50 outline-none focus:border-[var(--color-error)]/50 transition-colors"
                     />
                     <div className="flex items-center justify-between">
                       <span className="text-[10px] text-[var(--color-on-surface-variant)]">
@@ -559,20 +558,20 @@ export default function DocumentDetailView() {
                       </span>
                     </div>
                     {revisionError && (
-                      <p className="m-0 text-[11px] font-bold text-[#ef4444]">{revisionError}</p>
+                      <p className="m-0 text-[11px] font-bold text-[var(--color-error)]">{revisionError}</p>
                     )}
                     <div className="flex gap-2">
                       <button
                         onClick={handleRevision}
                         disabled={!!actionLoading}
-                        className="flex-1 flex items-center justify-center gap-1.5 rounded-lg bg-[#ef4444]/20 px-3 py-2 text-[12px] font-bold text-[#ef4444] border border-[#ef4444]/30 transition-all hover:bg-[#ef4444]/30 disabled:opacity-50"
+                        className="flex-1 flex items-center justify-center gap-1.5 rounded-lg bg-[var(--color-error)]/20 px-3 py-2 text-[12px] font-bold text-[var(--color-error)] border border-[var(--color-error)]/30 transition-all hover:bg-[var(--color-error)]/30 disabled:opacity-50"
                       >
                         {actionLoading === 'revision' ? <Loader2 size={14} className="animate-spin" /> : <Send size={12} />}
                         Submit
                       </button>
                       <button
                         onClick={() => { setShowRevision(false); setRevisionComment(''); setRevisionError('') }}
-                        className="flex-1 rounded-lg bg-white/[0.05] px-3 py-2 text-[12px] font-bold text-[var(--color-on-surface-variant)] border border-white/[0.1] transition-all hover:bg-white/[0.08]"
+                        className="flex-1 rounded-lg bg-[var(--color-surface-high)] px-3 py-2 text-[12px] font-bold text-[var(--color-on-surface-variant)] border border-[var(--color-outline-variant)] transition-all hover:bg-[var(--color-surface-highest)]"
                       >
                         Cancel
                       </button>
@@ -585,31 +584,31 @@ export default function DocumentDetailView() {
                   <button
                     onClick={() => setShowWaiveConfirm(true)}
                     disabled={!!actionLoading}
-                    className="w-full flex items-center justify-center gap-2 rounded-[14px] border border-[#64748b]/30 bg-[#64748b]/15 px-6 py-3 text-[13px] font-bold text-[#64748b] transition-all hover:bg-[#64748b]/25 disabled:opacity-50"
+                    className="w-full flex items-center justify-center gap-2 rounded-xl border border-[var(--color-on-surface-variant)]/20 bg-[var(--color-surface-high)] px-6 py-3 text-[13px] font-bold text-[var(--color-on-surface-variant)] transition-all hover:bg-[var(--color-surface-highest)] hover:text-[var(--color-on-surface)] disabled:opacity-50"
                   >
                     <ShieldOff size={16} /> Waive Requirement
                   </button>
                 ) : (
-                  <div className="rounded-xl border border-[#64748b]/20 bg-[#64748b]/5 p-4 space-y-3">
-                    <p className="m-0 text-[12px] font-semibold text-[#64748b]">Waive this requirement?</p>
+                  <div className="rounded-xl border border-[var(--color-outline-variant)] bg-[var(--color-surface-high)] p-4 space-y-3">
+                    <p className="m-0 text-[12px] font-semibold text-[var(--color-on-surface-variant)]">Waive this requirement?</p>
                     <textarea
                       value={waiveReason}
                       onChange={(e) => setWaiveReason(e.target.value)}
                       placeholder="Optional reason..."
                       rows={2}
-                      className="w-full resize-none rounded-xl border border-[var(--color-outline-variant)] bg-[var(--color-surface-high)] px-4 py-2 text-[13px] text-[var(--color-on-surface)] placeholder-[var(--color-on-surface-variant)]/50 outline-none"
+                      className="w-full resize-none rounded-xl border border-[var(--color-outline-variant)] bg-[var(--color-surface-container)] px-4 py-2 text-[13px] text-[var(--color-on-surface)] placeholder:text-[var(--color-on-surface-variant)]/50 outline-none transition-colors focus:border-[var(--color-primary)]/50"
                     />
                     <div className="flex gap-2">
                       <button
                         onClick={handleWaive}
                         disabled={!!actionLoading}
-                        className="flex-1 rounded-lg bg-[#64748b]/20 px-3 py-2 text-[12px] font-bold text-[#64748b] border border-[#64748b]/30 transition-all hover:bg-[#64748b]/30 disabled:opacity-50"
+                        className="flex-1 rounded-lg bg-[var(--color-surface-highest)] px-3 py-2 text-[12px] font-bold text-[var(--color-on-surface)] border border-[var(--color-outline)] transition-all hover:brightness-110 disabled:opacity-50"
                       >
                         {actionLoading === 'waive' ? <Loader2 size={14} className="animate-spin mx-auto" /> : 'Confirm Waive'}
                       </button>
                       <button
                         onClick={() => { setShowWaiveConfirm(false); setWaiveReason('') }}
-                        className="flex-1 rounded-lg bg-white/[0.05] px-3 py-2 text-[12px] font-bold text-[var(--color-on-surface-variant)] border border-white/[0.1] transition-all hover:bg-white/[0.08]"
+                        className="flex-1 rounded-lg bg-transparent px-3 py-2 text-[12px] font-bold text-[var(--color-on-surface-variant)] border border-[var(--color-outline-variant)] transition-all hover:bg-[var(--color-surface-high)]"
                       >
                         Cancel
                       </button>
@@ -620,7 +619,7 @@ export default function DocumentDetailView() {
 
               {/* Action error */}
               {actionError && (
-                <div className="mt-3 rounded-lg border border-red-500/20 bg-red-500/10 px-3 py-2 text-xs text-red-400">
+                <div className="mt-3 rounded-lg border border-[var(--color-error)]/20 bg-[var(--color-error-muted)] px-3 py-2 text-[12px] text-[var(--color-error)]">
                   {actionError}
                 </div>
               )}
@@ -638,14 +637,14 @@ export default function DocumentDetailView() {
                 <button
                   onClick={handleUndo}
                   disabled={!!actionLoading}
-                  className="flex items-center gap-1.5 rounded-xl border border-yellow-500/30 bg-yellow-500/15 px-4 py-2 text-[12px] font-bold text-yellow-400 transition-all hover:bg-yellow-500/25 disabled:opacity-50"
+                  className="flex items-center gap-1.5 rounded-xl border border-[var(--color-warning)]/30 bg-[var(--color-warning-muted)] px-4 py-2 text-[12px] font-bold text-[var(--color-warning)] transition-all hover:bg-[var(--color-warning)]/20 disabled:opacity-50"
                 >
                   {actionLoading === 'undo' ? <Loader2 size={14} className="animate-spin" /> : <Undo2 size={14} />}
                   Undo Approval
                 </button>
               </div>
               {actionError && (
-                <div className="mt-3 rounded-lg border border-red-500/20 bg-red-500/10 px-3 py-2 text-xs text-red-400">
+                <div className="mt-3 rounded-lg border border-[var(--color-error)]/20 bg-[var(--color-error-muted)] px-3 py-2 text-[12px] text-[var(--color-error)]">
                   {actionError}
                 </div>
               )}

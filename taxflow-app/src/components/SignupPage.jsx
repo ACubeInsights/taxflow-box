@@ -2,14 +2,14 @@ import { useState, useEffect } from 'react'
 import { useSearchParams, useNavigate } from 'react-router-dom'
 import { motion } from 'framer-motion'
 import { Loader2, AlertCircle, CheckCircle, Lock, Eye, EyeOff } from 'lucide-react'
-import { inviteApi, setAuthToken } from '../services/api'
+import { inviteApi } from '../services/api'
 import { useAuth } from '../context/AuthContext'
 import AnimatedBackground from './AnimatedBackground'
 
 export default function SignupPage() {
   const [searchParams] = useSearchParams()
   const navigate = useNavigate()
-  const { user } = useAuth()
+  const { user, login } = useAuth()
   const token = searchParams.get('token')
 
   const [state, setState] = useState('loading') // loading | valid | expired | used | invalid | submitting | error
@@ -68,21 +68,13 @@ export default function SignupPage() {
     setState('submitting')
 
     try {
-      const result = await inviteApi.completeSignup(token, password, fullName.trim(), externalId.trim(), clientEmail.trim())
+      // Complete the invite signup — this registers the account server-side
+      await inviteApi.completeSignup(token, password, fullName.trim(), externalId.trim(), clientEmail.trim())
 
-      // Set auth state (mirrors login flow)
-      setAuthToken(result.sessionToken)
-      const userData = { ...result.user, vault: result.vault || null, externalId: result.user.externalId || null }
+      // Log in via AuthContext so all session state (timers, token, vault) is properly initialized
+      await login(clientEmail.trim(), password)
 
-      // Store session in sessionStorage (same as AuthContext.login)
-      sessionStorage.setItem('taxflow_session', JSON.stringify({
-        user: userData,
-        token: result.sessionToken,
-        tokenExpiresAt: result.expiresAt,
-      }))
-
-      // Force reload to let AuthProvider pick up the new session
-      window.location.href = '/dashboard'
+      navigate('/dashboard', { replace: true })
     } catch (err) {
       const msg = err.message || 'Signup failed'
       if (msg.includes('expired') || msg.includes('410')) setState('expired')
@@ -116,7 +108,7 @@ export default function SignupPage() {
         <ErrorCard
           title="Invitation Expired"
           message="This invitation link has expired. Please contact your tax preparer for a new invitation."
-          icon={<AlertCircle size={32} className="text-amber-400" />}
+          icon={<AlertCircle size={32} className="text-[var(--color-warning)]" />}
         />
       </PageWrapper>
     )
@@ -128,7 +120,7 @@ export default function SignupPage() {
         <ErrorCard
           title="Account Already Created"
           message="This invitation has already been used. Your account is ready — head to the login page."
-          icon={<CheckCircle size={32} className="text-emerald-400" />}
+          icon={<CheckCircle size={32} className="text-[var(--color-success)]" />}
           action={<a href="/" className="mt-4 inline-flex items-center gap-2 px-6 py-2.5 rounded-xl text-[13px] font-semibold no-underline bg-[var(--color-primary)]/15 border border-[var(--color-primary)]/25 text-[var(--color-primary)]">Go to Login</a>}
         />
       </PageWrapper>
@@ -141,7 +133,7 @@ export default function SignupPage() {
         <ErrorCard
           title="Invalid Link"
           message="This invitation link is invalid or malformed. Please check the link in your email or contact your tax preparer."
-          icon={<AlertCircle size={32} className="text-red-400" />}
+          icon={<AlertCircle size={32} className="text-[var(--color-error)]" />}
         />
       </PageWrapper>
     )
@@ -153,7 +145,7 @@ export default function SignupPage() {
       <motion.div
         initial={{ opacity: 0, y: 20 }}
         animate={{ opacity: 1, y: 0 }}
-        className="w-full max-w-[420px] rounded-[24px] border border-[var(--color-outline-variant)] overflow-hidden"
+        className="w-full max-w-[420px] rounded-2xl border border-[var(--color-outline-variant)] overflow-hidden"
         style={{ background: 'var(--color-surface-container)', boxShadow: '0 40px 80px rgba(0,0,0,0.5)' }}
       >
         <div className="px-8 pt-8 pb-4 text-center">
@@ -221,25 +213,23 @@ export default function SignupPage() {
             className="w-full px-4 py-3.5 rounded-xl border border-[var(--color-outline-variant)] bg-[var(--color-surface-high)] text-[14px] text-[var(--color-on-surface)] placeholder:text-[var(--color-on-surface-variant)]/50 outline-none focus:border-[var(--color-primary)] transition-colors"
           />
 
-          {/* Validation hints */}
           {password.length > 0 && password.length < 6 && (
-            <p className="m-0 text-[11px] text-amber-400">Password must be at least 6 characters</p>
+            <p className="m-0 text-[11px] text-[var(--color-warning)]">Password must be at least 6 characters</p>
           )}
           {confirmPassword.length > 0 && !passwordsMatch && (
-            <p className="m-0 text-[11px] text-red-400">Passwords do not match</p>
+            <p className="m-0 text-[11px] text-[var(--color-error)]">Passwords do not match</p>
           )}
 
-          {/* Server error */}
           {serverError && (
-            <div className="flex flex-col gap-2 p-3 rounded-xl border border-red-500/30 bg-red-500/10">
+            <div className="flex flex-col gap-2 p-3 rounded-xl border border-[var(--color-error)]/30 bg-[var(--color-error-muted)]">
               <div className="flex items-start gap-2">
-                <AlertCircle size={14} className="text-red-400 shrink-0 mt-0.5" />
-                <p className="m-0 text-[12px] text-red-300">{serverError}</p>
+                <AlertCircle size={14} className="text-[var(--color-error)] shrink-0 mt-0.5" />
+                <p className="m-0 text-[12px] text-[var(--color-error)]">{serverError}</p>
               </div>
               {serverError.includes('already exists') && (
                 <a
                   href="/"
-                  className="self-start ml-6 inline-flex items-center gap-1 px-4 py-1.5 rounded-lg text-[12px] font-semibold no-underline bg-[var(--color-primary)]/15 border border-[var(--color-primary)]/25 text-[var(--color-primary)] hover:bg-[var(--color-primary)]/25 transition-colors"
+                  className="self-start ml-6 inline-flex items-center gap-1 px-4 py-1.5 rounded-lg text-[12px] font-semibold no-underline bg-[var(--color-primary-muted)] border border-[var(--color-primary)]/25 text-[var(--color-primary)] hover:bg-[var(--color-primary)]/20 transition-colors"
                 >
                   Go to Login
                 </a>
@@ -284,7 +274,7 @@ function ErrorCard({ title, message, icon, action }) {
     <motion.div
       initial={{ opacity: 0, scale: 0.95 }}
       animate={{ opacity: 1, scale: 1 }}
-      className="w-full max-w-[400px] rounded-[24px] border border-[var(--color-outline-variant)] p-8 text-center"
+      className="w-full max-w-[400px] rounded-2xl border border-[var(--color-outline-variant)] p-8 text-center"
       style={{ background: 'var(--color-surface-container)', boxShadow: '0 40px 80px rgba(0,0,0,0.5)' }}
     >
       <div className="mb-4">{icon}</div>

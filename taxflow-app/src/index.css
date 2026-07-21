@@ -175,6 +175,34 @@ input:-webkit-autofill:focus {
   box-shadow: 0 0 10px rgba(129, 140, 248, 0.1);
 }
 
+/* ─── Border Radius Scale ─── */
+/*
+  --radius-sm:  8px   → rounded-lg   (chips, badges, small buttons)
+  --radius-md:  12px  → rounded-xl   (inputs, rows, dropdowns, cards)
+  --radius-lg:  16px  → rounded-2xl  (panels, modals, large cards)
+  --radius-xl:  24px  → rounded-3xl  (login card, full-screen panels)
+
+  Use these four values only. Avoid custom rounded-[Npx] except for
+  circular elements (rounded-full) or icons (rounded-md / rounded-lg).
+*/
+
+/* ─── Skeleton Shimmer ─── */
+@keyframes skeleton-shimmer {
+  0%   { background-position: -400px 0; }
+  100% { background-position:  400px 0; }
+}
+
+.skeleton {
+  background: linear-gradient(
+    90deg,
+    var(--color-surface-high)  0%,
+    var(--color-surface-highest) 40%,
+    var(--color-surface-high)  80%
+  );
+  background-size: 800px 100%;
+  animation: skeleton-shimmer 1.4s ease-in-out infinite;
+}
+
 /* ─── Smooth Transitions Globally ─── */
 button, a, input, select, textarea {
   transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);

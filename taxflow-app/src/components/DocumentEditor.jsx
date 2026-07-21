@@ -317,7 +317,7 @@ export default function DocumentEditor({
           {/* Error */}
           {error && (
             <div className="absolute inset-0 flex flex-col items-center justify-center gap-4 z-10 bg-[var(--color-surface)]">
-              <AlertCircle size={32} className="text-red-400" />
+              <AlertCircle size={32} className="text-[var(--color-error)]" />
               <p className="text-sm font-medium text-[var(--color-on-surface)]">{error}</p>
               <button
                 onClick={() => { if (mode === 'preview') fetchPreviewToken(); else if (mode === 'edit') fetchEditUrl(); else fetchVersions(); }}
@@ -349,7 +349,7 @@ export default function DocumentEditor({
               {/* Session banner */}
               <div className="shrink-0 px-5 py-3 border-b border-[var(--color-outline-variant)] bg-[var(--color-surface-container)]/80 flex items-center justify-between gap-4">
                 <div className="flex items-center gap-3 min-w-0">
-                  <div className="w-2 h-2 rounded-full bg-[#22c55e] shrink-0 animate-pulse" />
+                  <div className="w-2 h-2 rounded-full bg-[var(--color-success)] shrink-0 animate-pulse" />
                   <p className="m-0 text-[12px] text-[var(--color-on-surface-variant)] leading-snug">
                     <span className="font-semibold text-[var(--color-on-surface)]">Click "Open" below to edit.</span>
                     {' '}Log into your Box account if prompted.

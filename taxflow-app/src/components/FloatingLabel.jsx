@@ -1,14 +1,16 @@
 import { useState } from 'react'
 import { Eye, EyeOff } from 'lucide-react'
 
-export default function FloatingLabel({ label, type, value, onChange, autoComplete }) {
+export default function FloatingLabel({ id, label, type, value, onChange, autoComplete, name }) {
   const [focused, setFocused] = useState(false)
   const [showPass, setShowPass] = useState(false)
   const lifted = focused || value.length > 0
+  const inputId = id || `fl-${label?.toLowerCase().replace(/\s+/g, '-')}`
 
   return (
     <div className="relative group">
       <label
+        htmlFor={inputId}
         className="absolute left-4 pointer-events-none z-[2] font-medium transition-all duration-200 ease-out"
         style={{
           top: lifted ? '10px' : '50%',
@@ -24,6 +26,8 @@ export default function FloatingLabel({ label, type, value, onChange, autoComple
         {label}
       </label>
       <input
+        id={inputId}
+        name={name}
         type={type === 'password' && showPass ? 'text' : type}
         value={value}
         onChange={onChange}
@@ -47,6 +51,7 @@ export default function FloatingLabel({ label, type, value, onChange, autoComple
           type="button"
           tabIndex={-1}
           onClick={() => setShowPass(p => !p)}
+          aria-label={showPass ? 'Hide password' : 'Show password'}
           className="absolute right-3.5 top-1/2 -translate-y-1/2 bg-transparent border-none text-[var(--color-on-surface-variant)] cursor-pointer p-1 flex items-center rounded-md hover:text-[var(--color-on-surface)] hover:bg-[var(--color-surface-highest)] z-[2]"
         >
           {showPass ? <EyeOff size={16} /> : <Eye size={16} />}

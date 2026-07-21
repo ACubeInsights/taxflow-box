@@ -9,6 +9,7 @@ export default function UploadDropzone({ onUpload, disabled = false, folderId, r
   const [progress, setProgress] = useState(0)
   const [complete, setComplete] = useState(false)
   const [fileName, setFileName] = useState('')
+  const [uploadError, setUploadError] = useState(null)
   const fileInputRef = useRef(null)
 
   const isValidFolderId = folderId && folderId !== '0' && folderId !== ''
@@ -51,7 +52,7 @@ export default function UploadDropzone({ onUpload, disabled = false, folderId, r
       setUploading(false)
       setProgress(0)
       setFileName('')
-      alert(`Upload failed: ${error.message}`)
+      setUploadError(error.message || 'Upload failed')
     }
   }, [isValidFolderId, folderId, requestId, onUpload])
 
@@ -98,7 +99,7 @@ export default function UploadDropzone({ onUpload, disabled = false, folderId, r
     return (
       <div
         data-testid="upload-dropzone"
-        className="relative overflow-hidden rounded-[24px] border-2 border-dashed p-10 lg:p-14 text-center transition-all duration-300 ease-out flex flex-col items-center justify-center min-h-[300px] cursor-not-allowed border-[var(--color-outline-variant)] bg-[var(--color-surface-container)]/50 opacity-60"
+        className="relative overflow-hidden rounded-3xl border-2 border-dashed p-10 lg:p-14 text-center transition-all duration-300 ease-out flex flex-col items-center justify-center min-h-[300px] cursor-not-allowed border-[var(--color-outline-variant)] bg-[var(--color-surface-container)]/50 opacity-60"
       >
         <input
           type="file"
@@ -108,7 +109,7 @@ export default function UploadDropzone({ onUpload, disabled = false, folderId, r
           accept="*/*"
         />
         <div className="relative z-10 w-full flex flex-col items-center">
-          <div className="w-16 h-16 rounded-[20px] flex items-center justify-center mb-6 bg-[var(--color-surface-high)] border border-[var(--color-outline-variant)] shadow-sm">
+          <div className="w-16 h-16 rounded-2xl flex items-center justify-center mb-6 bg-[var(--color-surface-high)] border border-[var(--color-outline-variant)] shadow-sm">
             <Shield size={28} className="text-[var(--color-on-surface-variant)]" strokeWidth={2} />
           </div>
           <div className="flex items-center gap-2 mb-3">
@@ -131,7 +132,7 @@ export default function UploadDropzone({ onUpload, disabled = false, folderId, r
       onDragOver={handleDragOver}
       onDragLeave={handleDragLeave}
       onDrop={handleDrop}
-      className={`relative overflow-hidden rounded-[24px] border-2 border-dashed p-10 lg:p-14 text-center transition-all duration-300 ease-out flex flex-col items-center justify-center min-h-[300px] ${
+      className={`relative overflow-hidden rounded-3xl border-2 border-dashed p-10 lg:p-14 text-center transition-all duration-300 ease-out flex flex-col items-center justify-center min-h-[300px] ${
         isDisabled
           ? 'cursor-not-allowed border-[var(--color-outline-variant)] bg-[var(--color-surface-container)]/50 opacity-60'
           : dragging
@@ -183,9 +184,9 @@ export default function UploadDropzone({ onUpload, disabled = false, folderId, r
               transition={{ duration: 0.3 }}
               className="flex flex-col items-center gap-6 w-full max-w-[320px]"
             >
-              <div className="w-14 h-14 rounded-[16px] bg-[var(--color-primary)]/15 border border-[var(--color-primary)]/30 flex items-center justify-center relative shadow-[0_0_20px_var(--color-primary)]/20">
+              <div className="w-14 h-14 rounded-xl bg-[var(--color-primary)]/15 border border-[var(--color-primary)]/30 flex items-center justify-center relative shadow-[0_0_20px_var(--color-primary)]/20">
                 <Upload size={24} className="text-[var(--color-primary)] animate-bounce" />
-                <div className="absolute inset-0 border border-[var(--color-primary)] rounded-[16px] animate-[ping_2s_cubic-bezier(0,0,0.2,1)_infinite] opacity-50" />
+                <div className="absolute inset-0 border border-[var(--color-primary)] rounded-xl animate-[ping_2s_cubic-bezier(0,0,0.2,1)_infinite] opacity-50" />
               </div>
 
               <div className="text-center">
@@ -221,7 +222,7 @@ export default function UploadDropzone({ onUpload, disabled = false, folderId, r
               className="flex flex-col items-center"
             >
               <div
-                className={`w-16 h-16 rounded-[20px] flex items-center justify-center mb-6 transition-all duration-300 ${
+                className={`w-16 h-16 rounded-2xl flex items-center justify-center mb-6 transition-all duration-300 ${
                   dragging
                     ? 'bg-[var(--color-primary)]/20 border-2 border-[var(--color-primary)]/50 shadow-[0_0_30px_var(--color-primary)]/30 scale-110'
                     : 'bg-[var(--color-surface-high)] border border-[var(--color-outline-variant)] shadow-sm'
@@ -254,6 +255,23 @@ export default function UploadDropzone({ onUpload, disabled = false, folderId, r
             </motion.div>
           )}
         </AnimatePresence>
+
+        {/* Upload error — shown below the main animated state */}
+        {uploadError && (
+          <motion.div
+            initial={{ opacity: 0, y: 6 }}
+            animate={{ opacity: 1, y: 0 }}
+            className="mt-4 flex items-center gap-2 px-4 py-2.5 rounded-xl border border-[var(--color-error)]/20 bg-[var(--color-error-muted)] w-full max-w-[320px]"
+          >
+            <span className="text-[12px] text-[var(--color-error)] font-medium flex-1 text-left">{uploadError}</span>
+            <button
+              onClick={() => setUploadError(null)}
+              className="text-[11px] text-[var(--color-error)] font-bold cursor-pointer bg-transparent border-none shrink-0 hover:opacity-70"
+            >
+              Dismiss
+            </button>
+          </motion.div>
+        )}
       </div>
     </div>
   )

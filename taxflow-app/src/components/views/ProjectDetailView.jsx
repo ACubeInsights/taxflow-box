@@ -8,21 +8,18 @@ import Breadcrumb from '../Breadcrumb'
 import StatusFilterChips from '../StatusFilterChips'
 import { GlassPanel, StatusBadge, Badge, ProgressBar } from '../ui'
 import { useAuth } from '../../context/AuthContext'
-
-const PRIORITY_COLORS = {
-  Urgent: '#ef4444',
-  High: '#f97316',
-  Medium: '#eab308',
-  Low: '#6b7280',
-}
+import { useToast } from '../../context/ToastContext'
+import { PRIORITY_COLORS, ENGAGEMENT_STATUS_COLORS } from '../../constants/roles'
+import EmptyState from '../EmptyState'
+import { SkeletonCard } from '../Skeleton'
 
 function SkeletonRow() {
   return (
-    <div className="flex items-center gap-4 px-4 py-3 animate-pulse">
-      <div className="h-3 w-40 rounded bg-white/[0.06]" />
-      <div className="h-3 w-24 rounded bg-white/[0.04] hidden sm:block" />
+    <div className="flex items-center gap-4 px-4 py-3">
+      <div className="skeleton h-3 w-40 rounded-full" />
+      <div className="skeleton h-3 w-24 rounded-full hidden sm:block" />
       <div className="flex-1" />
-      <div className="h-5 w-16 rounded bg-white/[0.06]" />
+      <div className="skeleton h-5 w-16 rounded-lg" />
     </div>
   )
 }
@@ -42,6 +39,7 @@ function formatDate(dateStr) {
 }
 
 export default function ProjectDetailView() {
+  const { error: toastError } = useToast()
   const { clientId, projectId } = useParams()
   const { user } = useAuth()
   const employeeId = user?.id || 'employee-1'
@@ -82,6 +80,7 @@ export default function ProjectDetailView() {
       const client = (clients || []).find((c) => c.id === clientId)
       setClientName(client?.name || 'Client')
     } catch (err) {
+      toastError(err.message || 'Failed to load project')
       setError(err.message || 'Failed to load project')
     } finally {
       setLoading(false)
@@ -125,9 +124,9 @@ export default function ProjectDetailView() {
   if (loading) {
     return (
       <div className="max-w-[1200px] mx-auto">
-        <div className="h-3 w-48 rounded bg-white/[0.06] mb-4 animate-pulse" />
-        <div className="h-8 w-64 rounded bg-white/[0.08] mb-2 animate-pulse" />
-        <div className="h-2 w-full max-w-xs rounded bg-white/[0.04] mb-8 animate-pulse" />
+        <div className="skeleton h-3 w-48 rounded-full mb-4" />
+        <div className="skeleton h-8 w-64 rounded-xl mb-2" />
+        <div className="skeleton h-2 w-80 rounded-full mb-8" />
         <GlassPanel>
           {[1, 2, 3, 4].map((i) => (
             <SkeletonRow key={i} />
@@ -148,19 +147,19 @@ export default function ProjectDetailView() {
           ]}
         />
         <GlassPanel className="flex flex-col items-center justify-center py-16 text-center">
-          <AlertCircle size={40} className="text-red-400/60 mb-4" />
-          <p className="text-[15px] font-semibold text-red-400/80 mb-2">{error}</p>
+          <AlertCircle size={40} className="text-[var(--color-error)]/60 mb-4" />
+          <p className="text-[15px] font-semibold text-[var(--color-error)]/80 mb-2">{error}</p>
           {error === 'Project not found' ? (
             <button
               onClick={() => navigate(`/clients/${clientId}`)}
-              className="mt-4 flex items-center gap-2 rounded-xl border border-[var(--color-outline-variant)] bg-[var(--color-surface-container)]/50 px-4 py-2 text-[13px] font-bold text-[var(--color-on-surface-variant)] transition-all hover:bg-[var(--color-surface-container)]"
+              className="mt-4 flex items-center gap-2 rounded-xl border border-[var(--color-outline-variant)] bg-[var(--color-surface-container)] px-4 py-2 text-[13px] font-bold text-[var(--color-on-surface-variant)] transition-all hover:bg-[var(--color-surface-high)]"
             >
               Back to Client
             </button>
           ) : (
             <button
               onClick={fetchData}
-              className="mt-4 flex items-center gap-2 rounded-xl border border-[var(--color-outline-variant)] bg-[var(--color-surface-container)]/50 px-4 py-2 text-[13px] font-bold text-[var(--color-on-surface-variant)] transition-all hover:bg-[var(--color-surface-container)]"
+              className="mt-4 flex items-center gap-2 rounded-xl border border-[var(--color-outline-variant)] bg-[var(--color-surface-container)] px-4 py-2 text-[13px] font-bold text-[var(--color-on-surface-variant)] transition-all hover:bg-[var(--color-surface-high)]"
             >
               <RefreshCw size={14} /> Retry
             </button>
@@ -221,7 +220,7 @@ export default function ProjectDetailView() {
           <button
             onClick={handleBulkTransition}
             disabled={bulkLoading}
-            className="ml-auto flex items-center gap-2 rounded-xl border border-[#3b82f6]/30 bg-[#3b82f6]/15 px-4 py-2 text-[12px] font-bold text-[#3b82f6] transition-all hover:bg-[#3b82f6]/25 disabled:opacity-50"
+            className="ml-auto flex items-center gap-2 rounded-xl border border-[var(--color-primary)]/30 bg-[var(--color-primary-muted)] px-4 py-2 text-[12px] font-bold text-[var(--color-primary)] transition-all hover:bg-[var(--color-primary)]/20 disabled:opacity-50"
           >
             {bulkLoading ? <Loader2 size={14} className="animate-spin" /> : <ArrowRight size={14} />}
             Mark All Uploaded as Under Review ({uploadedDocIds.length})
@@ -229,7 +228,7 @@ export default function ProjectDetailView() {
         )}
       </motion.div>
       {bulkError && (
-        <div className="mb-4 rounded-lg border border-red-500/20 bg-red-500/10 px-3 py-2 text-xs text-red-400">
+        <div className="mb-4 rounded-lg border border-[var(--color-error)]/20 bg-[var(--color-error-muted)] px-3 py-2 text-xs text-[var(--color-error)]">
           {bulkError}
         </div>
       )}
@@ -237,19 +236,20 @@ export default function ProjectDetailView() {
       {/* Document list */}
       <GlassPanel delay={200}>
         {filteredDocs.length === 0 ? (
-          <div className="flex flex-col items-center justify-center py-12 text-center">
-            <FileText size={32} className="text-white/20 mb-3" />
-            <p className="text-[13px] text-[var(--color-on-surface-variant)]">
-              {documents.length === 0 ? 'No documents in this project yet.' : 'No documents match the selected filters.'}
-            </p>
-          </div>
+          <EmptyState
+            icon={FileText}
+            title={documents.length === 0 ? 'No documents yet' : 'No documents match filters'}
+            subtitle={documents.length === 0
+              ? 'Documents will appear here once requests are created.'
+              : 'Try clearing the status filter.'}
+          />
         ) : (
-          <div className="divide-y divide-white/[0.05]">
+          <div className="divide-y divide-[var(--color-outline-variant)]">
             {filteredDocs.map((doc) => (
               <button
                 key={doc.id}
                 onClick={() => navigate(`/clients/${clientId}/projects/${projectId}/documents/${doc.id}`)}
-                className="w-full flex items-center gap-4 px-4 py-3.5 text-left transition-colors hover:bg-white/[0.03] cursor-pointer bg-transparent border-0"
+                className="w-full flex items-center gap-4 px-4 py-3.5 text-left transition-colors hover:bg-[var(--color-surface-high)] cursor-pointer bg-transparent border-0"
               >
                 <div className="flex-1 min-w-0">
                   <p className="m-0 text-[13px] font-semibold text-[var(--color-on-surface)] truncate">

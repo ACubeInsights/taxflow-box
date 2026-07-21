@@ -63,7 +63,7 @@ export default function BoxPreviewModal({ fileId, fileName, fileSize, userId, ca
         animate={{ opacity: 1, scale: 1, y: 0 }}
         exit={{ opacity: 0, scale: 0.96, y: 16 }}
         transition={{ duration: 0.3, ease: [0.4, 0, 0.2, 1] }}
-        className="fixed inset-5 z-[201] flex flex-col rounded-[24px] overflow-hidden ring-1 ring-[var(--color-outline-variant)]"
+        className="fixed inset-5 z-[201] flex flex-col rounded-2xl overflow-hidden ring-1 ring-[var(--color-outline-variant)]"
         style={{ background: 'var(--color-surface)', boxShadow: 'inset 0 1px 0 rgba(255,255,255,0.05), 0 40px 80px rgba(0,0,0,0.6)' }}
         onClick={(e) => e.stopPropagation()}
       >
@@ -71,7 +71,7 @@ export default function BoxPreviewModal({ fileId, fileName, fileSize, userId, ca
         <div className="flex items-center justify-between px-7 py-5 border-b border-[var(--color-outline-variant)] bg-[var(--color-surface-container)]/60 backdrop-blur-xl shrink-0">
           <div className="flex items-center gap-3 min-w-0">
             <div
-              className="w-9 h-9 rounded-[10px] flex items-center justify-center text-[var(--color-on-surface-variant)]"
+              className="w-9 h-9 rounded-lg flex items-center justify-center text-[var(--color-on-surface-variant)]"
               style={{ background: 'color-mix(in srgb, var(--color-primary) 10%, transparent)', border: '1px solid color-mix(in srgb, var(--color-primary) 20%, transparent)' }}
             >
               <FileText size={16} />
@@ -85,7 +85,7 @@ export default function BoxPreviewModal({ fileId, fileName, fileSize, userId, ca
             {canDownload && (
               <button
                 onClick={onDownload}
-                className="h-9 px-4 rounded-[10px] flex items-center gap-2 text-[12px] font-bold cursor-pointer transition-all duration-200"
+                className="h-9 px-4 rounded-lg flex items-center gap-2 text-[12px] font-bold cursor-pointer transition-all duration-200"
                 style={{ background: 'color-mix(in srgb, var(--color-primary) 12%, transparent)', border: '1px solid color-mix(in srgb, var(--color-primary) 22%, transparent)', color: 'var(--color-primary)' }}
               >
                 <Download size={13} /> Download
@@ -93,7 +93,7 @@ export default function BoxPreviewModal({ fileId, fileName, fileSize, userId, ca
             )}
             <button
               onClick={onClose}
-              className="w-9 h-9 rounded-[10px] flex items-center justify-center cursor-pointer transition-all duration-200 ring-1 ring-[var(--color-outline-variant)] bg-transparent text-[var(--color-on-surface-variant)] hover:bg-[var(--color-surface-highest)] hover:text-[var(--color-on-surface)]"
+              className="w-9 h-9 rounded-lg flex items-center justify-center cursor-pointer transition-all duration-200 ring-1 ring-[var(--color-outline-variant)] bg-transparent text-[var(--color-on-surface-variant)] hover:bg-[var(--color-surface-highest)] hover:text-[var(--color-on-surface)]"
             >
               <X size={16} />
             </button>
@@ -101,7 +101,7 @@ export default function BoxPreviewModal({ fileId, fileName, fileSize, userId, ca
         </div>
 
         {/* Preview content area */}
-        <div className="flex-1 relative overflow-hidden bg-[#1a1a2e]">
+        <div className="flex-1 relative overflow-hidden bg-[var(--color-surface-lowest)]">
           {/* Loading */}
           {loading && (
             <div className="absolute inset-0 flex flex-col items-center justify-center gap-3 z-10 bg-[var(--color-surface-lowest)]">
@@ -113,18 +113,18 @@ export default function BoxPreviewModal({ fileId, fileName, fileSize, userId, ca
           {/* Error with download fallback */}
           {error && (
             <div className="absolute inset-0 flex flex-col items-center justify-center gap-4 z-10 px-8 text-center bg-[var(--color-surface-lowest)]">
-              <AlertCircle size={32} className="text-[#f87171]" />
+              <AlertCircle size={32} className="text-[var(--color-error)]" />
               <p className="m-0 text-[14px] font-semibold text-[var(--color-on-surface)]">{error}</p>
               <div className="flex items-center gap-3">
                 <button
                   onClick={fetchEmbed}
-                  className="h-9 px-4 rounded-[10px] flex items-center gap-2 text-[12px] font-bold cursor-pointer transition-all ring-1 ring-[var(--color-outline-variant)] bg-transparent text-[var(--color-on-surface-variant)] hover:bg-[var(--color-surface-highest)]"
+                  className="h-9 px-4 rounded-lg flex items-center gap-2 text-[12px] font-bold cursor-pointer transition-all ring-1 ring-[var(--color-outline-variant)] bg-transparent text-[var(--color-on-surface-variant)] hover:bg-[var(--color-surface-highest)]"
                 >
                   <RefreshCw size={13} /> Retry
                 </button>
                 <button
                   onClick={onDownload}
-                  className="h-9 px-4 rounded-[10px] flex items-center gap-2 text-[12px] font-bold cursor-pointer transition-all"
+                  className="h-9 px-4 rounded-lg flex items-center gap-2 text-[12px] font-bold cursor-pointer transition-all"
                   style={{ background: 'var(--color-primary)', color: 'var(--color-surface-lowest)', boxShadow: '0 4px 12px color-mix(in srgb, var(--color-primary) 35%, transparent)' }}
                 >
                   <Download size={13} /> Download File

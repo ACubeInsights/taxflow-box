@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react'
+import { useState } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import { useAuth } from '../context/AuthContext'
 import { Lock, AlertCircle, Loader2, ArrowRight } from 'lucide-react'
@@ -13,15 +13,6 @@ export default function LoginScreen() {
   const [password, setPassword] = useState('')
   const [error, setError] = useState(null)
   const [forgotMode, setForgotMode] = useState(false)
-
-  const [isMobile, setIsMobile] = useState(false)
-  useEffect(() => {
-    const mql = window.matchMedia('(max-width: 767px)')
-    setIsMobile(mql.matches)
-    const handler = (e) => setIsMobile(e.matches)
-    mql.addEventListener('change', handler)
-    return () => mql.removeEventListener('change', handler)
-  }, [])
 
   const isFormValid = email.trim() !== '' && password.trim() !== ''
 
@@ -50,11 +41,10 @@ export default function LoginScreen() {
       >
         {/* Card */}
         <div
-          className="rounded-2xl relative overflow-hidden noise-overlay"
+          className="rounded-2xl relative overflow-hidden noise-overlay px-6 pt-8 pb-6 sm:px-10 sm:pt-12 sm:pb-10"
           style={{
             background: 'var(--color-surface-container)',
             border: '1px solid var(--color-outline-variant)',
-            padding: isMobile ? '32px 24px' : '48px 40px 40px',
             boxShadow: '0 0 0 1px rgba(255,255,255,0.03) inset, 0 25px 80px rgba(0,0,0,0.6)',
           }}
         >
@@ -176,7 +166,7 @@ export default function LoginScreen() {
           </>
           )}
 
-          <DemoLoginSection demoLogin={demoLogin} isMobile={isMobile} />
+          <DemoLoginSection demoLogin={demoLogin} />
         </div>
 
         {/* Footer text */}

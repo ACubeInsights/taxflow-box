@@ -39,8 +39,8 @@ export default function ResetPasswordPage() {
       <div className="relative w-screen h-screen flex items-center justify-center p-5 bg-[var(--color-surface-lowest)] font-sans">
         <AnimatedBackground />
         <div className="relative z-10 text-center">
-          <AlertCircle size={48} className="text-red-400 mx-auto mb-4" />
-          <p className="text-red-300 text-lg font-bold">Invalid reset link</p>
+          <AlertCircle size={48} className="text-[var(--color-error)] mx-auto mb-4" />
+          <p className="text-[var(--color-error)] text-lg font-bold">Invalid reset link</p>
           <p className="text-[var(--color-on-surface-variant)] text-sm mt-2">This link is missing the reset token.</p>
           <button onClick={() => navigate('/')} className="mt-6 px-6 py-2.5 rounded-xl text-[13px] font-semibold bg-[var(--color-surface-high)] border border-[var(--color-outline-variant)] text-[var(--color-on-surface)] cursor-pointer">
             Back to Login
@@ -59,9 +59,9 @@ export default function ResetPasswordPage() {
         transition={{ type: 'spring', stiffness: 100, damping: 20 }}
         className="relative z-10 w-full max-w-[420px]"
       >
-        <div className="rounded-[32px] bg-[var(--color-surface-container)]/40 backdrop-blur-[40px] border border-[var(--color-outline-variant)] relative overflow-hidden" style={{ padding: '44px 44px 36px', boxShadow: 'inset 0 1px 0 rgba(255,255,255,0.06), 0 40px 100px rgba(0,0,0,0.8)' }}>
+        <div className="rounded-3xl bg-[var(--color-surface-container)]/40 backdrop-blur-[40px] border border-[var(--color-outline-variant)] relative overflow-hidden" style={{ padding: '44px 44px 36px', boxShadow: 'inset 0 1px 0 rgba(255,255,255,0.06), 0 40px 100px rgba(0,0,0,0.8)' }}>
           <div className="text-center mb-7">
-            <div className="inline-flex items-center justify-center w-14 h-14 rounded-[18px] border border-[var(--color-primary)]/40 mb-5" style={{ background: 'linear-gradient(135deg, rgba(173,198,255,0.2), rgba(75,142,255,0.1))' }}>
+            <div className="inline-flex items-center justify-center w-14 h-14 rounded-2xl border border-[var(--color-primary)]/40 mb-5" style={{ background: 'linear-gradient(135deg, rgba(173,198,255,0.2), rgba(75,142,255,0.1))' }}>
               <Zap size={28} className="text-[var(--color-primary)]" strokeWidth={2.5} />
             </div>
             <h1 className="m-0 text-[24px] font-bold text-[var(--color-on-surface)] tracking-tight">Reset Password</h1>
@@ -70,8 +70,8 @@ export default function ResetPasswordPage() {
 
           {success ? (
             <div className="text-center py-4">
-              <CheckCircle2 size={48} className="text-emerald-400 mx-auto mb-4" />
-              <p className="text-[16px] font-bold text-white mb-2">Password reset successful</p>
+              <CheckCircle2 size={48} className="text-[var(--color-success)] mx-auto mb-4" />
+              <p className="text-[16px] font-bold text-[var(--color-on-surface)] mb-2">Password reset successful</p>
               <p className="text-[12px] text-[var(--color-on-surface-variant)] mb-6">You can now log in with your new password.</p>
               <button
                 onClick={() => navigate('/')}
@@ -87,13 +87,13 @@ export default function ResetPasswordPage() {
               <FloatingLabel label="Confirm Password" type="password" value={confirmPassword} onChange={(e) => setConfirmPassword(e.target.value)} />
 
               {newPassword && confirmPassword && newPassword !== confirmPassword && (
-                <p className="m-0 text-[11px] text-red-400">Passwords do not match</p>
+                <p className="m-0 text-[11px] text-[var(--color-error)] font-medium">Passwords do not match</p>
               )}
 
               {error && (
-                <div className="flex items-start gap-2 p-3 rounded-xl border border-red-500/30 bg-red-500/10">
-                  <AlertCircle size={16} className="text-red-400 flex-shrink-0 mt-0.5" />
-                  <p className="m-0 text-[12px] text-red-300">{error}</p>
+                <div className="flex items-start gap-2 p-3 rounded-xl border border-[var(--color-error)]/25 bg-[var(--color-error-muted)]">
+                  <AlertCircle size={16} className="text-[var(--color-error)] shrink-0 mt-0.5" />
+                  <p className="m-0 text-[12px] text-[var(--color-error)]">{error}</p>
                 </div>
               )}
 

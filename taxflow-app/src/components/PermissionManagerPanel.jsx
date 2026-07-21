@@ -10,11 +10,11 @@ import { projectApi, vaultApi, permissionApi } from '../services/api'
 
 const ACCESS_LEVELS = ['no_access', 'viewer', 'commenter', 'writer', 'delete']
 const ACCESS_COLORS = {
-  no_access: '#6b7280',
-  viewer: 'var(--color-primary)',
+  no_access: 'var(--color-on-surface-variant)',
+  viewer:    'var(--color-primary)',
   commenter: 'var(--color-tertiary)',
-  writer: 'var(--color-secondary)',
-  delete: '#f87171',
+  writer:    'var(--color-secondary)',
+  delete:    'var(--color-error)',
 }
 
 function AccessBadge({ level, onClick }) {
@@ -54,7 +54,7 @@ function AccessSelector({ current, onSelect, onCancel }) {
           {level.replace('_', ' ')}
         </button>
       ))}
-      <button onClick={onCancel} className="text-[9px] text-[var(--color-on-surface-variant)] ml-1 cursor-pointer bg-transparent border-none hover:text-white">
+      <button onClick={onCancel} className="text-[9px] text-[var(--color-on-surface-variant)] ml-1 cursor-pointer bg-transparent border-none hover:text-[var(--color-on-surface)]">
         ✕
       </button>
     </div>
@@ -214,7 +214,7 @@ export default function PermissionManagerPanel({ onClose }) {
           <Shield size={16} className="text-[var(--color-on-surface)]" />
           <span className="text-[15px] font-semibold text-[var(--color-on-surface)]">Permission Manager</span>
         </div>
-        {onClose && <button onClick={onClose} className="text-[12px] text-[var(--color-on-surface-variant)] cursor-pointer bg-transparent border-none hover:text-white">Close</button>}
+        {onClose && <button onClick={onClose} className="text-[12px] text-[var(--color-on-surface-variant)] cursor-pointer bg-transparent border-none hover:text-[var(--color-on-surface)]">Close</button>}
       </div>
 
       {/* Client list */}
@@ -270,7 +270,7 @@ export default function PermissionManagerPanel({ onClose }) {
             <p className="m-0 text-[12px] font-bold text-[var(--color-on-surface)]">{selectedClient.name}</p>
             <p className="m-0 text-[10px] text-[var(--color-on-surface-variant)]">{selectedClient.email}</p>
           </div>
-          <button onClick={() => setSelectedClient(null)} className="text-[10px] text-[var(--color-on-surface-variant)] cursor-pointer bg-transparent border-none hover:text-white">Change</button>
+          <button onClick={() => setSelectedClient(null)} className="text-[10px] text-[var(--color-on-surface-variant)] cursor-pointer bg-transparent border-none hover:text-[var(--color-on-surface)]">Change</button>
         </div>
       )}
 
@@ -278,7 +278,12 @@ export default function PermissionManagerPanel({ onClose }) {
       {selectedClient && (
         <div>
           {loading && <div className="flex items-center justify-center py-8"><Loader2 size={18} className="animate-spin text-[var(--color-primary)]" /></div>}
-          {error && <div className="flex items-center gap-2 px-3 py-2 rounded-xl bg-[#f87171]/5 border border-[#f87171]/15"><AlertCircle size={12} className="text-[#f87171]" /><span className="text-[11px] text-[#f87171]">{error}</span></div>}
+          {error && (
+            <div className="flex items-center gap-2 px-3 py-2 rounded-xl bg-[var(--color-error-muted)] border border-[var(--color-error)]/15">
+              <AlertCircle size={12} className="text-[var(--color-error)]" />
+              <span className="text-[11px] text-[var(--color-error)]">{error}</span>
+            </div>
+          )}
           {!loading && !error && (
             <div className="flex flex-col gap-0.5">
               {vaultFolders.length > 0 ? (

@@ -1,14 +1,15 @@
 import { useState } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import { Shield, Users, FileText, ChevronDown } from 'lucide-react'
+import { ROLE_META } from '../constants/roles'
 
 const DEMO_ROLES = [
-  { id: 'superadmin', label: 'Super Admin', description: 'Full system access', icon: Shield, color: '#818cf8' },
-  { id: 'employee', label: 'Tax Preparer', description: 'Client workflows', icon: FileText, color: '#c4b5fd' },
-  { id: 'client', label: 'Client', description: 'Portal view', icon: Users, color: '#5eead4' },
+  { id: 'superadmin', label: 'Super Admin', description: 'Full system access',  icon: Shield,   color: ROLE_META.superadmin.color },
+  { id: 'employee',   label: 'Tax Preparer', description: 'Client workflows',   icon: FileText, color: ROLE_META.employee.color },
+  { id: 'client',     label: 'Client',       description: 'Portal view',        icon: Users,    color: ROLE_META.client.color },
 ]
 
-export default function DemoLoginSection({ demoLogin, isMobile }) {
+export default function DemoLoginSection({ demoLogin }) {
   const [showDemo, setShowDemo] = useState(false)
 
   return (
