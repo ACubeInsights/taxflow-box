@@ -1,10 +1,10 @@
-import { useState, useEffect, useRef, useCallback } from 'react'
+import { useState, useEffect, useCallback } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
 import {
   FileText, Loader2, AlertCircle, RefreshCw, CheckCircle,
   RotateCcw, ShieldOff, Calendar, Undo2, Send, Edit3,
 } from 'lucide-react'
-import { projectApi, reviewApi, tokenApi } from '../../services/api'
+import { projectApi, reviewApi, vaultApi } from '../../services/api'
 import Breadcrumb from '../Breadcrumb'
 import { FolioPanel, StatusBadge, Badge } from '../ui'
 import CommentsThread from '../CommentsThread'
@@ -13,6 +13,10 @@ import { useAuth } from '../../context/AuthContext'
 import { useToast } from '../../context/ToastContext'
 import { PRIORITY_COLORS } from '../../constants/roles'
 import { STATUS_COLORS } from '../../constants/statusColors'
+
+function isRealBoxFileId(fileId) {
+  return /^\d+$/.test(String(fileId ?? '').trim())
+}
 
 function formatDate(dateStr) {
   if (!dateStr) return '—'
@@ -67,9 +71,8 @@ export default function DocumentDetailView() {
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState(null)
 
-  const [previewToken, setPreviewToken] = useState(null)
+  const [previewEmbedUrl, setPreviewEmbedUrl] = useState(null)
   const [previewError, setPreviewError] = useState(null)
-  const refreshTimerRef = useRef(null)
 
   const [actionLoading, setActionLoading] = useState(null)
   const [actionError, setActionError] = useState(null)
@@ -159,30 +162,34 @@ export default function DocumentDetailView() {
   }, [doc?.id, doc?.status, documentId, employeeId, doc?.version])
 
   useEffect(() => {
-    if (!doc?.fileId || !employeeId) return
+    if (!doc?.fileId) return
 
-    const fetchToken = async () => {
+    let cancelled = false
+    setPreviewEmbedUrl(null)
+    setPreviewError(null)
+
+    if (!isRealBoxFileId(doc.fileId)) {
+      setPreviewError(
+        'This document uses demo seed data and is not linked to a Box file yet. Run: node scripts/sync-seed-files-to-box.js'
+      )
+      return undefined
+    }
+
+    const fetchPreview = async () => {
       try {
-        const result = await tokenApi.getPreviewToken(doc.fileId, employeeId)
-        setPreviewToken(result)
-        setPreviewError(null)
-        if (result.expiresAt) {
-          const expiresMs = new Date(result.expiresAt).getTime()
-          const refreshIn = expiresMs - Date.now() - 5 * 60 * 1000
-          if (refreshIn > 0) {
-            refreshTimerRef.current = setTimeout(fetchToken, refreshIn)
-          }
+        const result = await vaultApi.getEmbedUrl(doc.fileId)
+        if (!cancelled) {
+          setPreviewEmbedUrl(result.embedUrl)
+          setPreviewError(null)
         }
       } catch (err) {
-        setPreviewError(err.message)
+        if (!cancelled) setPreviewError(err.message)
       }
     }
 
-    fetchToken()
-    return () => {
-      if (refreshTimerRef.current) clearTimeout(refreshTimerRef.current)
-    }
-  }, [doc?.fileId, employeeId])
+    fetchPreview()
+    return () => { cancelled = true }
+  }, [doc?.fileId])
 
   const doTransition = async (toStatus, extra = {}) => {
     setActionError(null)
@@ -390,18 +397,31 @@ export default function DocumentDetailView() {
               )}
             </div>
             <div className="flex min-h-[400px] flex-1 flex-col items-center justify-center rounded-[var(--radius-control)] border border-[var(--color-rule)] bg-[var(--color-archive)] p-[var(--space-4)]">
-              {doc.fileId && previewToken ? (
+              {doc.fileId && previewEmbedUrl ? (
                 <iframe
-                  src={`https://app.box.com/embed/preview/${doc.fileId}?token=${previewToken.token}`}
+                  src={previewEmbedUrl}
                   style={{ width: '100%', height: 450, border: 'none', borderRadius: 'var(--radius-control)' }}
                   title={`Preview: ${doc.name}`}
-                  sandbox="allow-scripts allow-same-origin allow-popups"
+                  allow="fullscreen"
                 />
               ) : doc.fileId && previewError ? (
                 <>
                   <FileText size={28} className="mb-[var(--space-3)] text-[var(--color-flag)]" aria-hidden />
                   <p className="m-0 text-sm font-medium text-[var(--color-flag)]">Preview unavailable</p>
                   <p className="m-0 mt-[var(--space-1)] text-xs text-[var(--color-whisper)]">{previewError}</p>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      if (!isRealBoxFileId(doc.fileId)) return
+                      setPreviewError(null)
+                      vaultApi.getEmbedUrl(doc.fileId)
+                        .then((result) => setPreviewEmbedUrl(result.embedUrl))
+                        .catch((err) => setPreviewError(err.message))
+                    }}
+                    className="btn-ghost mt-[var(--space-3)] h-8 text-xs"
+                  >
+                    <RefreshCw size={12} aria-hidden /> Retry preview
+                  </button>
                 </>
               ) : !doc.fileId ? (
                 <>

@@ -2,6 +2,7 @@ import express from 'express';
 import boxService from '../services/boxService.js';
 import permissionService from '../services/permissionService.js';
 import { requireAuth, requireRole, validateFolderOwnership, permissionCheck } from '../middleware/authMiddleware.js';
+import { isPlaceholderBoxFileId, isRealBoxFileId } from '../utils/boxIds.js';
 
 const router = express.Router();
 
@@ -64,6 +65,16 @@ router.get('/files/:fileId/download', requireAuth, requireRole('client', 'employ
 router.get('/files/:fileId/embed', requireAuth, requireRole('client', 'employee', 'superadmin'), permissionCheck('viewer'), async (req, res, next) => {
   try {
     const { fileId } = req.params;
+
+    if (isPlaceholderBoxFileId(fileId)) {
+      return res.status(422).json({
+        error: 'This document is demo seed data and is not linked to a Box file yet. Run: node scripts/sync-seed-files-to-box.js',
+      });
+    }
+    if (!isRealBoxFileId(fileId)) {
+      return res.status(422).json({ error: 'Invalid Box file ID' });
+    }
+
     const client = boxService.getBoxClient();
 
     const file = await client.files.getFileById(fileId, {
@@ -77,8 +88,9 @@ router.get('/files/:fileId/embed', requireAuth, requireRole('client', 'employee'
 
     res.json({ embedUrl, fileName: file.name, extension: file.extension });
   } catch (error) {
-    if (error.statusCode === 404) {
-      return res.status(404).json({ error: 'File not found' });
+    const status = error.statusCode || error.status || error.responseInfo?.statusCode;
+    if (status === 404 || String(error.message || '').includes('404')) {
+      return res.status(404).json({ error: 'File not found in Box' });
     }
     next(error);
   }

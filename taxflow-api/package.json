@@ -7,7 +7,8 @@
   "scripts": {
     "dev": "node --watch src/server.js",
     "start": "node src/server.js",
-    "test": "vitest --run"
+    "test": "vitest --run",
+    "sync-seed-box": "node scripts/sync-seed-files-to-box.js"
   },
   "dependencies": {
     "bcrypt": "^6.0.0",

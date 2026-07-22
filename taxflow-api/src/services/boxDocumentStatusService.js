@@ -51,6 +51,15 @@ export function toApiStatus(boxStatus) {
   return BOX_TO_API_STATUS[boxStatus] || null;
 }
 
+function isBoxNotFoundError(err) {
+  const status = err?.statusCode ?? err?.status ?? err?.responseInfo?.statusCode;
+  if (status === 404) return true;
+  const message = String(err?.message || '');
+  return message.includes('404') && (
+    message.includes('not_found') || message.includes('instance_not_found')
+  );
+}
+
 export class BoxDocumentStatusService {
   _canUseBoxMetadata() {
     return boxService.getTier() === 'enterprise';
@@ -140,7 +149,7 @@ export class BoxDocumentStatusService {
       );
       return true;
     } catch (err) {
-      if (err.statusCode !== 404 && err.status !== 404) throw err;
+      if (!isBoxNotFoundError(err)) throw err;
 
       await client.fileMetadata.createFileMetadataById(
         boxFileId,
