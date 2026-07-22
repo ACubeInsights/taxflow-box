@@ -1,11 +1,137 @@
 import { useState } from 'react'
-import { motion, AnimatePresence } from 'framer-motion'
+import { AlertCircle, Loader2, ShieldCheck, FolderLock, FileCheck, Users } from 'lucide-react'
 import { useAuth } from '../context/AuthContext'
-import { Lock, AlertCircle, Loader2, ArrowRight } from 'lucide-react'
-import AnimatedBackground from './AnimatedBackground'
 import FloatingLabel from './FloatingLabel'
 import ForgotPasswordForm from './ForgotPasswordForm'
 import DemoLoginSection from './DemoLoginSection'
+
+const DEFAULT_FEATURES = [
+  {
+    icon: FolderLock,
+    title: 'Secure client vaults',
+    description: 'Every file stays in an encrypted Box workspace.',
+    accent: 'var(--color-trace)',
+    accentMuted: 'var(--color-trace-muted)',
+  },
+  {
+    icon: FileCheck,
+    title: 'Structured requests',
+    description: 'Send checklists and track what is still outstanding.',
+    accent: 'var(--color-commit)',
+    accentMuted: 'var(--color-commit-muted)',
+  },
+  {
+    icon: Users,
+    title: 'Team-ready workflow',
+    description: 'Preparers, admins, and clients each see the right view.',
+    accent: 'var(--color-signal)',
+    accentMuted: 'var(--color-signal-muted)',
+  },
+]
+
+/**
+ * Auth split layout — left hero, right form.
+ */
+function AuthSplit({ children, railTitle, railBody, features, steps }) {
+  const highlights = features?.length ? features : null
+
+  return (
+    <div className="flex min-h-screen w-full flex-col bg-[var(--color-archive)] md:flex-row">
+      <aside className="auth-hero relative hidden w-[45%] max-w-lg flex-col justify-between border-r border-[var(--color-rule)] px-[var(--space-12)] py-[var(--space-12)] md:flex">
+        <div>
+          <div className="mb-[var(--space-10)] flex items-center gap-[var(--space-3)]">
+            <div
+              className="flex h-9 w-9 items-center justify-center rounded-[var(--radius-control)] border border-[var(--color-rule)] bg-[var(--color-ledger)]"
+              aria-hidden
+            >
+              <span className="font-display text-xs font-bold text-[var(--color-signal)]">TF</span>
+            </div>
+            <span className="font-display text-sm font-semibold tracking-tight text-[var(--color-ink)]">
+              TaxFlow Pro
+            </span>
+          </div>
+
+          <p className="label-caps m-0 mb-[var(--space-3)] text-[var(--color-trace)]">
+            Tax document platform
+          </p>
+          <h1 className="m-0 mb-[var(--space-4)] max-w-[22ch] font-display text-2xl font-bold text-[var(--color-ink)]">
+            {railTitle}
+          </h1>
+          <p className="m-0 max-w-[36ch] text-sm leading-relaxed text-[var(--color-whisper)]">
+            {railBody}
+          </p>
+        </div>
+
+        {highlights ? (
+          <ul className="m-0 list-none space-y-[var(--space-4)] p-0" aria-label="Platform highlights">
+            {highlights.map((item) => {
+              const Icon = item.icon
+              return (
+                <li key={item.title} className="flex items-start gap-[var(--space-3)]">
+                  <span
+                    className="auth-feature-icon"
+                    style={{ background: item.accentMuted, borderColor: item.accent }}
+                    aria-hidden
+                  >
+                    <Icon size={16} style={{ color: item.accent }} strokeWidth={2.25} />
+                  </span>
+                  <span className="min-w-0 pt-[var(--space-1)]">
+                    <span className="block text-sm font-medium text-[var(--color-ink)]">
+                      {item.title}
+                    </span>
+                    <span className="mt-[var(--space-1)] block text-xs leading-relaxed text-[var(--color-whisper)]">
+                      {item.description}
+                    </span>
+                  </span>
+                </li>
+              )
+            })}
+          </ul>
+        ) : steps?.length > 0 ? (
+          <ol className="m-0 list-none space-y-[var(--space-3)] p-0" aria-label="Steps">
+            {steps.map((step, index) => (
+              <li key={step} className="flex items-center gap-[var(--space-3)] text-sm text-[var(--color-whisper)]">
+                <span
+                  className="folio-spine h-4"
+                  style={{
+                    background: index === 0
+                      ? 'var(--color-signal)'
+                      : index === 1
+                        ? 'var(--color-trace)'
+                        : 'var(--color-commit)',
+                  }}
+                  aria-hidden
+                />
+                {step}
+              </li>
+            ))}
+          </ol>
+        ) : null}
+
+        <p className="m-0 flex items-center gap-[var(--space-2)] text-xs text-[var(--color-whisper)]">
+          <ShieldCheck size={14} className="shrink-0 text-[var(--color-commit)]" aria-hidden />
+          Enterprise-grade storage powered by Box
+        </p>
+      </aside>
+
+      <div className="flex flex-1 flex-col justify-center px-[var(--space-4)] py-[var(--space-8)] sm:px-[var(--space-8)] lg:px-[var(--space-12)]">
+        <div className="mb-[var(--space-8)] flex items-center gap-[var(--space-3)] md:hidden">
+          <div
+            className="flex h-9 w-9 items-center justify-center rounded-[var(--radius-control)] border border-[var(--color-rule)] bg-[var(--color-ledger)]"
+            aria-hidden
+          >
+            <span className="font-display text-xs font-bold text-[var(--color-signal)]">TF</span>
+          </div>
+          <span className="font-display text-sm font-semibold text-[var(--color-ink)]">TaxFlow Pro</span>
+        </div>
+
+        <div className="auth-card mx-auto w-full max-w-md p-[var(--space-6)] sm:p-[var(--space-8)]">
+          {children}
+        </div>
+      </div>
+    </div>
+  )
+}
 
 export default function LoginScreen() {
   const { login, demoLogin, loginLoading, tokenError } = useAuth()
@@ -19,115 +145,70 @@ export default function LoginScreen() {
   const handleSubmit = async (e) => {
     e.preventDefault()
     setError(null)
-
     try {
       await login(email.trim(), password)
     } catch (err) {
-      setError(err.message || 'Login failed')
+      setError(err.message || 'Sign in failed')
     }
   }
 
   const displayError = error || tokenError
 
   return (
-    <div className="relative w-screen h-screen flex items-center justify-center p-5 overflow-y-auto bg-[var(--color-surface-lowest)]">
-      <AnimatedBackground />
-
-      <motion.div
-        initial={{ opacity: 0, y: 20 }}
-        animate={{ opacity: 1, y: 0 }}
-        transition={{ duration: 0.6, ease: [0.22, 1, 0.36, 1] }}
-        className="relative z-10 w-full max-w-[420px]"
-      >
-        {/* Card */}
-        <div
-          className="rounded-2xl relative overflow-hidden noise-overlay px-6 pt-8 pb-6 sm:px-10 sm:pt-12 sm:pb-10"
-          style={{
-            background: 'var(--color-surface-container)',
-            border: '1px solid var(--color-outline-variant)',
-            boxShadow: '0 0 0 1px rgba(255,255,255,0.03) inset, 0 25px 80px rgba(0,0,0,0.6)',
-          }}
-        >
-          {/* Top edge highlight */}
-          <div className="absolute top-0 left-[20%] right-[20%] h-[1px] bg-gradient-to-r from-transparent via-[var(--color-primary)]/30 to-transparent" />
-
-          {/* Brand */}
-          <motion.div
-            className="text-center mb-10"
-            initial={{ opacity: 0, y: 10 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ delay: 0.1, duration: 0.5 }}
-          >
-            <div className="inline-flex items-center justify-center w-12 h-12 rounded-xl mb-5 border border-[var(--color-primary)]/20 glow-sm">
-              <div
-                className="w-full h-full rounded-xl flex items-center justify-center"
-                style={{ background: 'linear-gradient(135deg, rgba(129,140,248,0.15), rgba(99,102,241,0.05))' }}
-              >
-                <Lock size={20} className="text-[var(--color-primary)]" strokeWidth={2} />
-              </div>
+    <AuthSplit
+      railTitle="Document management built for tax firms"
+      railBody="Collect client files, track review status, and keep every engagement organized in one secure workspace."
+      features={DEFAULT_FEATURES}
+    >
+      {forgotMode ? (
+        <ForgotPasswordForm
+          onBack={() => { setForgotMode(false); setError(null) }}
+          initialEmail={email}
+          displayError={displayError}
+          setError={setError}
+        />
+      ) : (
+        <>
+          <form onSubmit={handleSubmit} className="flex flex-col gap-[var(--space-4)]">
+            <div className="mb-[var(--space-2)]">
+              <h2 className="m-0 font-display text-xl font-bold text-[var(--color-ink)]">
+                Welcome back
+              </h2>
+              <p className="m-0 mt-[var(--space-2)] text-sm leading-relaxed text-[var(--color-whisper)]">
+                Sign in with the email address your firm registered for you.
+              </p>
             </div>
-            <h1 className="m-0 text-[28px] font-bold text-[var(--color-on-surface)] leading-tight tracking-[-0.03em] font-display">
-              Welcome back
-            </h1>
-            <p className="mt-2 text-[13px] text-[var(--color-on-surface-variant)] font-medium">
-              Sign in to your TaxFlow Pro workspace
-            </p>
-          </motion.div>
 
-          {/* Login form or Forgot Password form */}
-          {forgotMode ? (
-            <ForgotPasswordForm
-              onBack={() => { setForgotMode(false); setError(null) }}
-              initialEmail={email}
-              displayError={displayError}
-              setError={setError}
-            />
-          ) : (
-          <>
-          {/* Error display */}
-          <AnimatePresence>
             {displayError && (
-              <motion.div
-                initial={{ opacity: 0, height: 0, marginBottom: 0 }}
-                animate={{ opacity: 1, height: 'auto', marginBottom: 16 }}
-                exit={{ opacity: 0, height: 0, marginBottom: 0 }}
-                className="flex items-start gap-2.5 px-4 py-3 rounded-xl border border-[var(--color-error)]/20 bg-[var(--color-error-muted)]"
+              <div
+                className="flex items-start gap-[var(--space-2)] rounded-[var(--radius-control)] border border-[var(--color-flag)] bg-[var(--color-flag-muted)] px-[var(--space-4)] py-[var(--space-3)]"
+                role="alert"
               >
-                <AlertCircle size={15} className="text-[var(--color-error)] flex-shrink-0 mt-0.5" />
-                <p className="m-0 text-[13px] text-[var(--color-error)] leading-relaxed font-medium">{displayError}</p>
-              </motion.div>
+                <AlertCircle size={16} className="mt-0.5 shrink-0 text-[var(--color-flag)]" aria-hidden />
+                <p className="m-0 text-sm text-[var(--color-flag)]">{displayError}</p>
+              </div>
             )}
-          </AnimatePresence>
 
-          {/* Login form */}
-          <motion.form
-            onSubmit={handleSubmit}
-            initial={{ opacity: 0, y: 10 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ delay: 0.2, duration: 0.5 }}
-          >
-            <div className="flex flex-col gap-3.5 mb-5">
-              <FloatingLabel
-                label="Email address"
-                type="email"
-                value={email}
-                onChange={(e) => setEmail(e.target.value)}
-                autoComplete="email"
-              />
-              <FloatingLabel
-                label="Password"
-                type="password"
-                value={password}
-                onChange={(e) => setPassword(e.target.value)}
-                autoComplete="current-password"
-              />
-            </div>
+            <FloatingLabel
+              label="Email"
+              type="email"
+              value={email}
+              onChange={(e) => setEmail(e.target.value)}
+              autoComplete="email"
+            />
+            <FloatingLabel
+              label="Password"
+              type="password"
+              value={password}
+              onChange={(e) => setPassword(e.target.value)}
+              autoComplete="current-password"
+            />
 
-            <div className="flex items-center justify-end mb-5">
+            <div className="flex justify-end">
               <button
                 type="button"
                 onClick={() => { setForgotMode(true); setError(null) }}
-                className="bg-transparent border-none text-[12px] font-semibold text-[var(--color-on-surface-variant)] cursor-pointer p-0 hover:text-[var(--color-primary)] transition-colors"
+                className="cursor-pointer border-none bg-transparent p-0 text-sm font-medium text-[var(--color-trace)] hover:text-[var(--color-ink)]"
               >
                 Forgot password?
               </button>
@@ -136,49 +217,28 @@ export default function LoginScreen() {
             <button
               type="submit"
               disabled={loginLoading || !isFormValid}
-              className="relative w-full h-12 rounded-xl text-[14px] font-semibold tracking-tight overflow-hidden cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed group"
-              style={{
-                background: isFormValid
-                  ? 'linear-gradient(180deg, var(--color-primary) 0%, var(--color-primary-container) 100%)'
-                  : 'var(--color-surface-highest)',
-                color: isFormValid ? '#09090b' : 'var(--color-on-surface-variant)',
-                border: 'none',
-                boxShadow: isFormValid
-                  ? '0 1px 0 rgba(255,255,255,0.2) inset, 0 4px 16px rgba(129, 140, 248, 0.3)'
-                  : 'none',
-              }}
+              className="btn-signal w-full"
             >
-              <span className="relative z-10 flex items-center justify-center gap-2">
-                {loginLoading ? (
-                  <>
-                    <Loader2 size={16} className="animate-spin" />
-                    Signing in...
-                  </>
-                ) : (
-                  <>
-                    Sign in
-                    <ArrowRight size={15} className="transition-transform group-hover:translate-x-0.5" />
-                  </>
-                )}
-              </span>
+              {loginLoading ? (
+                <>
+                  <Loader2 size={16} className="animate-spin" aria-hidden />
+                  Signing in…
+                </>
+              ) : (
+                'Sign in'
+              )}
             </button>
-          </motion.form>
-          </>
-          )}
+
+            <p className="m-0 mt-[var(--space-2)] text-center text-xs leading-relaxed text-[var(--color-whisper)]">
+              New client? Open the invitation link in your email to create your account.
+            </p>
+          </form>
 
           <DemoLoginSection demoLogin={demoLogin} />
-        </div>
-
-        {/* Footer text */}
-        <motion.p
-          className="text-center mt-6 text-[11px] text-[var(--color-on-surface-variant)]/50 font-medium"
-          initial={{ opacity: 0 }}
-          animate={{ opacity: 1 }}
-          transition={{ delay: 0.5 }}
-        >
-          Protected by end-to-end encryption
-        </motion.p>
-      </motion.div>
-    </div>
+        </>
+      )}
+    </AuthSplit>
   )
 }
+
+export { AuthSplit }

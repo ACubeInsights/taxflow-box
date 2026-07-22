@@ -4,7 +4,7 @@
  */
 
 import express from 'express';
-import { requireAuth, requireRole } from '../middleware/authMiddleware.js';
+import { requireAuth, requireRole, resolveClientForUser } from '../middleware/authMiddleware.js';
 import permissionService from '../services/permissionService.js';
 import notificationService from '../services/notificationService.js';
 import projectService from '../services/projectService.js';
@@ -86,8 +86,11 @@ router.get('/:clientId/:resourceId', requireAuth, async (req, res, next) => {
     const { clientId, resourceId } = req.params;
 
     // Clients can only query their own permissions
-    if (req.user.role === 'client' && req.user.userId !== clientId) {
-      return res.status(404).json({ error: 'Resource not found' });
+    if (req.user.role === 'client') {
+      const client = await resolveClientForUser(req.user);
+      if (!client || client.id !== clientId) {
+        return res.status(404).json({ error: 'Resource not found' });
+      }
     }
 
     const permission = await permissionService.getPermission(clientId, resourceId);

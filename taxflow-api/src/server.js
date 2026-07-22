@@ -96,6 +96,11 @@ process.on('SIGINT', async () => {
 
 async function startServer() {
   try {
+    if (config.nodeEnv === 'production' && !config.deepLinkSecret) {
+      logger.error('DEEP_LINK_SECRET must be set in production');
+      process.exit(1);
+    }
+
     const db = await initDatabase();
     const repos = initRepositories(db);
     injectRepositories(repos);

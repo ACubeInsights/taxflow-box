@@ -1,36 +1,29 @@
 /**
- * Single source of truth for document workflow status color and label mappings.
- * Used by DocumentWorkflowContext, ui.jsx, StatusFilterChips, and other components
- * that need to display status-related UI.
- *
- * @module statusColors
- * @see Requirements 5.3
+ * Status colors — Folio Rail spine + status labels only.
+ * All values are token references from index.css.
  */
 
 import { DocumentStatus } from './statusTransitions.js'
 
-/** Color hex codes for each document workflow status */
 export const STATUS_COLORS = {
-  [DocumentStatus.Not_Requested]: '#6b7280',       // Gray
-  [DocumentStatus.Uploaded]: '#3b82f6',             // Blue
-  [DocumentStatus.Under_Review]: '#eab308',         // Yellow
-  [DocumentStatus.Revision_Requested]: '#ef4444',   // Red
-  [DocumentStatus.Approved]: '#22c55e',             // Green
-  [DocumentStatus.Waived]: '#64748b',               // Slate
+  [DocumentStatus.Not_Requested]: 'var(--color-whisper)',
+  [DocumentStatus.Uploaded]: 'var(--color-trace)',
+  [DocumentStatus.Under_Review]: 'var(--color-hold)',
+  [DocumentStatus.Revision_Requested]: 'var(--color-flag)',
+  [DocumentStatus.Approved]: 'var(--color-commit)',
+  [DocumentStatus.Waived]: 'var(--color-whisper)',
 }
 
-/** Human-readable labels for each document workflow status */
 export const STATUS_LABELS = {
-  [DocumentStatus.Not_Requested]: 'Not Requested',
+  [DocumentStatus.Not_Requested]: 'Not requested',
   [DocumentStatus.Uploaded]: 'Uploaded',
-  [DocumentStatus.Under_Review]: 'Under Review',
-  [DocumentStatus.Revision_Requested]: 'Revision Requested',
+  [DocumentStatus.Under_Review]: 'Under review',
+  [DocumentStatus.Revision_Requested]: 'Revision requested',
   [DocumentStatus.Approved]: 'Approved',
   [DocumentStatus.Waived]: 'Waived',
   Pending: 'Pending',
 }
 
-/** Legacy status colors for backward compatibility */
 export const LEGACY_STATUS_COLORS = {
-  Pending: 'var(--color-on-surface-variant)',
+  Pending: 'var(--color-whisper)',
 }

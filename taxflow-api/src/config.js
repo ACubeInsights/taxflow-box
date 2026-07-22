@@ -28,7 +28,7 @@ if (boxConfigFromEnv) {
   fs.writeFileSync(configPath, configData);
 }
 
-const boxConfigPath = process.env.BOX_CONFIG_PATH || './box_config.json';
+const boxConfigPath = process.env.BOX_CONFIG_PATH || '../box_config.json';
 
 export const config = {
   port: process.env.PORT || 3001,
@@ -46,6 +46,9 @@ export const config = {
   // Deep Links
   deepLinkSecret: process.env.DEEP_LINK_SECRET || '',
   deepLinkExpiryHours: parseInt(process.env.DEEP_LINK_EXPIRY_HOURS || '72'),
+
+  // Dev-only mock auth tokens (never enable in production)
+  allowMockAuth: process.env.ALLOW_MOCK_AUTH === 'true',
 
   // Notifications
   sendgridApiKey: process.env.SENDGRID_API_KEY || '',
@@ -89,4 +92,8 @@ export const config = {
   databaseUrl: process.env.DATABASE_URL || './data/taxflow.db',
   dbPoolMin: parseInt(process.env.DB_POOL_MIN || '2'),
   dbPoolMax: parseInt(process.env.DB_POOL_MAX || '10'),
+  /** Require SSL for Postgres (recommended for RDS) */
+  dbSsl: process.env.DB_SSL === 'true' || process.env.NODE_ENV === 'production',
+  /** 'full' = all tables (dev/SQLite); 'minimal' = users/sessions/reset_tokens/invite_records only */
+  dbSchema: process.env.DB_SCHEMA || 'full',
 };

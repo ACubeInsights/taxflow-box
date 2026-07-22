@@ -8,7 +8,7 @@ import authService from './authService.js';
 import projectService from './projectService.js';
 import { createHttpError } from '../utils/httpError.js';
 import { getRepositories } from '../db/repositories/index.js';
-import { buildExternalId } from '../utils/authUtils.js';
+import { hashPassword } from '../utils/authUtils.js';
 
 class SignupService {
   constructor() {
@@ -85,7 +85,11 @@ class SignupService {
     // Use clientName/externalId/email from signup form, fall back to invite record values
     const finalClientName = (clientName || '').trim() || record.client_name || record.email.split('@')[0];
     const finalExternalId = (externalId || '').trim() || record.external_id || `CL-${Date.now()}`;
-    const finalEmail = (email || '').trim() || record.email;
+    const finalEmail = record.email;
+    const submittedEmail = (email || '').trim();
+    if (submittedEmail && submittedEmail.toLowerCase() !== record.email.toLowerCase()) {
+      throw createHttpError('Email must match the invited address', 400);
+    }
 
     // Run existing onboarding pipeline (same as before — creates Box App User, folders, etc.)
     let onboardingResult;
@@ -167,12 +171,13 @@ class SignupService {
     let userRecord = await repos.userRepo.findByEmail(finalEmail);
     if (!userRecord) {
       try {
+        const passwordHash = await hashPassword(password);
         userRecord = await repos.userRepo.create({
           box_user_id: onboardingResult.appUser?.userId || '',
           email: finalEmail,
           name: finalClientName,
           role: 'client',
-          password_hash: buildExternalId(password, finalEmail, 'client'),
+          password_hash: passwordHash,
         });
       } catch (createErr) {
         // If UNIQUE constraint, the user was created by a race — try finding again

@@ -1,24 +1,20 @@
 import { useState, useEffect } from 'react'
-import { motion, AnimatePresence } from 'framer-motion'
 import { X, Upload, Folder, Loader2, CheckCircle2, AlertCircle } from 'lucide-react'
 import { projectApi, vaultApi, documentApi, permissionApi } from '../services/api'
 
-const SPRING = { type: 'spring', stiffness: 380, damping: 32, mass: 0.8 }
-
 export default function ShareFileModal({ open, onClose }) {
-  const [clients, setClients]           = useState([])
+  const [clients, setClients] = useState([])
   const [selectedClient, setSelectedClient] = useState(null)
-  const [folders, setFolders]           = useState([])
+  const [folders, setFolders] = useState([])
   const [selectedFolder, setSelectedFolder] = useState(null)
-  const [file, setFile]                 = useState(null)
+  const [file, setFile] = useState(null)
   const [shareWithClient, setShareWithClient] = useState(true)
-  const [accessLevel, setAccessLevel]   = useState('viewer')
-  const [loading, setLoading]           = useState(false)
+  const [accessLevel, setAccessLevel] = useState('viewer')
+  const [loading, setLoading] = useState(false)
   const [loadingFolders, setLoadingFolders] = useState(false)
-  const [result, setResult]             = useState(null)
-  const [error, setError]               = useState(null)
+  const [result, setResult] = useState(null)
+  const [error, setError] = useState(null)
 
-  // Fetch clients on open
   useEffect(() => {
     if (!open) return
     projectApi.getAllClients()
@@ -26,7 +22,6 @@ export default function ShareFileModal({ open, onClose }) {
       .catch(() => setClients([]))
   }, [open])
 
-  // Fetch folders when client selected
   useEffect(() => {
     if (!selectedClient?.boxFolderId) { setFolders([]); return }
     setLoadingFolders(true)
@@ -43,8 +38,11 @@ export default function ShareFileModal({ open, onClose }) {
           } catch { /* skip */ }
         }
         setFolders(allFolders)
-      } catch { setFolders([]) }
-      finally { setLoadingFolders(false) }
+      } catch {
+        setFolders([])
+      } finally {
+        setLoadingFolders(false)
+      }
     }
     load()
   }, [selectedClient])
@@ -58,7 +56,7 @@ export default function ShareFileModal({ open, onClose }) {
       const uploadResult = await documentApi.upload(file, selectedFolder.id)
       if (shareWithClient && uploadResult.file?.id) {
         await permissionApi.setPermission(
-          selectedClient.id, uploadResult.file.id, 'file', accessLevel, uploadResult.file.name
+          selectedClient.id, uploadResult.file.id, 'file', accessLevel, uploadResult.file.name,
         )
       }
       setResult(uploadResult)
@@ -76,190 +74,163 @@ export default function ShareFileModal({ open, onClose }) {
     onClose()
   }
 
+  if (!open) return null
+
   return (
-    <AnimatePresence>
-      {open && (
-        <motion.div
-          key="sharefile-backdrop"
-          initial={{ opacity: 0 }}
-          animate={{ opacity: 1 }}
-          exit={{ opacity: 0 }}
-          transition={{ duration: 0.2 }}
-          className="fixed inset-0 z-[200] flex items-center justify-center p-4"
-          style={{ background: 'rgba(0,0,0,0.65)', backdropFilter: 'blur(10px)' }}
-          onClick={handleClose}
-        >
-          <motion.div
-            key="sharefile-card"
-            initial={{ opacity: 0, scale: 0.92, y: 24 }}
-            animate={{ opacity: 1, scale: 1, y: 0 }}
-            exit={{ opacity: 0, scale: 0.94, y: 16 }}
-            transition={SPRING}
-            className="w-full max-w-[500px] rounded-2xl border border-[var(--color-outline-variant)] overflow-hidden"
-            style={{
-              background: 'var(--color-surface-container)',
-              boxShadow: 'inset 0 1px 0 rgba(255,255,255,0.05), 0 40px 80px rgba(0,0,0,0.6)',
-            }}
-            onClick={(e) => e.stopPropagation()}
-          >
-            {/* Header */}
-            <div className="flex items-center justify-between px-6 py-5 border-b border-[var(--color-outline-variant)]">
+    <div
+      className="fixed inset-0 z-[200] flex items-center justify-center p-[var(--space-4)]"
+      style={{ background: 'color-mix(in srgb, var(--color-archive) 72%, transparent)' }}
+      onClick={handleClose}
+      role="presentation"
+    >
+      <div
+        className="w-full max-w-lg overflow-hidden rounded-[var(--radius-panel)] border border-[var(--color-rule)] bg-[var(--color-folio)]"
+        onClick={(e) => e.stopPropagation()}
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="share-file-title"
+      >
+        <div className="flex items-center justify-between border-b border-[var(--color-rule)] px-[var(--space-6)] py-[var(--space-4)]">
+          <div>
+            <h2 id="share-file-title" className="m-0 font-display text-md font-semibold text-[var(--color-ink)]">
+              Share a file
+            </h2>
+            <p className="m-0 mt-[var(--space-1)] text-sm text-[var(--color-whisper)]">
+              Upload into a client’s vault folder
+            </p>
+          </div>
+          <button type="button" onClick={handleClose} className="btn-ghost h-8 w-8 p-0" aria-label="Close">
+            <X size={16} />
+          </button>
+        </div>
+
+        <div className="px-[var(--space-6)] py-[var(--space-5)]">
+          {result ? (
+            <div className="flex flex-col items-center gap-[var(--space-4)] py-[var(--space-4)] text-center">
+              <CheckCircle2 size={28} className="text-[var(--color-commit)]" aria-hidden />
               <div>
-                <h2 className="m-0 text-[16px] font-bold text-[var(--color-on-surface)]">Share File with Client</h2>
-                <p className="m-0 text-[12px] text-[var(--color-on-surface-variant)] mt-0.5">Upload a file directly to a client's vault</p>
+                <h3 className="m-0 mb-[var(--space-1)] font-display text-md font-semibold text-[var(--color-ink)]">
+                  File shared
+                </h3>
+                <p className="m-0 text-sm text-[var(--color-whisper)]">
+                  {result.file?.name} uploaded to {selectedClient?.name}’s vault
+                  {shareWithClient && ` (${accessLevel} access)`}
+                </p>
               </div>
-              <button
-                onClick={handleClose}
-                className="w-8 h-8 rounded-lg flex items-center justify-center bg-transparent border border-[var(--color-outline-variant)] text-[var(--color-on-surface-variant)] hover:text-[var(--color-on-surface)] hover:border-[var(--color-outline)] transition-colors cursor-pointer"
-              >
-                <X size={16} />
-              </button>
+              <button type="button" onClick={handleClose} className="btn-ghost">Done</button>
             </div>
+          ) : (
+            <form onSubmit={handleSubmit} className="flex flex-col gap-[var(--space-4)]">
+              <div>
+                <label className="label-caps mb-[var(--space-2)] block" htmlFor="share-client">Client</label>
+                <select
+                  id="share-client"
+                  value={selectedClient?.id || ''}
+                  onChange={(e) => {
+                    const c = clients.find(cl => cl.id === e.target.value)
+                    setSelectedClient(c || null)
+                    setSelectedFolder(null)
+                  }}
+                  className="folio-select"
+                >
+                  <option value="">Select a client…</option>
+                  {clients.filter(c => c.boxFolderId).map(c => (
+                    <option key={c.id} value={c.id}>{c.name}</option>
+                  ))}
+                </select>
+              </div>
 
-            {/* Body */}
-            <div className="px-6 py-5">
-              {result ? (
-                <div className="flex flex-col items-center text-center gap-4 py-4">
-                  <div className="w-14 h-14 rounded-full flex items-center justify-center bg-[var(--color-success-muted)] border border-[var(--color-success)]/30">
-                    <CheckCircle2 size={28} className="text-[var(--color-success)]" />
-                  </div>
-                  <div>
-                    <h3 className="m-0 text-[15px] font-bold text-[var(--color-on-surface)] mb-1">File Shared</h3>
-                    <p className="m-0 text-[12px] text-[var(--color-on-surface-variant)]">
-                      {result.file?.name} uploaded to {selectedClient?.name}'s vault
-                      {shareWithClient && ` (${accessLevel} access granted)`}
-                    </p>
-                  </div>
-                  <button
-                    onClick={handleClose}
-                    className="mt-2 px-6 py-2.5 rounded-xl text-[13px] font-semibold bg-[var(--color-surface-high)] border border-[var(--color-outline-variant)] text-[var(--color-on-surface)] hover:bg-[var(--color-surface-highest)] transition-colors cursor-pointer"
-                  >
-                    Done
-                  </button>
-                </div>
-              ) : (
-                <form onSubmit={handleSubmit} className="flex flex-col gap-4">
-                  {/* Client picker */}
-                  <div>
-                    <label className="text-[11px] font-semibold text-[var(--color-on-surface-variant)] uppercase tracking-wide mb-1.5 block">
-                      Client
-                    </label>
-                    <select
-                      value={selectedClient?.id || ''}
-                      onChange={(e) => {
-                        const c = clients.find(cl => cl.id === e.target.value)
-                        setSelectedClient(c || null)
-                        setSelectedFolder(null)
-                      }}
-                      className="w-full px-4 py-3 rounded-xl border border-[var(--color-outline-variant)] bg-[var(--color-surface-high)] text-[13px] text-[var(--color-on-surface)] outline-none cursor-pointer appearance-none [color-scheme:dark]"
-                    >
-                      <option value="">Select a client...</option>
-                      {clients.filter(c => c.boxFolderId).map(c => (
-                        <option key={c.id} value={c.id}>{c.name}</option>
-                      ))}
-                    </select>
-                  </div>
-
-                  {/* Folder picker */}
-                  {selectedClient && (
-                    <div>
-                      <label className="text-[11px] font-semibold text-[var(--color-on-surface-variant)] uppercase tracking-wide mb-1.5 block">
-                        Destination Folder
-                      </label>
-                      {loadingFolders ? (
-                        <div className="flex items-center gap-2 py-3 text-[12px] text-[var(--color-on-surface-variant)]">
-                          <Loader2 size={14} className="animate-spin" /> Loading folders...
-                        </div>
-                      ) : (
-                        <div className="flex flex-col gap-1 max-h-[140px] overflow-y-auto">
-                          {folders.map(f => (
-                            <button
-                              key={f.id}
-                              type="button"
-                              onClick={() => setSelectedFolder(f)}
-                              className={`flex items-center gap-2 px-3 py-2 rounded-lg text-left text-[12px] cursor-pointer border transition-colors ${
-                                selectedFolder?.id === f.id
-                                  ? 'bg-[var(--color-primary-muted)] border-[var(--color-primary)]/30 text-[var(--color-on-surface)]'
-                                  : 'bg-transparent border-transparent text-[var(--color-on-surface-variant)] hover:bg-[var(--color-surface-highest)]'
-                              }`}
-                            >
-                              <Folder size={14} />
-                              {f.name}
-                            </button>
-                          ))}
-                          {folders.length === 0 && (
-                            <p className="text-[12px] text-[var(--color-on-surface-variant)] italic py-2">No folders found</p>
-                          )}
-                        </div>
-                      )}
+              {selectedClient && (
+                <div>
+                  <p className="label-caps mb-[var(--space-2)]">Destination folder</p>
+                  {loadingFolders ? (
+                    <div className="flex items-center gap-[var(--space-2)] py-[var(--space-3)] text-sm text-[var(--color-whisper)]">
+                      <Loader2 size={14} className="animate-spin" aria-hidden /> Loading folders…
                     </div>
-                  )}
-
-                  {/* File input */}
-                  {selectedFolder && (
-                    <div>
-                      <label className="text-[11px] font-semibold text-[var(--color-on-surface-variant)] uppercase tracking-wide mb-1.5 block">
-                        File
-                      </label>
-                      <input
-                        type="file"
-                        onChange={(e) => setFile(e.target.files?.[0] || null)}
-                        className="w-full text-[12px] text-[var(--color-on-surface-variant)] file:mr-3 file:py-2 file:px-4 file:rounded-lg file:border file:border-[var(--color-outline-variant)] file:text-[12px] file:font-semibold file:bg-[var(--color-surface-high)] file:text-[var(--color-on-surface)] file:cursor-pointer"
-                      />
-                    </div>
-                  )}
-
-                  {/* Share options */}
-                  {file && (
-                    <div className="flex flex-col gap-2 p-3 rounded-xl bg-[var(--color-surface-high)] border border-[var(--color-outline-variant)]">
-                      <label className="flex items-center gap-2 cursor-pointer">
-                        <input
-                          type="checkbox"
-                          checked={shareWithClient}
-                          onChange={(e) => setShareWithClient(e.target.checked)}
-                          className="w-4 h-4 rounded accent-[var(--color-primary)]"
-                        />
-                        <span className="text-[12px] font-medium text-[var(--color-on-surface)]">Share with client</span>
-                      </label>
-                      {shareWithClient && (
-                        <select
-                          value={accessLevel}
-                          onChange={(e) => setAccessLevel(e.target.value)}
-                          className="px-3 py-2 rounded-lg border border-[var(--color-outline-variant)] bg-[var(--color-surface-container)] text-[12px] text-[var(--color-on-surface)] outline-none cursor-pointer appearance-none [color-scheme:dark]"
+                  ) : (
+                    <div className="flex max-h-[140px] flex-col gap-[var(--space-1)] overflow-y-auto">
+                      {folders.map(f => (
+                        <button
+                          key={f.id}
+                          type="button"
+                          onClick={() => setSelectedFolder(f)}
+                          className={`flex cursor-pointer items-center gap-[var(--space-2)] rounded-[var(--radius-control)] border px-[var(--space-3)] py-[var(--space-2)] text-left text-sm ${
+                            selectedFolder?.id === f.id
+                              ? 'border-[var(--color-signal)] bg-[var(--color-signal-muted)] text-[var(--color-ink)]'
+                              : 'border-transparent bg-transparent text-[var(--color-whisper)] hover:bg-[var(--color-ledger)]'
+                          }`}
                         >
-                          <option value="viewer">Viewer (read only)</option>
-                          <option value="commenter">Commenter</option>
-                          <option value="writer">Writer (can edit)</option>
-                        </select>
+                          <Folder size={14} aria-hidden />
+                          {f.name}
+                        </button>
+                      ))}
+                      {folders.length === 0 && (
+                        <p className="m-0 py-[var(--space-2)] text-sm italic text-[var(--color-whisper)]">No folders found</p>
                       )}
                     </div>
                   )}
-
-                  {/* Error */}
-                  {error && (
-                    <div className="flex items-start gap-2 p-3 rounded-xl border border-[var(--color-error)]/25 bg-[var(--color-error-muted)]">
-                      <AlertCircle size={14} className="text-[var(--color-error)] shrink-0 mt-0.5" />
-                      <p className="m-0 text-[12px] text-[var(--color-error)]">{error}</p>
-                    </div>
-                  )}
-
-                  {/* Submit */}
-                  <button
-                    type="submit"
-                    disabled={!selectedClient || !selectedFolder || !file || loading}
-                    className="w-full py-3 rounded-xl text-[13px] font-semibold cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed border-none bg-[var(--color-primary)] text-[var(--color-surface-lowest)] hover:brightness-110 active:scale-[0.98] transition-all flex items-center justify-center gap-2 shadow-[0_2px_8px_rgba(129,140,248,0.25)]"
-                  >
-                    {loading
-                      ? <><Loader2 size={15} className="animate-spin" /> Uploading...</>
-                      : <><Upload size={15} /> Upload & Share</>
-                    }
-                  </button>
-                </form>
+                </div>
               )}
-            </div>
-          </motion.div>
-        </motion.div>
-      )}
-    </AnimatePresence>
+
+              {selectedFolder && (
+                <div>
+                  <label className="label-caps mb-[var(--space-2)] block" htmlFor="share-file-input">File</label>
+                  <input
+                    id="share-file-input"
+                    type="file"
+                    onChange={(e) => setFile(e.target.files?.[0] || null)}
+                    className="w-full text-sm text-[var(--color-whisper)] file:mr-[var(--space-3)] file:cursor-pointer file:rounded-[var(--radius-control)] file:border file:border-[var(--color-rule)] file:bg-[var(--color-ledger)] file:px-[var(--space-4)] file:py-[var(--space-2)] file:text-sm file:font-medium file:text-[var(--color-ink)]"
+                  />
+                </div>
+              )}
+
+              {file && (
+                <div className="flex flex-col gap-[var(--space-2)] rounded-[var(--radius-panel)] border border-[var(--color-rule)] bg-[var(--color-ledger)] p-[var(--space-3)]">
+                  <label className="flex cursor-pointer items-center gap-[var(--space-2)]">
+                    <input
+                      type="checkbox"
+                      checked={shareWithClient}
+                      onChange={(e) => setShareWithClient(e.target.checked)}
+                      className="h-4 w-4 accent-[var(--color-signal)]"
+                    />
+                    <span className="text-sm font-medium text-[var(--color-ink)]">Grant client access</span>
+                  </label>
+                  {shareWithClient && (
+                    <select
+                      value={accessLevel}
+                      onChange={(e) => setAccessLevel(e.target.value)}
+                      className="folio-select"
+                      aria-label="Access level"
+                    >
+                      <option value="viewer">Viewer (read only)</option>
+                      <option value="commenter">Commenter</option>
+                      <option value="writer">Writer (can edit)</option>
+                    </select>
+                  )}
+                </div>
+              )}
+
+              {error && (
+                <div className="flex items-start gap-[var(--space-2)] rounded-[var(--radius-control)] border border-[var(--color-flag)] bg-[var(--color-flag-muted)] p-[var(--space-3)]" role="alert">
+                  <AlertCircle size={14} className="mt-0.5 shrink-0 text-[var(--color-flag)]" aria-hidden />
+                  <p className="m-0 text-sm text-[var(--color-flag)]">{error}</p>
+                </div>
+              )}
+
+              <button
+                type="submit"
+                disabled={!selectedClient || !selectedFolder || !file || loading}
+                className="btn-signal w-full"
+              >
+                {loading
+                  ? <><Loader2 size={15} className="animate-spin" aria-hidden /> Uploading…</>
+                  : <><Upload size={15} aria-hidden /> Upload & share</>
+                }
+              </button>
+            </form>
+          )}
+        </div>
+      </div>
+    </div>
   )
 }

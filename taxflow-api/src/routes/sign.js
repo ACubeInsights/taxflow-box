@@ -6,8 +6,11 @@
 
 import express from 'express';
 import signService from '../services/signService.js';
+import { requireStaff } from '../middleware/authMiddleware.js';
 
 const router = express.Router();
+
+router.use(...requireStaff);
 
 /**
  * POST /api/sign/request

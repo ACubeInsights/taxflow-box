@@ -18,11 +18,12 @@ const router = express.Router();
  */
 router.post('/preview', requireAuth, async (req, res, next) => {
   try {
-    const { fileId, userId } = req.body;
+    const { fileId } = req.body;
+    const userId = req.user.userId;
 
-    if (!fileId || !userId) {
+    if (!fileId) {
       return res.status(400).json({
-        error: 'fileId and userId are required',
+        error: 'fileId is required',
       });
     }
 

@@ -40,6 +40,9 @@ export const TAXFLOW_DOCUMENT_TEMPLATE = {
     { type: 'string', key: 'reviewer', displayName: 'Reviewer' },
     { type: 'string', key: 'review_comments', displayName: 'Review Comments' },
     { type: 'date', key: 'reviewed_at', displayName: 'Reviewed At' },
+    { type: 'string', key: 'request_name', displayName: 'Request Name' },
+    { type: 'date', key: 'due_date', displayName: 'Due Date' },
+    { type: 'string', key: 'description', displayName: 'Description' },
     {
       type: 'enum',
       key: 'priority',

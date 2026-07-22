@@ -2,10 +2,12 @@ import express from 'express';
 import multer from 'multer';
 import boxService from '../services/boxService.js';
 import { BoxService } from '../services/boxService.js';
-import { initDatabase } from '../db/db.js';
-import { requireAuth, permissionCheck } from '../middleware/authMiddleware.js';
+import { getDb } from '../db/db.js';
+import { requireAuth, permissionCheck, validateFolderOwnership, validateUploadFolder } from '../middleware/authMiddleware.js';
 import { config } from '../config.js';
 import cacheLayer from '../services/cacheLayer.js';
+import projectService from '../services/projectService.js';
+import boxDocumentStatusService from '../services/boxDocumentStatusService.js';
 import fs from 'fs';
 import path from 'path';
 import os from 'os';
@@ -39,7 +41,7 @@ const upload = multer({
  * Files < 20MB: direct upload. Files >= 20MB: chunked upload.
  * Body (multipart/form-data): { file, folderId, requestId? }
  */
-router.post('/upload', requireAuth, upload.single('file'), async (req, res, next) => {
+router.post('/upload', requireAuth, validateUploadFolder, upload.single('file'), async (req, res, next) => {
   let tempFilePath = null;
 
   try {
@@ -70,10 +72,11 @@ router.post('/upload', requireAuth, upload.single('file'), async (req, res, next
     try { fs.unlinkSync(tempFilePath); } catch { /* best effort */ }
     tempFilePath = null;
 
-    // If this upload is linked to a document request, update the DB
+    // Link upload to document request: Box metadata is source of truth for status
     if (requestId) {
       try {
-        const db = await initDatabase();
+        const docRequest = await projectService.getDocument(requestId);
+        const db = getDb();
         await db('document_requests')
           .where('id', requestId)
           .update({
@@ -83,9 +86,18 @@ router.post('/upload', requireAuth, upload.single('file'), async (req, res, next
             version: db.raw('version + 1'),
             updated_at: new Date().toISOString(),
           });
+
+        if (docRequest) {
+          await boxDocumentStatusService.applyUploadMetadata(file.id, {
+            requestId: docRequest.id,
+            clientId: docRequest.clientId,
+            documentType: docRequest.documentType,
+            financialYear: new Date().getFullYear().toString(),
+            priority: docRequest.priority,
+          });
+        }
       } catch (dbErr) {
         console.error('Failed to update document request after upload:', dbErr.message);
-        // Don't fail the upload response — file is already on Box
       }
     }
 
@@ -113,7 +125,7 @@ router.post('/upload', requireAuth, upload.single('file'), async (req, res, next
  * GET /api/documents/:folderId
  * Get all documents in a folder (alias for vaults route)
  */
-router.get('/:folderId', async (req, res, next) => {
+router.get('/:folderId', requireAuth, validateFolderOwnership, async (req, res, next) => {
   try {
     const { folderId } = req.params;
 
@@ -214,7 +226,7 @@ router.get('/:fileId/edit-url', requireAuth, async (req, res, next) => {
       },
       body: JSON.stringify({
         shared_link: {
-          access: 'open',
+          access: 'company',
           permissions: { can_edit: true, can_download: true, can_preview: true }
         }
       }),
@@ -368,7 +380,7 @@ router.post('/:fileId/edit-session', requireAuth, async (req, res, next) => {
       return res.status(400).json({ error: `action must be one of: ${validActions.join(', ')}` });
     }
 
-    const db = await initDatabase();
+    const db = getDb();
     const { randomUUID } = await import('crypto');
     const id = randomUUID();
     const now = new Date().toISOString();
@@ -397,7 +409,7 @@ router.post('/:fileId/edit-session', requireAuth, async (req, res, next) => {
 router.get('/:fileId/edit-sessions', requireAuth, async (req, res, next) => {
   try {
     const { fileId } = req.params;
-    const db = await initDatabase();
+    const db = getDb();
 
     const sessions = await db('edit_sessions')
       .where('file_id', fileId)

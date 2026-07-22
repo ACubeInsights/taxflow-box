@@ -1,192 +1,229 @@
-import { motion } from 'framer-motion'
-import { STATUS_COLORS as WORKFLOW_STATUS_COLORS, STATUS_LABELS, LEGACY_STATUS_COLORS } from '../constants/statusColors'
-
 /**
- * StatCard — Metric display card with ambient glow and icon.
- * Used in dashboards for KPI visualization.
+ * Folio Desk shared UI primitives.
+ * Spacing/type/color must use CSS tokens — no ad-hoc hex.
  */
-export function StatCard({ label, value, change, changeType, color = 'var(--color-primary)', icon: Icon, delay = 0 }) {
-  return (
-    <motion.div
-      initial={{ opacity: 0, y: 12 }}
-      animate={{ opacity: 1, y: 0 }}
-      transition={{ delay: delay / 1000, duration: 0.4, ease: [0.22, 1, 0.36, 1] }}
-      className="relative overflow-hidden rounded-xl p-5 cursor-default group border border-[var(--color-outline-variant)] hover:border-[var(--color-outline)] transition-colors duration-300"
-      style={{
-        background: 'var(--color-surface-container)',
-      }}
-    >
-      {/* Ambient corner glow */}
-      <div
-        className="pointer-events-none absolute -top-12 -right-12 h-32 w-32 rounded-full blur-3xl opacity-0 group-hover:opacity-100 transition-opacity duration-500"
-        style={{ background: color }}
-      />
 
-      <div className="flex items-start justify-between relative z-10">
-        <div>
-          <p className="mb-1.5 text-[11px] font-semibold tracking-[0.06em] text-[var(--color-on-surface-variant)] uppercase">
-            {label}
-          </p>
-          <p className="text-[32px] font-bold leading-none tracking-tight text-[var(--color-on-surface)] font-display">
-            {value}
-          </p>
-          {change && (
-            <p className={`mt-2 text-[11px] font-semibold ${
-              changeType === 'up' ? 'text-[var(--color-success)]' :
-              changeType === 'down' ? 'text-[var(--color-error)]' :
-              'text-[var(--color-on-surface-variant)]'
-            }`}>
-              {changeType === 'up' ? '+' : changeType === 'down' ? '' : ''}{change}
-            </p>
-          )}
-        </div>
-        {Icon && (
-          <div
-            className="flex h-10 w-10 items-center justify-center rounded-lg transition-transform duration-300 group-hover:scale-105"
-            style={{
-              background: `${color}12`,
-              border: `1px solid ${color}20`,
-            }}
-          >
-            <Icon size={18} color={color} strokeWidth={2} />
-          </div>
-        )}
-      </div>
-    </motion.div>
+import { STATUS_COLORS, STATUS_LABELS, LEGACY_STATUS_COLORS } from '../constants/statusColors'
+
+/** Flat content panel — replaces GlassPanel */
+export function FolioPanel({ children, className = '', style = {}, as: Tag = 'div', ...rest }) {
+  return (
+    <Tag
+      className={`folio-panel p-[var(--space-6)] ${className}`}
+      style={style}
+      {...rest}
+    >
+      {children}
+    </Tag>
   )
 }
 
-/**
- * SectionHeader — Section title with optional subtitle.
- */
-export function SectionHeader({ title, subtitle, delay = 0 }) {
+/** Page / section title */
+export function SectionHeader({ title, subtitle, as: Heading = 'h1' }) {
   return (
-    <motion.div
-      initial={{ opacity: 0, y: 10 }}
-      animate={{ opacity: 1, y: 0 }}
-      transition={{ delay: delay / 1000, duration: 0.4, ease: [0.22, 1, 0.36, 1] }}
-      className="mb-6"
-    >
-      <h2 className="m-0 text-[24px] font-bold tracking-tight text-[var(--color-on-surface)] font-display leading-tight">
+    <header className="mb-[var(--space-8)]">
+      <Heading className="m-0 text-xl font-display font-bold text-[var(--color-ink)]">
         {title}
-      </h2>
+      </Heading>
       {subtitle && (
-        <p className="mt-1.5 text-[13px] font-medium text-[var(--color-on-surface-variant)] max-w-xl">
+        <p className="m-0 mt-[var(--space-2)] text-sm font-medium text-[var(--color-whisper)] max-w-xl">
           {subtitle}
         </p>
       )}
-    </motion.div>
+    </header>
   )
 }
 
-/**
- * GlassPanel — Container card with subtle glass effect.
- * The primary structural component for content grouping.
- */
-export function GlassPanel({ children, style = {}, delay = 0, className = '' }) {
+/** Uppercase panel label inside FolioPanel */
+export function PanelTitle({ children }) {
   return (
-    <motion.div
-      initial={{ opacity: 0, y: 12 }}
-      animate={{ opacity: 1, y: 0 }}
-      transition={{ delay: delay / 1000, duration: 0.4, ease: [0.22, 1, 0.36, 1] }}
-      className={`rounded-xl border border-[var(--color-outline-variant)] p-6 relative overflow-hidden ${className}`}
+    <h2 className="label-caps m-0 mb-[var(--space-4)]">
+      {children}
+    </h2>
+  )
+}
+
+/** Compact status chip — Folio Rail color, no glow */
+export function Badge({ children, color = 'var(--color-trace)' }) {
+  return (
+    <span
+      className="inline-flex items-center rounded-[var(--radius-chip)] px-[var(--space-2)] py-[var(--space-1)] text-xs font-medium tracking-[0.04em] uppercase"
       style={{
-        background: 'var(--color-surface-container)',
-        boxShadow: '0 2px 8px rgba(0,0,0,0.2), 0 0 0 1px rgba(255,255,255,0.02) inset',
-        ...style,
+        background: `color-mix(in srgb, ${color} 14%, transparent)`,
+        border: `1px solid color-mix(in srgb, ${color} 35%, transparent)`,
+        color,
       }}
     >
       {children}
-    </motion.div>
+    </span>
   )
 }
 
-/**
- * PanelTitle — Section label inside a GlassPanel.
- */
-export function PanelTitle({ children }) {
-  return (
-    <h3 className="mb-4 text-[11px] font-bold uppercase tracking-[0.08em] text-[var(--color-on-surface-variant)]">
-      {children}
-    </h3>
-  )
-}
+/** Document workflow status */
+export function StatusBadge({ status }) {
+  const color = STATUS_COLORS[status] || LEGACY_STATUS_COLORS[status] || 'var(--color-whisper)'
+  const label = STATUS_LABELS[status] || status
 
-/**
- * StatusDot — Small colored indicator circle.
- */
-export function StatusDot({ color = 'var(--color-primary)', pulse = false }) {
   return (
     <span
-      className={`inline-block h-2 w-2 shrink-0 rounded-full ${pulse ? 'animate-pulse-soft' : ''}`}
+      className="inline-flex items-center gap-[var(--space-2)] rounded-[var(--radius-chip)] px-[var(--space-2)] py-[var(--space-1)] text-xs font-medium tracking-[0.04em] uppercase"
       style={{
-        background: color,
-        boxShadow: `0 0 6px ${color}60`,
+        background: `color-mix(in srgb, ${color} 14%, transparent)`,
+        border: `1px solid color-mix(in srgb, ${color} 35%, transparent)`,
+        color,
       }}
-    />
+    >
+      <span
+        className="folio-spine inline-block h-[10px] w-[3px] shrink-0"
+        style={{ background: color }}
+        aria-hidden
+      />
+      {label}
+    </span>
   )
 }
 
-/**
- * ProgressBar — Animated horizontal progress indicator.
- */
-export function ProgressBar({ value, color = 'var(--color-primary)', bg = 'var(--color-surface-highest)' }) {
+/** Quiet progress — no glow */
+export function ProgressBar({ value, color = 'var(--color-trace)' }) {
+  const clamped = Math.max(0, Math.min(100, Number(value) || 0))
   return (
-    <div className="h-1.5 overflow-hidden rounded-full" style={{ background: bg }}>
-      <motion.div
-        className="h-full rounded-full"
-        initial={{ width: 0 }}
-        animate={{ width: `${value}%` }}
-        transition={{ duration: 0.8, ease: [0.22, 1, 0.36, 1] }}
+    <div
+      className="h-[6px] overflow-hidden rounded-[var(--radius-chip)]"
+      style={{ background: varSafe('--color-ledger') }}
+      role="progressbar"
+      aria-valuenow={clamped}
+      aria-valuemin={0}
+      aria-valuemax={100}
+    >
+      <div
+        className="h-full rounded-[var(--radius-chip)]"
         style={{
+          width: `${clamped}%`,
           background: color,
-          boxShadow: `0 0 8px ${color}40`,
+          transition: `width var(--duration-standard) var(--ease-standard)`,
         }}
       />
     </div>
   )
 }
 
+function varSafe(name) {
+  return `var(${name})`
+}
+
 /**
- * Badge — Compact label chip with colored background.
+ * Folio Rail — signature vertical spine.
+ * Used on list rows and as page procedural rail.
  */
-export function Badge({ children, color = 'var(--color-primary)' }) {
+export function FolioSpine({ color = 'var(--color-trace)', className = '' }) {
   return (
     <span
-      className="inline-flex items-center rounded-md px-2 py-0.5 text-[10px] font-bold tracking-wide uppercase"
-      style={{
-        background: `${color}15`,
-        border: `1px solid ${color}25`,
-        color: color,
-      }}
-    >
-      {children}
-    </span>
+      className={`folio-spine self-stretch min-h-[20px] ${className}`}
+      style={{ background: color }}
+      aria-hidden
+    />
   )
 }
 
 /**
- * StatusBadge — Document workflow status indicator.
- * Automatically maps status to color and label.
+ * Vertical procedural rail for interior pages.
+ * steps: [{ label, path?, current? }]
+ * Only use when the content is a genuine Client → Project → Document sequence.
  */
-export function StatusBadge({ status }) {
-  const color = WORKFLOW_STATUS_COLORS[status] || LEGACY_STATUS_COLORS[status] || '#6b7280'
-  const label = STATUS_LABELS[status] || status
+export function FolioRail({ steps = [], spineColor = 'var(--color-trace)', className = '' }) {
+  if (!steps.length) return null
 
   return (
-    <span
-      className="inline-flex items-center gap-1.5 rounded-md px-2 py-0.5 text-[10px] font-bold tracking-wide uppercase"
-      style={{
-        background: `${color}12`,
-        border: `1px solid ${color}20`,
-        color: color,
-      }}
+    <aside
+      className={`hidden md:flex flex-col shrink-0 w-[var(--layout-rail)] border-r border-[var(--color-rule)] ${className}`}
+      aria-label="Location in workflow"
     >
-      <span
-        className="w-1.5 h-1.5 rounded-full"
-        style={{ background: color, boxShadow: `0 0 4px ${color}60` }}
-      />
-      {label}
-    </span>
+      <div className="flex flex-1 flex-col items-center py-[var(--space-6)] gap-[var(--space-4)]">
+        <div
+          className="folio-spine w-[4px] flex-1 min-h-[48px] rounded-[2px]"
+          style={{ background: spineColor }}
+          aria-hidden
+        />
+        <ol className="m-0 p-0 list-none flex flex-col gap-[var(--space-6)] w-full px-[var(--space-2)]">
+          {steps.map((step) => (
+            <li key={step.label} className="text-center">
+              <span
+                className={`block text-xs font-medium leading-tight ${
+                  step.current ? 'text-[var(--color-ink)]' : 'text-[var(--color-whisper)]'
+                }`}
+                style={{ writingMode: 'vertical-rl', transform: 'rotate(180deg)' }}
+              >
+                {step.label}
+              </span>
+            </li>
+          ))}
+        </ol>
+      </div>
+    </aside>
   )
+}
+
+/** Row with leading FolioSpine — for client/document lists */
+export function FolioRow({
+  spineColor = 'var(--color-trace)',
+  children,
+  onClick,
+  className = '',
+  as: Tag = onClick ? 'button' : 'div',
+}) {
+  const interactive = Boolean(onClick)
+  return (
+    <Tag
+      type={Tag === 'button' ? 'button' : undefined}
+      onClick={onClick}
+      className={`
+        flex w-full items-stretch gap-[var(--space-4)]
+        min-h-[var(--layout-row)]
+        rounded-[var(--radius-panel)]
+        border border-[var(--color-rule)]
+        bg-[var(--color-folio)]
+        text-left
+        ${interactive ? 'cursor-pointer hover:bg-[var(--color-ledger)]' : ''}
+        ${className}
+      `}
+    >
+      <FolioSpine color={spineColor} className="rounded-l-[var(--radius-panel)] rounded-r-none min-h-full" />
+      <div className="flex flex-1 items-center gap-[var(--space-4)] py-[var(--space-3)] pr-[var(--space-4)] min-w-0">
+        {children}
+      </div>
+    </Tag>
+  )
+}
+
+/** Empty state — quiet, no decorative icons required */
+export function EmptyState({ icon: Icon, title, subtitle, action }) {
+  return (
+    <div className="flex flex-col items-center justify-center py-[var(--space-12)] px-[var(--space-4)] text-center">
+      {Icon && (
+        <div
+          className="mb-[var(--space-4)] flex h-12 w-12 items-center justify-center rounded-[var(--radius-panel)] border border-[var(--color-rule)] bg-[var(--color-ledger)]"
+          aria-hidden
+        >
+          <Icon size={22} className="text-[var(--color-whisper)]" strokeWidth={1.5} />
+        </div>
+      )}
+      <p className="m-0 text-sm font-medium text-[var(--color-ink)] mb-[var(--space-1)]">{title}</p>
+      {subtitle && (
+        <p className="m-0 text-sm text-[var(--color-whisper)] max-w-[260px] leading-relaxed">
+          {subtitle}
+        </p>
+      )}
+      {action && (
+        <button type="button" onClick={action.onClick} className="btn-ghost mt-[var(--space-4)]">
+          {action.label}
+        </button>
+      )}
+    </div>
+  )
+}
+
+/* ── Back-compat aliases (migrate callers gradually) ── */
+export const GlassPanel = FolioPanel
+export const StatCard = function StatCardRemoved() {
+  return null
 }

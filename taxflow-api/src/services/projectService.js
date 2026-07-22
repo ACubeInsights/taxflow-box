@@ -12,6 +12,10 @@
 const DOCUMENT_STATUSES = ['Not_Requested', 'Uploaded', 'Under_Review', 'Revision_Requested', 'Approved', 'Waived'];
 
 import notificationService from './notificationService.js';
+import boxDocumentStatusService from './boxDocumentStatusService.js';
+import boxEntityService from './boxEntityService.js';
+import boxDocumentRequestService from './boxDocumentRequestService.js';
+import { isMinimalSchema } from '../db/schemaMode.js';
 import { createHttpError } from '../utils/httpError.js';
 import {
   clients as seedClients,
@@ -41,6 +45,8 @@ export class ProjectService {
     this._projectRepo = null;
     this._docRepo = null;
     this._activityRepo = null;
+    this._userRepo = null;
+    this._minimalMode = false;
 
     this._seed();
   }
@@ -49,11 +55,17 @@ export class ProjectService {
    * Injects repository dependencies. Called after DB initialization.
    * @param {{ clientRepo?: object, projectRepo?: object, docRequestRepo?: object, activityRepo?: object }} repos
    */
-  setRepositories({ clientRepo, projectRepo, docRequestRepo, activityRepo } = {}) {
+  setRepositories({ clientRepo, projectRepo, docRequestRepo, activityRepo, userRepo, minimalMode } = {}) {
+    this._minimalMode = minimalMode ?? isMinimalSchema();
+    if (userRepo) this._userRepo = userRepo;
     if (clientRepo) this._clientRepo = clientRepo;
     if (projectRepo) this._projectRepo = projectRepo;
     if (docRequestRepo) this._docRepo = docRequestRepo;
     if (activityRepo) this._activityRepo = activityRepo;
+  }
+
+  _useMinimalBox() {
+    return this._minimalMode && this._userRepo;
   }
 
   /**
@@ -87,6 +99,9 @@ export class ProjectService {
    * Called after Box onboarding completes.
    */
   async registerOnboardedClient(data, employeeId) {
+    if (this._useMinimalBox()) {
+      return boxEntityService.registerOnboardedClient(data, employeeId);
+    }
     if (this._clientRepo) {
       return this._registerOnboardedClientDb(data, employeeId);
     }
@@ -194,6 +209,9 @@ export class ProjectService {
    * Returns ALL clients with optional filters.
    */
   async getAllClients({ search, status, entityType } = {}) {
+    if (this._useMinimalBox()) {
+      return boxEntityService.listClients({ search, status, entityType });
+    }
     if (this._clientRepo) {
       const filters = { search, status, entityType };
       const hasFilters = search || status || entityType;
@@ -203,7 +221,7 @@ export class ProjectService {
       const results = [];
       for (const c of clients) {
         const activeProjects = await this._projectRepo.countActiveByClientId(c.id);
-        const pendingActions = await this._docRepo.countPendingByClientId(c.id);
+        const pendingActions = await this._countPendingActionsAsync(c.id);
         results.push(this._mapClientFromDb(c, activeProjects, pendingActions));
       }
       return results;
@@ -235,11 +253,14 @@ export class ProjectService {
    * Returns projects for a client with computed progress percentages.
    */
   async getClientProjects(clientId) {
+    if (this._useMinimalBox()) {
+      return boxEntityService.getClientProjects(clientId);
+    }
     if (this._projectRepo) {
       const projects = await this._projectRepo.findByClientId(clientId);
       const results = [];
       for (const p of projects) {
-        const stats = await this._docRepo.computeProjectStats(p.id);
+        const stats = await this._computeProjectStatsAsync(p.id);
         results.push({
           ...this._mapProjectFromDb(p),
           ...stats,
@@ -263,13 +284,33 @@ export class ProjectService {
   /**
    * Returns project detail with document list.
    */
-  async getProjectDetail(projectId, { statusFilter } = {}) {
+  async getProjectDetail(projectId, { statusFilter, clientId: clientIdParam } = {}) {
+    if (this._useMinimalBox()) {
+      const ctx = await boxEntityService.resolveProjectContext(projectId);
+      const clientId = clientIdParam || ctx.clientId;
+      const documents = clientId
+        ? await boxDocumentRequestService.listByProject(clientId, projectId, { status: statusFilter })
+        : [];
+      const stats = clientId
+        ? await boxEntityService._computeProjectStats(clientId, projectId)
+        : { documentCount: 0, progressPercentage: 0 };
+      const year = new Date().getFullYear().toString();
+      return {
+        id: projectId,
+        clientId,
+        name: `${year} Tax Return`,
+        description: '',
+        status: 'Active',
+        ...stats,
+        documents,
+      };
+    }
     if (this._projectRepo) {
       const project = await this._projectRepo.findById(projectId);
       if (!project) return null;
 
       const documents = await this.getProjectDocuments(projectId, { status: statusFilter });
-      const stats = await this._docRepo.computeProjectStats(projectId);
+      const stats = await this._computeProjectStatsAsync(projectId);
 
       return {
         ...this._mapProjectFromDb(project),
@@ -292,12 +333,23 @@ export class ProjectService {
   }
 
   /**
-   * Returns documents for a project with optional status filter.
+   * Returns documents for a project. Status is resolved from Box metadata when available;
+   * optional status filter is applied after merge (not at DB query level).
    */
-  async getProjectDocuments(projectId, { status } = {}) {
+  async getProjectDocuments(projectId, { status, clientId: clientIdParam } = {}) {
+    if (this._useMinimalBox()) {
+      const ctx = await boxEntityService.resolveProjectContext(projectId);
+      const clientId = clientIdParam || ctx.clientId;
+      if (!clientId) return [];
+      return boxDocumentRequestService.listByProject(clientId, projectId, { status });
+    }
     if (this._docRepo) {
-      const docs = await this._docRepo.findByProjectId(projectId, { status });
-      return docs.map((d) => this._mapDocFromDb(d));
+      const docs = await this._docRepo.findByProjectId(projectId);
+      const mapped = docs.map((d) => this._mapDocFromDb(d));
+      return this._filterByStatus(
+        await this._mergeDocumentsWithBox(mapped),
+        status
+      );
     }
 
     let docs = [];
@@ -307,12 +359,7 @@ export class ProjectService {
       }
     }
 
-    if (status) {
-      const statuses = Array.isArray(status) ? status : [status];
-      docs = docs.filter((d) => statuses.includes(d.status));
-    }
-
-    return docs;
+    return this._filterByStatus(docs, status);
   }
 
   /**
@@ -328,6 +375,22 @@ export class ProjectService {
     }
     if (!dueDate || !dueDate.trim()) {
       throw createHttpError('Missing required field: dueDate', 400);
+    }
+
+    if (this._useMinimalBox()) {
+      const ctx = await boxEntityService.resolveProjectContext(projectId);
+      if (!ctx.clientId) {
+        throw createHttpError('Project not found', 404);
+      }
+      return boxDocumentRequestService.createRequest(projectId, {
+        clientId: ctx.clientId,
+        name,
+        description,
+        priority,
+        dueDate,
+        documentType,
+        isDraft,
+      });
     }
 
     if (this._docRepo) {
@@ -443,6 +506,11 @@ export class ProjectService {
    * Checks for duplicate document requests in a project.
    */
   async checkDuplicate(projectId, documentType) {
+    if (this._useMinimalBox()) {
+      const ctx = await boxEntityService.resolveProjectContext(projectId);
+      if (!ctx.clientId) return { isDuplicate: false };
+      return boxDocumentRequestService.checkDuplicate(projectId, documentType, ctx.clientId);
+    }
     if (this._docRepo) {
       const result = await this._docRepo.checkDuplicate(projectId, documentType);
       if (result.isDuplicate && result.existingDocument) {
@@ -479,31 +547,57 @@ export class ProjectService {
    * Returns employee summary metrics (computed across all clients).
    */
   async getEmployeeSummary(employeeId) {
-    if (this._clientRepo && this._docRepo) {
-      const clients = await this._clientRepo.findAll();
-
+    if (this._useMinimalBox()) {
+      const clients = await boxEntityService.listClients({});
       let activeClients = 0;
-      for (const client of clients) {
-        if (client.engagement_status === 'Active') activeClients++;
-      }
-
-      // Get all documents for all clients
       let pendingReviews = 0;
       let overdueDocuments = 0;
       let awaitingClientAction = 0;
       const now = new Date();
 
       for (const client of clients) {
-        const docs = await this._docRepo.findByClientId(client.id);
+        if (client.engagementStatus === 'Active') activeClients++;
+        const entries = await boxDocumentStatusService.queryDocumentsByClientId(client.id);
+        for (const entry of entries) {
+          const status = entry.apiStatus;
+          if (status === 'Uploaded' || status === 'Under_Review') pendingReviews++;
+          if (entry.dueDate && status !== 'Approved' && status !== 'Waived') {
+            if (new Date(entry.dueDate) < now) overdueDocuments++;
+          }
+          if (status === 'Revision_Requested' || status === 'Not_Requested') {
+            awaitingClientAction++;
+          }
+        }
+      }
+
+      return { activeClients, pendingReviews, overdueDocuments, awaitingClientAction };
+    }
+    if (this._clientRepo && this._docRepo) {
+      const clients = await this._clientRepo.findAll();
+
+      let activeClients = 0;
+      let pendingReviews = 0;
+      let overdueDocuments = 0;
+      let awaitingClientAction = 0;
+      const now = new Date();
+
+      for (const client of clients) {
+        if (client.engagement_status === 'Active') activeClients++;
+
+        const dbDocs = await this._docRepo.findByClientId(client.id);
+        const mapped = dbDocs.map((d) => this._mapDocFromDb(d));
+        const docs = await boxDocumentStatusService.mergeWithBoxMetadata(mapped, client.id);
+
         for (const doc of docs) {
+          if (doc.isDraft) continue;
           if (doc.status === 'Uploaded' || doc.status === 'Under_Review') {
             pendingReviews++;
           }
-          if (doc.due_date && doc.status !== 'Approved' && doc.status !== 'Waived') {
-            const due = new Date(doc.due_date);
+          if (doc.dueDate && doc.status !== 'Approved' && doc.status !== 'Waived') {
+            const due = new Date(doc.dueDate);
             if (due < now) overdueDocuments++;
           }
-          if (doc.status === 'Revision_Requested' || (doc.status === 'Not_Requested' && !doc.is_draft)) {
+          if (doc.status === 'Revision_Requested' || doc.status === 'Not_Requested') {
             awaitingClientAction++;
           }
         }
@@ -550,19 +644,38 @@ export class ProjectService {
    * Returns a single document by ID, or null if not found.
    */
   async getDocument(documentId) {
+    if (this._useMinimalBox()) {
+      const clients = await this._userRepo.findByRole('client');
+      for (const user of clients) {
+        const doc = await boxDocumentRequestService.getDocument(documentId, user.id);
+        if (doc) return doc;
+      }
+      return null;
+    }
     if (this._docRepo) {
       const doc = await this._docRepo.findById(documentId);
-      return doc ? this._mapDocFromDb(doc) : null;
+      if (!doc) return null;
+      const mapped = this._mapDocFromDb(doc);
+      return boxDocumentStatusService.enrichDocument(mapped);
     }
 
     const doc = this._documents.get(documentId);
-    return doc ? { ...doc } : null;
+    if (!doc) return null;
+    return boxDocumentStatusService.enrichDocument({ ...doc });
   }
 
   /**
    * Updates a document's status with optimistic concurrency control.
    */
   async updateDocumentStatus(documentId, status, version, extra) {
+    if (this._useMinimalBox()) {
+      const doc = await this.getDocument(documentId);
+      if (!doc) throw createHttpError('Document not found', 404);
+      return boxDocumentRequestService.updateStatus(documentId, status, version, {
+        ...extra,
+        clientId: doc.clientId,
+      });
+    }
     if (this._docRepo) {
       const dbExtra = {};
       if (extra) {
@@ -607,6 +720,9 @@ export class ProjectService {
    * Returns a single client by ID, or null if not found.
    */
   async getClient(clientId) {
+    if (this._useMinimalBox()) {
+      return boxEntityService.getClient(clientId);
+    }
     if (this._clientRepo) {
       const client = await this._clientRepo.findById(clientId);
       return client ? this._mapClientFromDb(client) : null;
@@ -690,6 +806,46 @@ export class ProjectService {
       updatedAt: d.updated_at,
       createdBy: d.created_by,
     };
+  }
+
+  /** Enrich documents with Box metadata (batch merge when clientId is known) */
+  async _mergeDocumentsWithBox(docs) {
+    if (!docs.length) return docs;
+    const clientId = docs[0]?.clientId;
+    if (clientId) {
+      return boxDocumentStatusService.mergeWithBoxMetadata(docs, clientId);
+    }
+    return Promise.all(docs.map((doc) => boxDocumentStatusService.enrichDocument(doc)));
+  }
+
+  _filterByStatus(docs, status) {
+    if (!status) return docs;
+    const statuses = Array.isArray(status) ? status : [status];
+    return docs.filter((d) => statuses.includes(d.status));
+  }
+
+  /** Project stats from Box-resolved document statuses */
+  async _computeProjectStatsAsync(projectId) {
+    const docs = await this.getProjectDocuments(projectId);
+    const documentCount = docs.length;
+    const completedCount = docs.filter((d) => ['Approved', 'Waived'].includes(d.status)).length;
+    const progressPercentage = documentCount > 0
+      ? Math.round((completedCount / documentCount) * 100)
+      : 0;
+    return { documentCount, progressPercentage };
+  }
+
+  /** Pending actions for a client using Box-resolved statuses */
+  async _countPendingActionsAsync(clientId) {
+    if (!this._docRepo) return this._countPendingActions(clientId);
+
+    const dbDocs = await this._docRepo.findByClientId(clientId);
+    const mapped = dbDocs.map((d) => this._mapDocFromDb(d));
+    const docs = await boxDocumentStatusService.mergeWithBoxMetadata(mapped, clientId);
+
+    return docs.filter(
+      (d) => !d.isDraft && !['Approved', 'Waived'].includes(d.status)
+    ).length;
   }
 
   /** Maps a DB activity row to the app-level activity shape */

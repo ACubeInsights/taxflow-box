@@ -5,7 +5,7 @@ import {
   StickyNote, Send, ChevronRight, FolderPlus, Trash2, Pencil, ArrowLeft,
   File, FileText, Loader2, Check, X, Upload, Eye, Download, Edit3, Users,
 } from 'lucide-react'
-import { GlassPanel, Badge, ProgressBar } from '../ui'
+import { FolioPanel as GlassPanel, Badge, ProgressBar } from '../ui'
 import Breadcrumb from '../Breadcrumb'
 import { projectApi, portalApi, reviewApi, vaultApi, documentApi, clientApi, collaborationApi } from '../../services/api'
 import DocumentEditor from '../DocumentEditor'
@@ -145,21 +145,23 @@ export default function ClientDetailView() {
           </div>
         </div>
       </div>
-      <div className="flex gap-1 mb-6 border-b border-[var(--color-outline-variant)]">
+      <div className="flex gap-1 mb-6 border-b border-[var(--color-rule)]">
         {TABS.map((tab) => {
           const isActive = activeTab === tab.key
           const TabIcon = tab.icon
           return (
             <button
               key={tab.key}
+              type="button"
               onClick={() => setActiveTab(tab.key)}
-              className={`flex items-center gap-2 px-5 py-3 text-[13px] font-semibold border-b-2 transition-all duration-200 cursor-pointer bg-transparent ${
+              aria-selected={isActive}
+              className={`flex cursor-pointer items-center gap-[var(--space-2)] border-b-2 bg-transparent px-[var(--space-4)] py-[var(--space-3)] text-sm font-medium transition-colors sm:px-[var(--space-6)] ${
                 isActive
-                  ? 'border-[var(--color-primary)] text-[var(--color-primary)]'
-                  : 'border-transparent text-[var(--color-on-surface-variant)] hover:text-[var(--color-on-surface)]'
+                  ? 'border-[var(--color-signal)] text-[var(--color-ink)]'
+                  : 'border-transparent text-[var(--color-whisper)] hover:text-[var(--color-ink)]'
               }`}
             >
-              <TabIcon size={15} />
+              <TabIcon size={15} aria-hidden />
               {tab.label}
             </button>
           )

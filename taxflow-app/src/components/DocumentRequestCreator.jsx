@@ -69,7 +69,10 @@ export default function DocumentRequestCreator({
       setLoadingClients(true)
       try {
         const data = await projectApi.getAllClients()
-        if (!cancelled) setClients(Array.isArray(data) ? data : [])
+        if (!cancelled) {
+          const list = Array.isArray(data) ? data : (data?.clients || [])
+          setClients(list)
+        }
       } catch { if (!cancelled) setClients([]) }
       finally { if (!cancelled) setLoadingClients(false) }
     }
@@ -85,7 +88,10 @@ export default function DocumentRequestCreator({
       setLoadingProjects(true)
       try {
         const data = await projectApi.getClientProjects(form.clientId)
-        if (!cancelled) setProjects(Array.isArray(data) ? data : [])
+        if (!cancelled) {
+          const list = Array.isArray(data) ? data : (data?.projects || [])
+          setProjects(list)
+        }
       } catch { if (!cancelled) setProjects([]) }
       finally { if (!cancelled) setLoadingProjects(false) }
     }
@@ -101,7 +107,10 @@ export default function DocumentRequestCreator({
       setLoadingDocTypes(true)
       try {
         const data = await documentTypeApi.getDocumentTypes()
-        if (!cancelled) setDocTypes(Array.isArray(data) ? data : [])
+        if (!cancelled) {
+          const list = Array.isArray(data) ? data : (data?.types || data?.documentTypes || [])
+          setDocTypes(list)
+        }
       } catch { if (!cancelled) setDocTypes([]) }
       finally { if (!cancelled) setLoadingDocTypes(false) }
     }
@@ -238,7 +247,8 @@ export default function DocumentRequestCreator({
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
             transition={{ duration: 0.3 }}
-            className="fixed inset-0 z-[100] bg-[var(--color-surface)]/80 backdrop-blur-md"
+            className="fixed inset-0 z-[100]"
+            style={{ background: 'color-mix(in srgb, var(--color-archive) 72%, transparent)' }}
             onClick={handleClose}
           />
 
@@ -248,16 +258,18 @@ export default function DocumentRequestCreator({
             animate={{ x: 0, opacity: 1, filter: 'blur(0px)' }}
             exit={{ x: '100%', opacity: 0, filter: 'blur(10px)' }}
             transition={{ type: 'spring', damping: 30, stiffness: 300, mass: 0.8 }}
-            className="fixed top-0 right-0 z-[101] flex h-full w-full max-w-lg flex-col border-l border-[var(--color-outline-variant)] bg-[var(--color-surface-high)]/95 shadow-2xl backdrop-blur-2xl"
+            className="fixed top-0 right-0 z-[101] flex h-full w-full max-w-lg flex-col border-l border-[var(--color-rule)] bg-[var(--color-folio)] shadow-[0_8px_32px_rgba(0,0,0,0.45)]"
           >
             {/* Header */}
-            <div className="flex items-center justify-between border-b border-[var(--color-outline-variant)] px-8 py-6 bg-[var(--color-surface)]/50 backdrop-blur-md sticky top-0 z-10">
-              <h2 className="text-[20px] font-bold tracking-tight text-[var(--color-on-surface)] m-0 flex items-center gap-2">
-                <Plus size={20} className="text-[var(--color-primary)]" /> New Document Request
+            <div className="sticky top-0 z-10 flex items-center justify-between border-b border-[var(--color-rule)] bg-[var(--color-folio)] px-[var(--space-6)] py-[var(--space-4)] sm:px-[var(--space-8)] sm:py-[var(--space-6)]">
+              <h2 className="m-0 flex items-center gap-[var(--space-2)] font-display text-lg font-semibold text-[var(--color-ink)]">
+                <Plus size={18} className="text-[var(--color-signal)]" aria-hidden /> New document request
               </h2>
               <button
+                type="button"
                 onClick={handleClose}
-                className="flex h-9 w-9 items-center justify-center rounded-full border border-[var(--color-outline-variant)] bg-[var(--color-surface-container)] text-[var(--color-on-surface-variant)] transition-all duration-200 hover:bg-[var(--color-surface-container-high)] hover:text-[var(--color-on-surface)] active:scale-95"
+                className="btn-ghost h-9 w-9 p-0"
+                aria-label="Close"
               >
                 <X size={16} />
               </button>
@@ -398,11 +410,11 @@ export default function DocumentRequestCreator({
                 {/* Draft vs Publish toggle */}
                 <div className="flex items-center justify-between rounded-[14px] border border-[var(--color-outline-variant)] bg-[var(--color-surface-container)]/30 px-4 py-3">
                   <div>
-                    <p className="m-0 text-[13px] font-bold text-[var(--color-on-surface)]">
-                      {form.isDraft ? 'Save as Draft' : 'Publish'}
+                    <p className="m-0 text-[13px] font-bold text-[var(--color-ink)]">
+                      {form.isDraft ? 'Save as draft' : 'Publish request'}
                     </p>
-                    <p className="m-0 text-[11px] text-[var(--color-on-surface-variant)]">
-                      {form.isDraft ? 'Client will not be notified' : 'Client will be notified'}
+                    <p className="m-0 text-[11px] text-[var(--color-whisper)]">
+                      {form.isDraft ? 'Client is not notified' : 'Client is notified'}
                     </p>
                   </div>
                   <button
@@ -425,27 +437,26 @@ export default function DocumentRequestCreator({
             </div>
 
             {/* Footer */}
-            <div className="border-t border-[var(--color-outline-variant)] p-6 bg-[var(--color-surface-high)]/95 backdrop-blur-md space-y-3">
-              {/* Duplicate warning */}
+            <div className="space-y-[var(--space-3)] border-t border-[var(--color-rule)] bg-[var(--color-folio)] p-[var(--space-6)]">
               {duplicateWarning && (
-                <div className="rounded-xl border border-yellow-500/30 bg-yellow-500/10 p-3 space-y-2">
-                  <div className="flex items-center gap-2">
-                    <AlertTriangle size={14} className="text-yellow-400 shrink-0" />
-                    <p className="m-0 text-[12px] font-medium text-yellow-300">{duplicateWarning}</p>
+                <div className="space-y-[var(--space-2)] rounded-[var(--radius-panel)] border border-[var(--color-hold)] bg-[var(--color-hold-muted)] p-[var(--space-3)]">
+                  <div className="flex items-center gap-[var(--space-2)]">
+                    <AlertTriangle size={14} className="shrink-0 text-[var(--color-hold)]" aria-hidden />
+                    <p className="m-0 text-sm font-medium text-[var(--color-hold)]">{duplicateWarning}</p>
                   </div>
-                  <div className="flex gap-2">
+                  <div className="flex gap-[var(--space-2)]">
                     <button
                       type="button"
                       onClick={handleConfirmDuplicate}
                       disabled={submitting}
-                      className="flex-1 rounded-lg bg-yellow-500/20 px-3 py-2 text-[12px] font-bold text-yellow-300 border border-yellow-500/30 hover:bg-yellow-500/30 disabled:opacity-50 transition-colors"
+                      className="btn-ghost flex-1"
                     >
                       Create anyway
                     </button>
                     <button
                       type="button"
                       onClick={() => { setDuplicateWarning(null); setAwaitingConfirm(false) }}
-                      className="flex-1 rounded-lg bg-[var(--color-surface-high)] px-3 py-2 text-[12px] font-bold text-[var(--color-on-surface-variant)] border border-[var(--color-outline-variant)] hover:bg-[var(--color-surface-highest)] transition-colors"
+                      className="btn-ghost flex-1"
                     >
                       Cancel
                     </button>
@@ -454,7 +465,7 @@ export default function DocumentRequestCreator({
               )}
 
               {submitError && (
-                <div className="rounded-lg border border-[var(--color-error)]/20 bg-[var(--color-error-muted)] px-3 py-2 text-[12px] text-[var(--color-error)]">
+                <div className="rounded-[var(--radius-control)] border border-[var(--color-flag)] bg-[var(--color-flag-muted)] px-[var(--space-3)] py-[var(--space-2)] text-sm text-[var(--color-flag)]" role="alert">
                   {submitError}
                 </div>
               )}
@@ -463,10 +474,10 @@ export default function DocumentRequestCreator({
                 type="submit"
                 form="doc-request-form"
                 disabled={submitting || awaitingConfirm}
-                className="w-full rounded-[14px] bg-[var(--color-on-surface)] text-[var(--color-surface-lowest)] px-4 py-4 text-[14px] font-bold tracking-wide transition-all duration-200 hover:bg-[var(--color-on-surface-variant)] active:scale-[0.98] shadow-lg flex justify-center items-center gap-2 disabled:opacity-50"
+                className="btn-signal w-full"
               >
-                {submitting ? <Loader2 size={18} className="animate-spin" /> : <Plus size={18} />}
-                {form.isDraft ? 'Save Draft' : 'Create & Publish'}
+                {submitting ? <Loader2 size={18} className="animate-spin" aria-hidden /> : <Plus size={18} aria-hidden />}
+                {form.isDraft ? 'Save draft' : 'Publish request'}
               </button>
             </div>
           </motion.div>

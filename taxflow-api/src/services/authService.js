@@ -15,6 +15,7 @@
 
 import boxService from './boxService.js';
 import emailService from './emailService.js';
+import vaultDiscoveryService, { mapVaultManifest } from './vaultDiscoveryService.js';
 import crypto from 'crypto';
 import { config } from '../config.js';
 import { createHttpError } from '../utils/httpError.js';
@@ -50,23 +51,10 @@ function getExtId(user) {
 
 /**
  * Maps a client_vaults DB row to the API response shape.
- * @param {object} row - Database row from client_vaults table
- * @returns {object|null}
+ * @deprecated Use mapVaultManifest from vaultDiscoveryService
  */
 function mapVaultFromDb(row) {
-  if (!row) return null;
-  return {
-    clientId: row.client_id,
-    financialYear: row.financial_year,
-    root: row.root_folder_id,
-    year: row.year_folder_id,
-    projects: row.projects_folder_id,
-    tax: row.tax_folder_id,
-    uploads: row.uploads_folder_id,
-    supportingDocs: row.supporting_docs_folder_id,
-    signedDocuments: row.signed_documents_folder_id,
-    internalNotes: row.internal_notes_folder_id,
-  };
+  return mapVaultManifest(row);
 }
 
 // ─── AuthService Class ──────────────────────────────────────────────────
@@ -202,7 +190,7 @@ export class AuthService {
    * @returns {Promise<object>} The enriched session response
    */
   async _enrichSessionWithVault(session, email) {
-    if (session.user.role !== 'client' || !this._clientVaultRepo || !this._clientRepo) {
+    if (session.user.role !== 'client' || !this._clientRepo) {
       return session;
     }
 
@@ -210,9 +198,9 @@ export class AuthService {
       const clientRecord = await this._clientRepo.findByEmail(email);
       if (clientRecord) {
         session.user.externalId = clientRecord.external_id;
-        const vaultRow = await this._clientVaultRepo.findByClientId(clientRecord.id);
-        if (vaultRow) {
-          session.vault = mapVaultFromDb(vaultRow);
+        const vault = await vaultDiscoveryService.getVaultForClient(clientRecord.id);
+        if (vault) {
+          session.vault = vault;
         }
       }
     } catch (err) {

@@ -1,33 +1,16 @@
 import { useState, useEffect, useCallback } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
-import { motion } from 'framer-motion'
 import { Loader2, AlertCircle, RefreshCw, FileText, Calendar, ArrowRight } from 'lucide-react'
 import { projectApi, reviewApi } from '../../services/api'
 import { saveFilters, loadFilters } from '../../services/sessionFilters'
 import Breadcrumb from '../Breadcrumb'
 import StatusFilterChips from '../StatusFilterChips'
-import { GlassPanel, StatusBadge, Badge, ProgressBar } from '../ui'
+import { FolioPanel, StatusBadge, Badge, ProgressBar, FolioRow } from '../ui'
+import EmptyState from '../EmptyState'
 import { useAuth } from '../../context/AuthContext'
 import { useToast } from '../../context/ToastContext'
-import { PRIORITY_COLORS, ENGAGEMENT_STATUS_COLORS } from '../../constants/roles'
-import EmptyState from '../EmptyState'
-import { SkeletonCard } from '../Skeleton'
-
-function SkeletonRow() {
-  return (
-    <div className="flex items-center gap-4 px-4 py-3">
-      <div className="skeleton h-3 w-40 rounded-full" />
-      <div className="skeleton h-3 w-24 rounded-full hidden sm:block" />
-      <div className="flex-1" />
-      <div className="skeleton h-5 w-16 rounded-lg" />
-    </div>
-  )
-}
-
-function truncate(str, max = 80) {
-  if (!str) return ''
-  return str.length > max ? str.slice(0, max) + '…' : str
-}
+import { PRIORITY_COLORS } from '../../constants/roles'
+import { STATUS_COLORS as DOC_STATUS_COLORS } from '../../constants/statusColors'
 
 function formatDate(dateStr) {
   if (!dateStr) return '—'
@@ -38,11 +21,16 @@ function formatDate(dateStr) {
   }
 }
 
+function truncate(str, max = 80) {
+  if (!str) return ''
+  return str.length > max ? `${str.slice(0, max)}…` : str
+}
+
 export default function ProjectDetailView() {
   const { error: toastError } = useToast()
   const { clientId, projectId } = useParams()
   const { user } = useAuth()
-  const employeeId = user?.id || 'employee-1'
+  const employeeId = user?.id
   const navigate = useNavigate()
 
   const [project, setProject] = useState(null)
@@ -77,19 +65,18 @@ export default function ProjectDetailView() {
       setProject(projectData)
       setDocuments(projectData.documents || [])
 
-      const client = (clients || []).find((c) => c.id === clientId)
+      const list = clients?.clients || clients || []
+      const client = list.find((c) => c.id === clientId)
       setClientName(client?.name || 'Client')
     } catch (err) {
-      toastError(err.message || 'Failed to load project')
-      setError(err.message || 'Failed to load project')
+      toastError(err.message || 'Could not load project')
+      setError(err.message || 'Could not load project')
     } finally {
       setLoading(false)
     }
-  }, [projectId, clientId])
+  }, [projectId, clientId, toastError])
 
-  useEffect(() => {
-    fetchData()
-  }, [fetchData])
+  useEffect(() => { fetchData() }, [fetchData])
 
   useEffect(() => {
     saveFilters(filterKey, selectedStatuses)
@@ -104,7 +91,7 @@ export default function ProjectDetailView() {
     .map((d) => d.id)
 
   const handleBulkTransition = async () => {
-    if (uploadedDocIds.length === 0) return
+    if (uploadedDocIds.length === 0 || !employeeId) return
     setBulkLoading(true)
     setBulkError(null)
     try {
@@ -114,57 +101,48 @@ export default function ProjectDetailView() {
       })
       await fetchData()
     } catch (err) {
-      setBulkError(err.message || 'Bulk transition failed')
+      setBulkError(err.message || 'Could not mark documents under review')
     } finally {
       setBulkLoading(false)
     }
   }
 
-  // Loading skeleton
   if (loading) {
     return (
-      <div className="max-w-[1200px] mx-auto">
-        <div className="skeleton h-3 w-48 rounded-full mb-4" />
-        <div className="skeleton h-8 w-64 rounded-xl mb-2" />
-        <div className="skeleton h-2 w-80 rounded-full mb-8" />
-        <GlassPanel>
-          {[1, 2, 3, 4].map((i) => (
-            <SkeletonRow key={i} />
-          ))}
-        </GlassPanel>
+      <div className="mx-auto max-w-[var(--layout-content-max)]">
+        <div className="mb-[var(--space-4)] h-3 w-48 animate-pulse rounded bg-[var(--color-ledger)]" />
+        <div className="mb-[var(--space-2)] h-8 w-64 animate-pulse rounded bg-[var(--color-ledger)]" />
+        <FolioPanel>
+          <div className="space-y-[var(--space-3)]">
+            {[1, 2, 3, 4].map((i) => (
+              <div key={i} className="h-12 animate-pulse rounded-[var(--radius-panel)] bg-[var(--color-ledger)]" />
+            ))}
+          </div>
+        </FolioPanel>
       </div>
     )
   }
 
-  // Error state
   if (error) {
     return (
-      <div className="max-w-[1200px] mx-auto">
+      <div className="mx-auto max-w-[var(--layout-content-max)]">
         <Breadcrumb
           segments={[
             { label: 'Dashboard', path: '/dashboard' },
             { label: clientName || 'Client', path: `/clients/${clientId}` },
           ]}
         />
-        <GlassPanel className="flex flex-col items-center justify-center py-16 text-center">
-          <AlertCircle size={40} className="text-[var(--color-error)]/60 mb-4" />
-          <p className="text-[15px] font-semibold text-[var(--color-error)]/80 mb-2">{error}</p>
-          {error === 'Project not found' ? (
-            <button
-              onClick={() => navigate(`/clients/${clientId}`)}
-              className="mt-4 flex items-center gap-2 rounded-xl border border-[var(--color-outline-variant)] bg-[var(--color-surface-container)] px-4 py-2 text-[13px] font-bold text-[var(--color-on-surface-variant)] transition-all hover:bg-[var(--color-surface-high)]"
-            >
-              Back to Client
-            </button>
-          ) : (
-            <button
-              onClick={fetchData}
-              className="mt-4 flex items-center gap-2 rounded-xl border border-[var(--color-outline-variant)] bg-[var(--color-surface-container)] px-4 py-2 text-[13px] font-bold text-[var(--color-on-surface-variant)] transition-all hover:bg-[var(--color-surface-high)]"
-            >
-              <RefreshCw size={14} /> Retry
-            </button>
-          )}
-        </GlassPanel>
+        <FolioPanel className="py-[var(--space-12)] text-center">
+          <AlertCircle size={36} className="mx-auto mb-[var(--space-4)] text-[var(--color-flag)]" aria-hidden />
+          <p className="m-0 mb-[var(--space-2)] text-sm font-medium text-[var(--color-flag)]">{error}</p>
+          <button
+            type="button"
+            onClick={error === 'Project not found' ? () => navigate(`/clients/${clientId}`) : fetchData}
+            className="btn-ghost mt-[var(--space-4)]"
+          >
+            {error === 'Project not found' ? 'Back to client' : <><RefreshCw size={14} aria-hidden /> Retry</>}
+          </button>
+        </FolioPanel>
       </div>
     )
   }
@@ -173,7 +151,7 @@ export default function ProjectDetailView() {
   const docCount = documents.length
 
   return (
-    <div className="max-w-[1200px] mx-auto">
+    <div className="mx-auto max-w-[var(--layout-content-max)]">
       <Breadcrumb
         segments={[
           { label: 'Dashboard', path: '/dashboard' },
@@ -182,107 +160,88 @@ export default function ProjectDetailView() {
         ]}
       />
 
-      {/* Project header */}
-      <motion.div
-        initial={{ opacity: 0, y: 12 }}
-        animate={{ opacity: 1, y: 0 }}
-        transition={{ duration: 0.4 }}
-        className="mb-6"
-      >
-        <div className="flex items-center gap-3 mb-3 flex-wrap">
-          <h1 className="m-0 text-[28px] font-bold tracking-tight text-[var(--color-on-surface)]">
+      <header className="mb-[var(--space-8)]">
+        <div className="mb-[var(--space-3)] flex flex-wrap items-center gap-[var(--space-3)]">
+          <h1 className="m-0 font-display text-2xl font-bold text-[var(--color-ink)]">
             {project?.name}
           </h1>
           {project?.status && <StatusBadge status={project.status} />}
         </div>
-        <div className="flex items-center gap-4 mb-4">
-          <span className="text-[12px] font-medium text-[var(--color-on-surface-variant)]">
-            {docCount} document{docCount !== 1 ? 's' : ''}
-          </span>
-          <span className="text-[12px] font-medium text-[var(--color-on-surface-variant)]">
-            {progressPct}% complete
-          </span>
+        <div className="mb-[var(--space-4)] flex flex-wrap items-center gap-[var(--space-4)] text-sm text-[var(--color-whisper)]">
+          <span>{docCount} document{docCount !== 1 ? 's' : ''}</span>
+          <span className="mono-sm">{progressPct}% complete</span>
         </div>
         <div className="max-w-md">
-          <ProgressBar value={progressPct} color="var(--color-primary)" />
+          <ProgressBar value={progressPct} color="var(--color-trace)" />
         </div>
-      </motion.div>
+      </header>
 
-      {/* Filters + bulk action */}
-      <motion.div
-        initial={{ opacity: 0, y: 10 }}
-        animate={{ opacity: 1, y: 0 }}
-        transition={{ duration: 0.4, delay: 0.1 }}
-        className="flex flex-wrap items-center gap-4 mb-6"
-      >
+      <div className="mb-[var(--space-6)] flex flex-wrap items-center gap-[var(--space-4)]">
         <StatusFilterChips selected={selectedStatuses} onChange={setSelectedStatuses} />
         {uploadedDocIds.length > 0 && (
           <button
+            type="button"
             onClick={handleBulkTransition}
-            disabled={bulkLoading}
-            className="ml-auto flex items-center gap-2 rounded-xl border border-[var(--color-primary)]/30 bg-[var(--color-primary-muted)] px-4 py-2 text-[12px] font-bold text-[var(--color-primary)] transition-all hover:bg-[var(--color-primary)]/20 disabled:opacity-50"
+            disabled={bulkLoading || !employeeId}
+            className="btn-ghost ml-auto text-xs"
           >
-            {bulkLoading ? <Loader2 size={14} className="animate-spin" /> : <ArrowRight size={14} />}
-            Mark All Uploaded as Under Review ({uploadedDocIds.length})
+            {bulkLoading
+              ? <Loader2 size={14} className="animate-spin" aria-hidden />
+              : <ArrowRight size={14} aria-hidden />
+            }
+            Mark {uploadedDocIds.length} uploaded as under review
           </button>
         )}
-      </motion.div>
+      </div>
+
       {bulkError && (
-        <div className="mb-4 rounded-lg border border-[var(--color-error)]/20 bg-[var(--color-error-muted)] px-3 py-2 text-xs text-[var(--color-error)]">
+        <div className="mb-[var(--space-4)] rounded-[var(--radius-control)] border border-[var(--color-flag)] bg-[var(--color-flag-muted)] px-[var(--space-3)] py-[var(--space-2)] text-sm text-[var(--color-flag)]" role="alert">
           {bulkError}
         </div>
       )}
 
-      {/* Document list */}
-      <GlassPanel delay={200}>
+      <FolioPanel className="!p-0 overflow-hidden">
         {filteredDocs.length === 0 ? (
           <EmptyState
             icon={FileText}
-            title={documents.length === 0 ? 'No documents yet' : 'No documents match filters'}
+            title={documents.length === 0 ? 'No documents yet' : 'No documents match these filters'}
             subtitle={documents.length === 0
-              ? 'Documents will appear here once requests are created.'
-              : 'Try clearing the status filter.'}
+              ? 'Create a document request from the dashboard to start this project.'
+              : 'Clear the status filter to see all documents.'}
           />
         ) : (
-          <div className="divide-y divide-[var(--color-outline-variant)]">
+          <div className="flex flex-col gap-[var(--space-2)] p-[var(--space-3)]">
             {filteredDocs.map((doc) => (
-              <button
+              <FolioRow
                 key={doc.id}
+                spineColor={DOC_STATUS_COLORS[doc.status] || 'var(--color-whisper)'}
                 onClick={() => navigate(`/clients/${clientId}/projects/${projectId}/documents/${doc.id}`)}
-                className="w-full flex items-center gap-4 px-4 py-3.5 text-left transition-colors hover:bg-[var(--color-surface-high)] cursor-pointer bg-transparent border-0"
               >
-                <div className="flex-1 min-w-0">
-                  <p className="m-0 text-[13px] font-semibold text-[var(--color-on-surface)] truncate">
-                    {doc.name}
-                  </p>
+                <div className="min-w-0 flex-1">
+                  <p className="m-0 truncate text-sm font-medium text-[var(--color-ink)]">{doc.name}</p>
                   {doc.description && (
-                    <p className="m-0 mt-0.5 text-[11px] text-[var(--color-on-surface-variant)] truncate">
+                    <p className="m-0 mt-[var(--space-1)] truncate text-xs text-[var(--color-whisper)]">
                       {truncate(doc.description)}
                     </p>
                   )}
                 </div>
                 {doc.priority && (
-                  <Badge color={PRIORITY_COLORS[doc.priority] || '#6b7280'}>
+                  <Badge color={PRIORITY_COLORS[doc.priority] || 'var(--color-whisper)'}>
                     {doc.priority}
                   </Badge>
                 )}
                 {doc.dueDate && (
-                  <span className="hidden sm:flex items-center gap-1 text-[11px] text-[var(--color-on-surface-variant)] whitespace-nowrap">
-                    <Calendar size={12} />
+                  <span className="hidden items-center gap-[var(--space-1)] text-xs text-[var(--color-whisper)] sm:flex">
+                    <Calendar size={12} aria-hidden />
                     {formatDate(doc.dueDate)}
                   </span>
                 )}
                 <StatusBadge status={doc.status} />
-                {doc.updatedAt && (
-                  <span className="hidden md:block text-[10px] text-[var(--color-on-surface-variant)]/60 whitespace-nowrap">
-                    {formatDate(doc.updatedAt)}
-                  </span>
-                )}
-              </button>
+              </FolioRow>
             ))}
           </div>
         )}
-      </GlassPanel>
+      </FolioPanel>
     </div>
   )
 }

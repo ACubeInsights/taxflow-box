@@ -1,5 +1,4 @@
 import { createContext, useContext, useState, useCallback, useRef } from 'react'
-import { motion, AnimatePresence } from 'framer-motion'
 import { CheckCircle, AlertCircle, AlertTriangle, Info, X } from 'lucide-react'
 
 const ToastContext = createContext(null)
@@ -7,27 +6,27 @@ const ToastContext = createContext(null)
 const TOAST_STYLES = {
   success: {
     icon: CheckCircle,
-    bg: 'var(--color-success-muted)',
-    border: 'rgba(52,211,153,0.25)',
-    color: 'var(--color-success)',
+    bg: 'var(--color-commit-muted)',
+    border: 'var(--color-commit)',
+    color: 'var(--color-commit)',
   },
   error: {
     icon: AlertCircle,
-    bg: 'var(--color-error-muted)',
-    border: 'rgba(251,113,133,0.25)',
-    color: 'var(--color-error)',
+    bg: 'var(--color-flag-muted)',
+    border: 'var(--color-flag)',
+    color: 'var(--color-flag)',
   },
   warning: {
     icon: AlertTriangle,
-    bg: 'var(--color-warning-muted)',
-    border: 'rgba(251,191,36,0.25)',
-    color: 'var(--color-warning)',
+    bg: 'var(--color-hold-muted)',
+    border: 'var(--color-hold)',
+    color: 'var(--color-hold)',
   },
   info: {
     icon: Info,
-    bg: 'var(--color-primary-muted)',
-    border: 'rgba(129,140,248,0.25)',
-    color: 'var(--color-primary)',
+    bg: 'var(--color-trace-muted)',
+    border: 'var(--color-trace)',
+    color: 'var(--color-trace)',
   },
 }
 
@@ -47,67 +46,54 @@ export function ToastProvider({ children }) {
 
   const toast = useCallback(({ type = 'info', message, duration = 4000 }) => {
     const id = _nextId++
-    setToasts(prev => {
-      // Cap at 4 toasts — drop oldest
-      const updated = [...prev, { id, type, message }]
-      return updated.slice(-4)
-    })
+    setToasts(prev => [...prev, { id, type, message }].slice(-4))
     if (duration > 0) {
       timersRef.current[id] = setTimeout(() => dismiss(id), duration)
     }
     return id
   }, [dismiss])
 
-  // Convenience wrappers
   const success = useCallback((message, opts) => toast({ type: 'success', message, ...opts }), [toast])
-  const error   = useCallback((message, opts) => toast({ type: 'error',   message, ...opts }), [toast])
+  const error = useCallback((message, opts) => toast({ type: 'error', message, ...opts }), [toast])
   const warning = useCallback((message, opts) => toast({ type: 'warning', message, ...opts }), [toast])
-  const info    = useCallback((message, opts) => toast({ type: 'info',    message, ...opts }), [toast])
+  const info = useCallback((message, opts) => toast({ type: 'info', message, ...opts }), [toast])
 
   return (
     <ToastContext.Provider value={{ toast, success, error, warning, info, dismiss }}>
       {children}
-
-      {/* Toast renderer — fixed bottom-right */}
       <div
-        className="fixed bottom-5 right-5 z-[9999] flex flex-col gap-2.5 items-end pointer-events-none"
+        className="pointer-events-none fixed bottom-[var(--space-6)] right-[var(--space-6)] z-[9999] flex flex-col items-end gap-[var(--space-2)]"
         aria-live="polite"
         aria-label="Notifications"
       >
-        <AnimatePresence initial={false}>
-          {toasts.map(t => {
-            const style = TOAST_STYLES[t.type] || TOAST_STYLES.info
-            const Icon = style.icon
-            return (
-              <motion.div
-                key={t.id}
-                layout
-                initial={{ opacity: 0, y: 16, scale: 0.95 }}
-                animate={{ opacity: 1, y: 0,  scale: 1 }}
-                exit={{   opacity: 0, y: 8,   scale: 0.95, transition: { duration: 0.15 } }}
-                transition={{ type: 'spring', stiffness: 420, damping: 30 }}
-                className="pointer-events-auto flex items-start gap-3 max-w-[360px] min-w-[260px] rounded-xl px-4 py-3 shadow-floating"
-                style={{
-                  background: style.bg,
-                  border: `1px solid ${style.border}`,
-                  backdropFilter: 'blur(16px)',
-                }}
+        {toasts.map(t => {
+          const style = TOAST_STYLES[t.type] || TOAST_STYLES.info
+          const Icon = style.icon
+          return (
+            <div
+              key={t.id}
+              className="pointer-events-auto flex min-w-[260px] max-w-[360px] items-start gap-[var(--space-3)] rounded-[var(--radius-panel)] px-[var(--space-4)] py-[var(--space-3)]"
+              style={{
+                background: style.bg,
+                border: `1px solid ${style.border}`,
+              }}
+              role="status"
+            >
+              <Icon size={15} className="mt-0.5 shrink-0" style={{ color: style.color }} aria-hidden />
+              <p className="m-0 flex-1 text-sm font-medium leading-snug text-[var(--color-ink)]">
+                {t.message}
+              </p>
+              <button
+                type="button"
+                onClick={() => dismiss(t.id)}
+                className="shrink-0 cursor-pointer rounded-[var(--radius-chip)] border-none bg-transparent p-[var(--space-1)] text-[var(--color-whisper)] hover:text-[var(--color-ink)]"
+                aria-label="Dismiss"
               >
-                <Icon size={15} className="shrink-0 mt-0.5" style={{ color: style.color }} />
-                <p className="m-0 flex-1 text-[13px] font-medium leading-snug" style={{ color: 'var(--color-on-surface)' }}>
-                  {t.message}
-                </p>
-                <button
-                  onClick={() => dismiss(t.id)}
-                  className="shrink-0 bg-transparent border-none cursor-pointer p-0.5 rounded-md text-[var(--color-on-surface-variant)] hover:text-[var(--color-on-surface)] transition-colors"
-                  aria-label="Dismiss"
-                >
-                  <X size={13} />
-                </button>
-              </motion.div>
-            )
-          })}
-        </AnimatePresence>
+                <X size={13} />
+              </button>
+            </div>
+          )
+        })}
       </div>
     </ToastContext.Provider>
   )

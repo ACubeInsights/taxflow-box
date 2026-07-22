@@ -207,7 +207,20 @@ export function AuthProvider({ children }) {
       try {
         const mockToken = `mock-token-${role}-${Date.now()}`
         const expiresAt = new Date(Date.now() + 60 * 60 * 1000).toISOString()
-        const userData = { id: `demo-${role}`, email: `${role}@demo.taxflow`, name: `Demo ${role}`, role, vault: null, externalId: `demo-${role}` }
+        const DEMO_USERS = {
+          superadmin: { name: 'Demo Admin', email: 'admin@demo.taxflow' },
+          employee:   { name: 'Demo Tax Preparer', email: 'preparer@demo.taxflow' },
+          client:     { name: 'Demo Client', email: 'client@demo.taxflow' },
+        }
+        const meta = DEMO_USERS[role] || { name: `Demo ${role}`, email: `${role}@demo.taxflow` }
+        const userData = {
+          id: `demo-${role}`,
+          email: meta.email,
+          name: meta.name,
+          role,
+          vault: null,
+          externalId: `demo-${role}`,
+        }
 
         setUser(userData)
         setToken(mockToken)

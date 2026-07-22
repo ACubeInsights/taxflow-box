@@ -1,46 +1,112 @@
-@import url('https://fonts.googleapis.com/css2?family=Inter:opsz,wght@14..32,300..900&family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Archivo:wght@600;700&family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans:wght@400;500&display=swap');
 
 @import "tailwindcss";
 
+/*
+  TaxFlow Pro — Folio Desk token system
+  Single source of truth. Do not introduce ad-hoc hex or magic pixels in components.
+*/
+
 @theme {
-  --font-sans: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
-  --font-display: 'Plus Jakarta Sans', -apple-system, BlinkMacSystemFont, sans-serif;
+  /* ── Fonts ── */
+  --font-sans: 'IBM Plex Sans', system-ui, sans-serif;
+  --font-display: 'Archivo', system-ui, sans-serif;
+  --font-mono: 'IBM Plex Mono', ui-monospace, monospace;
 
-  /* ─── Refined Color Palette ─── */
-  /* Primary: Warm indigo-blue — trustworthy yet modern */
-  --color-primary: #818cf8;
-  --color-primary-hover: #a5b4fc;
-  --color-primary-container: #6366f1;
-  --color-primary-muted: rgba(129, 140, 248, 0.12);
+  /* ── Surfaces (deep navy — not flat gray) ── */
+  --color-archive: #0A0F1A;
+  --color-folio: #111827;
+  --color-ledger: #1E293B;
+  --color-rule: #334155;
+  --color-paper-well: #172033;
 
-  /* Accent: Soft violet for secondary actions */
-  --color-secondary: #c4b5fd;
-  --color-secondary-container: #7c3aed;
+  /* ── Ink ── */
+  --color-ink: #F8FAFC;
+  --color-whisper: #94A3B8;
 
-  /* Tertiary: Warm teal for success states */
-  --color-tertiary: #5eead4;
-  --color-tertiary-container: #0d9488;
+  /* ── Semantic actions / status (saturated, not muted) ── */
+  --color-signal: #3B82F6;
+  --color-signal-ink: #FFFFFF;
+  --color-commit: #34D399;
+  --color-flag: #F87171;
+  --color-hold: #FB923C;
+  --color-trace: #60A5FA;
 
-  /* ─── Surface Scale (warmer undertones) ─── */
-  --color-surface-lowest: #09090b;
-  --color-surface: #0f0f12;
-  --color-surface-container: #18181b;
-  --color-surface-high: #232326;
-  --color-surface-highest: #2e2e32;
+  /* ── Muted fills (same hue, low opacity) ── */
+  --color-signal-muted: rgba(59, 130, 246, 0.16);
+  --color-commit-muted: rgba(52, 211, 153, 0.14);
+  --color-flag-muted: rgba(248, 113, 113, 0.14);
+  --color-hold-muted: rgba(251, 146, 60, 0.14);
+  --color-trace-muted: rgba(96, 165, 250, 0.14);
 
-  /* ─── Text & Borders ─── */
-  --color-on-surface: #fafafa;
-  --color-on-surface-variant: #a1a1aa;
-  --color-outline: rgba(255, 255, 255, 0.12);
-  --color-outline-variant: rgba(255, 255, 255, 0.06);
+  /* ── Spacing scale (4px base) ── */
+  --space-1: 4px;
+  --space-2: 8px;
+  --space-3: 12px;
+  --space-4: 16px;
+  --space-6: 24px;
+  --space-8: 32px;
+  --space-10: 40px;
+  --space-12: 48px;
+  --space-16: 64px;
 
-  /* ─── Semantic ─── */
-  --color-error: #fb7185;
-  --color-error-muted: rgba(251, 113, 133, 0.12);
-  --color-success: #34d399;
-  --color-success-muted: rgba(52, 211, 153, 0.12);
-  --color-warning: #fbbf24;
-  --color-warning-muted: rgba(251, 191, 36, 0.12);
+  /* ── Layout constants ── */
+  --layout-topbar: 48px;
+  --layout-rail: 56px;
+  --layout-procedure: 360px;
+  --layout-content-max: 1280px;
+  --layout-row-compact: 44px;
+  --layout-row: 52px;
+  --layout-auth-max: 960px;
+
+  /* ── Radius (strict) ── */
+  --radius-chip: 4px;
+  --radius-control: 6px;
+  --radius-panel: 8px;
+
+  /* ── Type scale (1.25 major third, base 16px) ── */
+  --text-xs: 12px;
+  --text-sm: 14px;
+  --text-base: 16px;
+  --text-md: 18px;
+  --text-lg: 20px;
+  --text-xl: 24px;
+  --text-2xl: 28px;
+  --mono-xs: 11px;
+  --mono-sm: 13px;
+
+  /* ── Motion ── */
+  --ease-micro: cubic-bezier(0.25, 0.46, 0.45, 0.94);
+  --ease-standard: cubic-bezier(0.4, 0, 0.2, 1);
+  --ease-emphasis: cubic-bezier(0.16, 1, 0.3, 1);
+  --duration-micro: 120ms;
+  --duration-standard: 240ms;
+  --duration-emphasis: 480ms;
+
+  /* ── Legacy aliases (map old names → Folio Desk) so unmigrated paths don't flash wrong ── */
+  --color-primary: var(--color-signal);
+  --color-primary-hover: #2563EB;
+  --color-primary-container: var(--color-signal);
+  --color-primary-muted: var(--color-signal-muted);
+  --color-secondary: var(--color-trace);
+  --color-secondary-container: var(--color-trace);
+  --color-tertiary: var(--color-commit);
+  --color-tertiary-container: var(--color-commit);
+  --color-surface-lowest: var(--color-archive);
+  --color-surface: var(--color-archive);
+  --color-surface-container: var(--color-folio);
+  --color-surface-high: var(--color-ledger);
+  --color-surface-highest: var(--color-rule);
+  --color-on-surface: var(--color-ink);
+  --color-on-surface-variant: var(--color-whisper);
+  --color-outline: var(--color-rule);
+  --color-outline-variant: var(--color-rule);
+  --color-error: var(--color-flag);
+  --color-error-muted: var(--color-flag-muted);
+  --color-success: var(--color-commit);
+  --color-success-muted: var(--color-commit-muted);
+  --color-warning: var(--color-hold);
+  --color-warning-muted: var(--color-hold-muted);
 }
 
 :root {
@@ -48,22 +114,23 @@
 }
 
 * {
-  font-family: var(--font-sans);
+  box-sizing: border-box;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
-  box-sizing: border-box;
 }
 
 html, body {
   margin: 0;
   padding: 0;
-  background: var(--color-surface-lowest);
-  color: var(--color-on-surface);
-  overflow-x: hidden;
   min-height: 100vh;
-  font-size: 15px;
-  line-height: 1.6;
-  letter-spacing: -0.01em;
+  overflow-x: hidden;
+  background: var(--color-archive);
+  color: var(--color-ink);
+  font-family: var(--font-sans);
+  font-size: var(--text-base);
+  font-weight: 400;
+  line-height: 1.5;
+  letter-spacing: 0;
 }
 
 #root {
@@ -72,153 +139,262 @@ html, body {
 
 h1, h2, h3, h4, h5, h6, .font-display {
   font-family: var(--font-display);
-  letter-spacing: -0.025em;
+  letter-spacing: -0.02em;
+  line-height: 1.25;
+  font-weight: 600;
 }
 
-/* ─── Scrollbar ─── */
-::-webkit-scrollbar { width: 6px; height: 6px; }
+.font-mono, .mono {
+  font-family: var(--font-mono);
+  line-height: 1.4;
+}
+
+/* Type utilities */
+.text-xs  { font-size: var(--text-xs); }
+.text-sm  { font-size: var(--text-sm); }
+.text-base { font-size: var(--text-base); }
+.text-md  { font-size: var(--text-md); }
+.text-lg  { font-size: var(--text-lg); }
+.text-xl  { font-size: var(--text-xl); }
+.text-2xl { font-size: var(--text-2xl); }
+.mono-xs  { font-size: var(--mono-xs); font-family: var(--font-mono); font-weight: 500; }
+.mono-sm  { font-size: var(--mono-sm); font-family: var(--font-mono); font-weight: 400; }
+
+.label-caps {
+  font-size: var(--text-xs);
+  font-weight: 500;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--color-whisper);
+}
+
+/* Scrollbar */
+::-webkit-scrollbar { width: var(--space-2); height: var(--space-2); }
 ::-webkit-scrollbar-track { background: transparent; }
 ::-webkit-scrollbar-thumb {
-  background: var(--color-surface-highest);
-  border-radius: 999px;
-  border: 1px solid transparent;
+  background: var(--color-rule);
+  border-radius: var(--radius-chip);
 }
-::-webkit-scrollbar-thumb:hover { background: rgba(255, 255, 255, 0.15); }
+::-webkit-scrollbar-thumb:hover { background: var(--color-whisper); }
 
-/* ─── Form Autofill ─── */
+/* Autofill */
 input:-webkit-autofill,
 input:-webkit-autofill:hover,
 input:-webkit-autofill:focus {
-  -webkit-text-fill-color: var(--color-on-surface);
-  -webkit-box-shadow: 0 0 0px 1000px var(--color-surface-high) inset;
-  caret-color: var(--color-on-surface);
+  -webkit-text-fill-color: var(--color-ink);
+  -webkit-box-shadow: 0 0 0px 1000px var(--color-ledger) inset;
+  caret-color: var(--color-ink);
   transition: background-color 5000s ease-in-out 0s;
 }
 
-/* ─── Animations ─── */
-@keyframes float {
-  0%, 100% { transform: translateY(0) rotate(0deg); }
-  33% { transform: translateY(-8px) rotate(0.5deg); }
-  66% { transform: translateY(4px) rotate(-0.3deg); }
-}
-
-@keyframes float-slow {
-  0%, 100% { transform: translate(0, 0) scale(1); }
-  50% { transform: translate(12px, -12px) scale(1.02); }
-}
-
-@keyframes shimmer {
-  0% { transform: translateX(-100%); }
-  100% { transform: translateX(100%); }
-}
-
-@keyframes pulse-soft {
-  0%, 100% { opacity: 1; }
-  50% { opacity: 0.6; }
-}
-
-@keyframes grain {
-  0%, 100% { transform: translate(0, 0); }
-  10% { transform: translate(-5%, -10%); }
-  30% { transform: translate(3%, -15%); }
-  50% { transform: translate(12%, 9%); }
-  70% { transform: translate(9%, 4%); }
-  90% { transform: translate(-1%, 7%); }
-}
-
-.animate-float { animation: float 8s cubic-bezier(0.4, 0, 0.2, 1) infinite; }
-.animate-float-slow { animation: float-slow 12s cubic-bezier(0.4, 0, 0.2, 1) infinite; }
-.animate-float-d2 { animation: float 8s cubic-bezier(0.4, 0, 0.2, 1) infinite 2s; }
-.animate-float-d4 { animation: float 8s cubic-bezier(0.4, 0, 0.2, 1) infinite 4s; }
-.animate-pulse-soft { animation: pulse-soft 3s ease-in-out infinite; }
-
-/* ─── Glass Panel ─── */
-.glass-panel {
-  background: rgba(24, 24, 27, 0.6);
-  backdrop-filter: blur(24px) saturate(1.2);
-  -webkit-backdrop-filter: blur(24px) saturate(1.2);
-  border: 1px solid var(--color-outline-variant);
-}
-
-/* ─── Noise Texture Overlay ─── */
-.noise-overlay::before {
-  content: '';
-  position: absolute;
-  inset: 0;
-  opacity: 0.025;
-  background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
-  pointer-events: none;
-  z-index: 1;
-}
-
-/* ─── Focus Ring ─── */
+/* Focus */
 :focus-visible {
-  outline: 2px solid var(--color-primary);
+  outline: 2px solid var(--color-signal);
   outline-offset: 2px;
-  border-radius: 6px;
+  border-radius: var(--radius-control);
 }
 
-/* ─── Selection ─── */
 ::selection {
-  background: rgba(129, 140, 248, 0.3);
-  color: #fff;
+  background: var(--color-signal-muted);
+  color: var(--color-ink);
 }
 
-/* ─── Utilities ─── */
-.text-balance { text-wrap: balance; }
-
-.glow-primary {
-  box-shadow: 0 0 20px rgba(129, 140, 248, 0.15), 0 0 60px rgba(129, 140, 248, 0.05);
-}
-
-.glow-sm {
-  box-shadow: 0 0 10px rgba(129, 140, 248, 0.1);
-}
-
-/* ─── Border Radius Scale ─── */
-/*
-  --radius-sm:  8px   → rounded-lg   (chips, badges, small buttons)
-  --radius-md:  12px  → rounded-xl   (inputs, rows, dropdowns, cards)
-  --radius-lg:  16px  → rounded-2xl  (panels, modals, large cards)
-  --radius-xl:  24px  → rounded-3xl  (login card, full-screen panels)
-
-  Use these four values only. Avoid custom rounded-[Npx] except for
-  circular elements (rounded-full) or icons (rounded-md / rounded-lg).
-*/
-
-/* ─── Skeleton Shimmer ─── */
-@keyframes skeleton-shimmer {
-  0%   { background-position: -400px 0; }
-  100% { background-position:  400px 0; }
-}
-
-.skeleton {
-  background: linear-gradient(
-    90deg,
-    var(--color-surface-high)  0%,
-    var(--color-surface-highest) 40%,
-    var(--color-surface-high)  80%
-  );
-  background-size: 800px 100%;
-  animation: skeleton-shimmer 1.4s ease-in-out infinite;
-}
-
-/* ─── Smooth Transitions Globally ─── */
+/* Motion defaults */
 button, a, input, select, textarea {
-  transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+  transition:
+    background-color var(--duration-micro) var(--ease-micro),
+    border-color var(--duration-micro) var(--ease-micro),
+    color var(--duration-micro) var(--ease-micro),
+    opacity var(--duration-micro) var(--ease-micro);
 }
 
-/* ─── Elevated Shadow Scale ─── */
-.shadow-elevated {
-  box-shadow:
-    0 0 0 1px var(--color-outline-variant),
-    0 2px 4px rgba(0, 0, 0, 0.3),
-    0 8px 24px rgba(0, 0, 0, 0.4);
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: 0ms !important;
+    transition-duration: 0ms !important;
+  }
 }
 
-.shadow-floating {
-  box-shadow:
-    0 0 0 1px var(--color-outline-variant),
-    0 4px 12px rgba(0, 0, 0, 0.4),
-    0 16px 48px rgba(0, 0, 0, 0.5);
+/* Folio Rail spine */
+.folio-spine {
+  width: 4px;
+  flex-shrink: 0;
+  border-radius: 2px;
+  transition: background-color var(--duration-emphasis) var(--ease-emphasis);
 }
+
+/* Flat panel (replaces glass) */
+.folio-panel {
+  background: var(--color-folio);
+  border: 1px solid var(--color-rule);
+  border-radius: var(--radius-panel);
+}
+
+/* Signal CTA — one primary action per screen */
+.btn-signal {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-2);
+  min-height: 44px;
+  padding: var(--space-3) var(--space-6);
+  border: none;
+  border-radius: var(--radius-control);
+  background: var(--color-signal);
+  color: var(--color-signal-ink);
+  font-family: var(--font-sans);
+  font-size: var(--text-sm);
+  font-weight: 500;
+  cursor: pointer;
+}
+.btn-signal:hover:not(:disabled) {
+  background: var(--color-primary-hover);
+}
+.btn-signal:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+.btn-ghost {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-2);
+  min-height: 36px;
+  padding: var(--space-2) var(--space-4);
+  border: 1px solid var(--color-rule);
+  border-radius: var(--radius-control);
+  background: transparent;
+  color: var(--color-ink);
+  font-family: var(--font-sans);
+  font-size: var(--text-sm);
+  font-weight: 500;
+  cursor: pointer;
+}
+.btn-ghost:hover:not(:disabled) {
+  background: var(--color-ledger);
+}
+.btn-ghost:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+.btn-flag {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-2);
+  min-height: 44px;
+  padding: var(--space-3) var(--space-6);
+  border: 1px solid var(--color-flag);
+  border-radius: var(--radius-control);
+  background: var(--color-flag-muted);
+  color: var(--color-flag);
+  font-family: var(--font-sans);
+  font-size: var(--text-sm);
+  font-weight: 500;
+  cursor: pointer;
+}
+.btn-flag:hover:not(:disabled) {
+  background: rgba(248, 113, 113, 0.22);
+}
+.btn-flag:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+.btn-commit {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-2);
+  min-height: 44px;
+  padding: var(--space-3) var(--space-6);
+  border: 1px solid var(--color-commit);
+  border-radius: var(--radius-control);
+  background: var(--color-commit-muted);
+  color: var(--color-commit);
+  font-family: var(--font-sans);
+  font-size: var(--text-sm);
+  font-weight: 500;
+  cursor: pointer;
+}
+.btn-commit:hover:not(:disabled) {
+  background: rgba(52, 211, 153, 0.22);
+}
+.btn-commit:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+/* Form control */
+.folio-input {
+  width: 100%;
+  min-height: 44px;
+  padding: var(--space-3) var(--space-4);
+  border: 1px solid var(--color-rule);
+  border-radius: var(--radius-control);
+  background: var(--color-ledger);
+  color: var(--color-ink);
+  font-family: var(--font-sans);
+  font-size: var(--text-sm);
+  font-weight: 400;
+  outline: none;
+}
+.folio-input::placeholder {
+  color: var(--color-whisper);
+}
+.folio-input:focus {
+  border-color: var(--color-signal);
+}
+
+.folio-select {
+  width: 100%;
+  min-height: 44px;
+  padding: var(--space-3) var(--space-4);
+  border: 1px solid var(--color-rule);
+  border-radius: var(--radius-control);
+  background: var(--color-ledger);
+  color: var(--color-ink);
+  font-family: var(--font-sans);
+  font-size: var(--text-sm);
+  font-weight: 400;
+  outline: none;
+  appearance: none;
+  cursor: pointer;
+  color-scheme: dark;
+}
+.folio-select:focus {
+  border-color: var(--color-signal);
+}
+
+/* Auth shell — richer first impression than flat matte panels */
+.auth-hero {
+  background:
+    radial-gradient(ellipse 80% 60% at 20% 10%, rgba(59, 130, 246, 0.18), transparent 55%),
+    radial-gradient(ellipse 60% 50% at 85% 90%, rgba(52, 211, 153, 0.12), transparent 50%),
+    linear-gradient(160deg, var(--color-archive) 0%, #0F172A 48%, #111827 100%);
+}
+
+.auth-card {
+  background: var(--color-folio);
+  border: 1px solid var(--color-rule);
+  border-radius: var(--radius-panel);
+  box-shadow:
+    0 0 0 1px rgba(59, 130, 246, 0.06),
+    0 24px 48px -16px rgba(0, 0, 0, 0.45);
+}
+
+.auth-feature-icon {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 36px;
+  height: 36px;
+  flex-shrink: 0;
+  border-radius: var(--radius-control);
+  border: 1px solid var(--color-rule);
+}
+
+/* Specificity note: .btn-signal / .folio-panel / .folio-input are class-based.
+   Prefer these over element+utility stacks to avoid Tailwind padding collisions. */

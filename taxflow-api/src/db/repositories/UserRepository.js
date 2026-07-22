@@ -14,6 +14,20 @@ export class UserRepository extends BaseRepository {
     return this.query(trx).where('box_user_id', boxUserId).whereNull('deleted_at').first();
   }
 
+  async findById(id, trx) {
+    return this.query(trx).where('id', id).whereNull('deleted_at').first();
+  }
+
+  async findByExternalId(externalId, trx) {
+    return this.query(trx).where('external_id', externalId).whereNull('deleted_at').first();
+  }
+
+  async updateProfile(id, fields, trx) {
+    const now = new Date().toISOString();
+    await this.query(trx).where('id', id).update({ ...fields, updated_at: now });
+    return this.findById(id, trx);
+  }
+
   /**
    * Finds all users with a given role.
    * @param {string} role - Role to filter by (e.g., 'employee', 'client', 'superadmin')

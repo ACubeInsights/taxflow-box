@@ -5,7 +5,6 @@
 .idea/
 
 # Secrets — NEVER commit these
-box_config.json
 *.pem
 *.key
 .env
@@ -16,6 +15,7 @@ node_modules/
 
 # Build artifacts
 dist/
+box_config.json
 
 # OS
 .DS_Store

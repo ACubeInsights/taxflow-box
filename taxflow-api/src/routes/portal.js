@@ -1,21 +1,26 @@
 /**
- * Portal routes — Client progress, employee dashboard, CXO portfolio,
- * inactive clients, file versions, and zip downloads.
- *
- * Requirements: 19.1, 20.1, 21.1, 22.1, 23.1, 24.1
+ * Portal routes — Client progress, employee dashboard, inactive clients,
+ * file versions, and zip downloads.
  */
 
 import express from 'express';
 import portalService from '../services/portalService.js';
 import projectService from '../services/projectService.js';
+import {
+  requireAuth,
+  requireRole,
+  requireClientAccess,
+  requireEmployeeSelfOrAdmin,
+} from '../middleware/authMiddleware.js';
 
 const router = express.Router();
 
+router.use(requireAuth);
+
 /**
  * GET /api/portal/client/:clientId/progress
- * Client progress via metadata query.
  */
-router.get('/client/:clientId/progress', async (req, res, next) => {
+router.get('/client/:clientId/progress', requireClientAccess, async (req, res, next) => {
   try {
     const { clientId } = req.params;
     const result = await portalService.getClientProgress(clientId);
@@ -27,23 +32,26 @@ router.get('/client/:clientId/progress', async (req, res, next) => {
 
 /**
  * GET /api/portal/employee/:employeeId/dashboard
- * Employee dashboard: pending reviews sorted by priority.
  */
-router.get('/employee/:employeeId/dashboard', async (req, res, next) => {
-  try {
-    const { employeeId } = req.params;
-    const result = await portalService.getEmployeeDashboard(employeeId);
-    res.json(result);
-  } catch (error) {
-    next(error);
+router.get(
+  '/employee/:employeeId/dashboard',
+  requireRole('employee', 'superadmin'),
+  requireEmployeeSelfOrAdmin('employeeId'),
+  async (req, res, next) => {
+    try {
+      const { employeeId } = req.params;
+      const result = await portalService.getEmployeeDashboard(employeeId);
+      res.json(result);
+    } catch (error) {
+      next(error);
+    }
   }
-});
+);
 
 /**
  * GET /api/portal/inactive-clients
- * Detect clients with no activity within threshold.
  */
-router.get('/inactive-clients', async (req, res, next) => {
+router.get('/inactive-clients', requireRole('employee', 'superadmin'), async (req, res, next) => {
   try {
     const { thresholdDays } = req.query;
     const parsed = thresholdDays ? parseInt(thresholdDays, 10) : undefined;
@@ -56,9 +64,8 @@ router.get('/inactive-clients', async (req, res, next) => {
 
 /**
  * GET /api/portal/files/:fileId/versions
- * File version history sorted by version number descending.
  */
-router.get('/files/:fileId/versions', async (req, res, next) => {
+router.get('/files/:fileId/versions', requireRole('employee', 'superadmin'), async (req, res, next) => {
   try {
     const { fileId } = req.params;
     const result = await portalService.getFileVersions(fileId);
@@ -70,9 +77,8 @@ router.get('/files/:fileId/versions', async (req, res, next) => {
 
 /**
  * POST /api/portal/zip-download
- * Create zip download. Validates max 100 files.
  */
-router.post('/zip-download', async (req, res, next) => {
+router.post('/zip-download', requireRole('employee', 'superadmin'), async (req, res, next) => {
   try {
     const { fileIds } = req.body;
 
@@ -96,31 +102,39 @@ router.post('/zip-download', async (req, res, next) => {
 
 /**
  * GET /api/portal/employee/:employeeId/summary
- * Employee summary metrics via projectService.getEmployeeSummary.
  */
-router.get('/employee/:employeeId/summary', async (req, res, next) => {
-  try {
-    const { employeeId } = req.params;
-    const summary = await projectService.getEmployeeSummary(employeeId);
-    res.json(summary);
-  } catch (error) {
-    next(error);
+router.get(
+  '/employee/:employeeId/summary',
+  requireRole('employee', 'superadmin'),
+  requireEmployeeSelfOrAdmin('employeeId'),
+  async (req, res, next) => {
+    try {
+      const { employeeId } = req.params;
+      const summary = await projectService.getEmployeeSummary(employeeId);
+      res.json(summary);
+    } catch (error) {
+      next(error);
+    }
   }
-});
+);
 
 /**
  * GET /api/portal/employee/:employeeId/activity
- * Activity feed via projectService.getEmployeeActivity with optional ?limit= param.
  */
-router.get('/employee/:employeeId/activity', async (req, res, next) => {
-  try {
-    const { employeeId } = req.params;
-    const limit = req.query.limit ? parseInt(req.query.limit, 10) : undefined;
-    const activity = await projectService.getEmployeeActivity(employeeId, limit);
-    res.json(activity);
-  } catch (error) {
-    next(error);
+router.get(
+  '/employee/:employeeId/activity',
+  requireRole('employee', 'superadmin'),
+  requireEmployeeSelfOrAdmin('employeeId'),
+  async (req, res, next) => {
+    try {
+      const { employeeId } = req.params;
+      const limit = req.query.limit ? parseInt(req.query.limit, 10) : undefined;
+      const activity = await projectService.getEmployeeActivity(employeeId, limit);
+      res.json(activity);
+    } catch (error) {
+      next(error);
+    }
   }
-});
+);
 
 export default router;

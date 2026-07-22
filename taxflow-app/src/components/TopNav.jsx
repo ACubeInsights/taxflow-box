@@ -1,5 +1,4 @@
 import { useState, useEffect, useRef } from 'react'
-import { motion, AnimatePresence } from 'framer-motion'
 import { useAuth } from '../context/AuthContext'
 import { notificationApi } from '../services/api'
 import {
@@ -17,52 +16,49 @@ const EVENT_TYPE_ICONS = {
   email_failed:       AlertCircle,
 }
 
-const DROPDOWN_VARIANTS = {
-  hidden:  { opacity: 0, scale: 0.96, y: -6 },
-  visible: { opacity: 1, scale: 1,    y: 0,  transition: { duration: 0.18, ease: [0.22, 1, 0.36, 1] } },
-  exit:    { opacity: 0, scale: 0.96, y: -4,  transition: { duration: 0.12, ease: [0.4, 0, 1, 1] } },
-}
-
 export default function TopNav() {
   const { user, logout, sessionWarning } = useAuth()
   const meta = ROLE_META[user?.role] || ROLE_META.employee
 
-  const [notifications, setNotifications]     = useState([])
+  const [notifications, setNotifications] = useState([])
   const [showNotifications, setShowNotifications] = useState(false)
-  const [showProfile, setShowProfile]         = useState(false)
+  const [showProfile, setShowProfile] = useState(false)
   const [changePasswordOpen, setChangePasswordOpen] = useState(false)
-  const pollRef     = useRef(null)
-  const profileRef  = useRef(null)
-  const notifRef    = useRef(null)
+  const pollRef = useRef(null)
+  const profileRef = useRef(null)
+  const notifRef = useRef(null)
 
   const unreadCount = notifications.filter(n => !n.read).length
-  const isEmployee  = user?.role === 'employee'
+  const isStaff = user?.role === 'employee' || user?.role === 'superadmin'
 
-  // Close dropdowns on outside click
   useEffect(() => {
     const handler = (e) => {
       if (profileRef.current && !profileRef.current.contains(e.target)) setShowProfile(false)
-      if (notifRef.current  && !notifRef.current.contains(e.target))  setShowNotifications(false)
+      if (notifRef.current && !notifRef.current.contains(e.target)) setShowNotifications(false)
     }
     document.addEventListener('mousedown', handler)
     return () => document.removeEventListener('mousedown', handler)
   }, [])
 
-  // Poll notifications — employee only
   useEffect(() => {
-    if (!user || !isEmployee) { setNotifications([]); return }
+    if (!user || !isStaff) {
+      setNotifications([])
+      return
+    }
 
-    const fetch = async () => {
+    const fetchNotifications = async () => {
       try {
-        const data = await notificationApi.getNotifications(user?.id || 'employee-1')
+        const data = await notificationApi.getNotifications(user.id)
         if (Array.isArray(data)) setNotifications(data)
       } catch { /* silent */ }
     }
 
-    fetch()
-    pollRef.current = setInterval(fetch, 30000)
-    return () => { if (pollRef.current) clearInterval(pollRef.current) }
-  }, [user, isEmployee])
+    fetchNotifications()
+    pollRef.current = setInterval(fetchNotifications, 30000)
+    return () => {
+      if (pollRef.current) clearInterval(pollRef.current)
+    }
+  }, [user, isStaff])
 
   const handleLogout = () => {
     if (pollRef.current) clearInterval(pollRef.current)
@@ -70,195 +66,176 @@ export default function TopNav() {
     logout()
   }
 
+  const initials = (user?.name || 'U')
+    .split(' ')
+    .map(w => w[0])
+    .slice(0, 2)
+    .join('')
+    .toUpperCase()
+
   return (
     <>
-      <header className="h-14 border-b border-[var(--color-outline-variant)] flex items-center px-6 lg:px-8 gap-4 sticky top-0 z-50 bg-[var(--color-surface)]/80 backdrop-blur-xl">
-
+      <header
+        className="sticky top-0 z-50 flex h-[var(--layout-topbar)] items-center gap-[var(--space-4)] border-b border-[var(--color-rule)] bg-[var(--color-archive)] px-[var(--space-4)] sm:px-[var(--space-6)] lg:px-[var(--space-8)]"
+      >
         {/* Brand */}
-        <div className="flex items-center gap-2.5 flex-1 min-w-0">
-          <div className="w-7 h-7 rounded-lg flex items-center justify-center bg-[var(--color-primary)]/10 border border-[var(--color-primary)]/20 shrink-0">
-            <span className="text-[11px] font-bold text-[var(--color-primary)]">TF</span>
+        <div className="flex min-w-0 flex-1 items-center gap-[var(--space-3)]">
+          <div
+            className="flex h-7 w-7 shrink-0 items-center justify-center rounded-[var(--radius-control)] border border-[var(--color-rule)] bg-[var(--color-folio)]"
+            aria-hidden
+          >
+            <span className="text-xs font-display font-bold text-[var(--color-signal)]">TF</span>
           </div>
-          <span className="text-[14px] font-semibold text-[var(--color-on-surface)] tracking-tight font-display">
+          <span className="truncate font-display text-sm font-semibold text-[var(--color-ink)]">
             TaxFlow Pro
           </span>
           <span
-            className="hidden sm:inline-flex items-center px-1.5 py-0.5 rounded text-[9px] font-bold uppercase tracking-wider shrink-0"
+            className="hidden sm:inline-flex items-center rounded-[var(--radius-chip)] px-[var(--space-2)] py-[var(--space-1)] text-xs font-medium uppercase tracking-[0.04em]"
             style={{
-              background: `color-mix(in srgb, ${meta.color} 12%, transparent)`,
               color: meta.color,
-              border: `1px solid color-mix(in srgb, ${meta.color} 20%, transparent)`,
+              background: `color-mix(in srgb, ${meta.color} 14%, transparent)`,
+              border: `1px solid color-mix(in srgb, ${meta.color} 30%, transparent)`,
             }}
           >
             {meta.badgeLabel}
           </span>
         </div>
 
-        {/* Actions */}
-        <div className="flex items-center gap-1.5">
-
-          {/* Notifications — employee only */}
-          {isEmployee && (
+        <div className="flex items-center gap-[var(--space-1)]">
+          {isStaff && (
             <div ref={notifRef} className="relative">
               <button
+                type="button"
                 onClick={() => { setShowNotifications(p => !p); setShowProfile(false) }}
-                className="relative w-8 h-8 rounded-lg flex items-center justify-center text-[var(--color-on-surface-variant)] hover:text-[var(--color-on-surface)] hover:bg-[var(--color-surface-high)] transition-colors border-none bg-transparent cursor-pointer"
-                aria-label={`Notifications${unreadCount > 0 ? ` (${unreadCount} unread)` : ''}`}
+                className="relative flex h-9 w-9 items-center justify-center rounded-[var(--radius-control)] border-none bg-transparent text-[var(--color-whisper)] hover:bg-[var(--color-ledger)] hover:text-[var(--color-ink)] cursor-pointer"
+                aria-label={`Notifications${unreadCount > 0 ? `, ${unreadCount} unread` : ''}`}
+                aria-expanded={showNotifications}
               >
-                <Bell size={16} />
-                <AnimatePresence>
-                  {unreadCount > 0 && (
-                    <motion.span
-                      key="badge"
-                      initial={{ scale: 0 }}
-                      animate={{ scale: 1 }}
-                      exit={{ scale: 0 }}
-                      transition={{ type: 'spring', stiffness: 500, damping: 25 }}
-                      className="absolute -top-0.5 -right-0.5 min-w-[16px] h-4 rounded-full bg-[var(--color-primary)] flex items-center justify-center text-[9px] font-bold text-[var(--color-surface-lowest)] px-1 pointer-events-none"
-                    >
-                      {unreadCount > 9 ? '9+' : unreadCount}
-                    </motion.span>
-                  )}
-                </AnimatePresence>
+                <Bell size={16} aria-hidden />
+                {unreadCount > 0 && (
+                  <span className="absolute -right-0.5 -top-0.5 flex h-4 min-w-4 items-center justify-center rounded-full bg-[var(--color-signal)] px-1 text-[10px] font-medium text-[var(--color-signal-ink)] pointer-events-none">
+                    {unreadCount > 9 ? '9+' : unreadCount}
+                  </span>
+                )}
               </button>
 
-              <AnimatePresence>
-                {showNotifications && (
-                  <motion.div
-                    key="notif-dropdown"
-                    variants={DROPDOWN_VARIANTS}
-                    initial="hidden"
-                    animate="visible"
-                    exit="exit"
-                    className="absolute top-10 right-0 w-[320px] max-h-[360px] overflow-y-auto rounded-xl border border-[var(--color-outline-variant)] bg-[var(--color-surface-container)] p-1.5 z-[100] shadow-floating origin-top-right"
-                    style={{ backdropFilter: 'blur(20px)' }}
-                  >
-                    <p className="text-[10px] font-bold text-[var(--color-on-surface-variant)] px-3 py-2 uppercase tracking-wider">
-                      Notifications {unreadCount > 0 && `· ${unreadCount} unread`}
+              {showNotifications && (
+                <div
+                  className="absolute right-0 top-11 z-[100] w-[min(320px,calc(100vw-2rem))] max-h-[360px] overflow-y-auto rounded-[var(--radius-panel)] border border-[var(--color-rule)] bg-[var(--color-folio)] p-[var(--space-2)] shadow-[0_8px_24px_rgba(0,0,0,0.45)]"
+                  role="menu"
+                >
+                  <p className="label-caps px-[var(--space-3)] py-[var(--space-2)] m-0">
+                    Notifications{unreadCount > 0 ? ` · ${unreadCount} unread` : ''}
+                  </p>
+                  {notifications.length === 0 ? (
+                    <p className="m-0 px-[var(--space-3)] py-[var(--space-8)] text-center text-sm text-[var(--color-whisper)]">
+                      No notifications yet
                     </p>
-                    {notifications.length === 0 ? (
-                      <div className="flex flex-col items-center py-8 gap-2">
-                        <Bell size={22} className="text-[var(--color-on-surface-variant)] opacity-30" />
-                        <p className="text-[12px] text-[var(--color-on-surface-variant)] opacity-50 m-0">No notifications yet</p>
-                      </div>
-                    ) : (
-                      notifications.slice(0, 8).map((n, i) => {
-                        const EventIcon = EVENT_TYPE_ICONS[n.eventType] || Bell
-                        return (
-                          <div
-                            key={n.id || i}
-                            className="flex gap-2.5 items-start p-2.5 rounded-lg transition-colors hover:bg-[var(--color-surface-high)] cursor-default"
-                            style={{ background: n.read ? 'transparent' : 'color-mix(in srgb, var(--color-primary) 4%, transparent)' }}
-                          >
-                            <div className="w-7 h-7 rounded-md shrink-0 flex items-center justify-center bg-[var(--color-primary-muted)] border border-[var(--color-primary)]/15">
-                              <EventIcon size={12} className="text-[var(--color-primary)]" />
-                            </div>
-                            <div className="flex-1 min-w-0">
-                              <p className="m-0 text-[9px] font-bold text-[var(--color-primary)] uppercase tracking-wide mb-0.5">
-                                {n.eventType?.replace(/_/g, ' ')}
-                              </p>
-                              <p className="m-0 text-[11px] text-[var(--color-on-surface-variant)] leading-relaxed line-clamp-2">
-                                {n.message}
-                              </p>
-                            </div>
+                  ) : (
+                    notifications.slice(0, 8).map((n, i) => {
+                      const EventIcon = EVENT_TYPE_ICONS[n.eventType] || Bell
+                      return (
+                        <div
+                          key={n.id || i}
+                          className="flex gap-[var(--space-3)] items-start rounded-[var(--radius-control)] p-[var(--space-3)]"
+                          style={{
+                            background: n.read
+                              ? 'transparent'
+                              : 'var(--color-signal-muted)',
+                          }}
+                        >
+                          <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-[var(--radius-control)] border border-[var(--color-rule)] bg-[var(--color-ledger)]">
+                            <EventIcon size={12} className="text-[var(--color-trace)]" aria-hidden />
                           </div>
-                        )
-                      })
-                    )}
-                  </motion.div>
-                )}
-              </AnimatePresence>
+                          <div className="min-w-0 flex-1">
+                            <p className="m-0 mb-[var(--space-1)] text-xs font-medium uppercase tracking-[0.04em] text-[var(--color-trace)]">
+                              {(n.eventType || 'update').replace(/_/g, ' ')}
+                            </p>
+                            <p className="m-0 text-sm text-[var(--color-whisper)] leading-snug line-clamp-2">
+                              {n.message}
+                            </p>
+                          </div>
+                        </div>
+                      )
+                    })
+                  )}
+                </div>
+              )}
             </div>
           )}
 
-          {/* Profile */}
           <div ref={profileRef} className="relative">
             <button
+              type="button"
               onClick={() => { setShowProfile(p => !p); setShowNotifications(false) }}
-              className="flex items-center gap-1.5 h-8 pl-1 pr-2.5 rounded-lg cursor-pointer hover:bg-[var(--color-surface-high)] transition-colors border-none bg-transparent"
+              className="flex h-9 items-center gap-[var(--space-2)] rounded-[var(--radius-control)] border-none bg-transparent pl-[var(--space-1)] pr-[var(--space-2)] cursor-pointer hover:bg-[var(--color-ledger)]"
+              aria-label={`Account menu for ${user?.name || 'user'}`}
+              aria-expanded={showProfile}
             >
               <div
-                className="w-6 h-6 rounded-md flex items-center justify-center text-[9px] font-bold shrink-0"
+                className="flex h-6 w-6 shrink-0 items-center justify-center rounded-[var(--radius-chip)] text-xs font-bold"
                 style={{
-                  background: `color-mix(in srgb, ${meta.color} 15%, transparent)`,
+                  background: `color-mix(in srgb, ${meta.color} 14%, transparent)`,
                   color: meta.color,
                 }}
+                aria-hidden
               >
-                {(user?.name || 'U').split(' ').map(w => w[0]).slice(0, 2).join('').toUpperCase()}
+                {initials}
               </div>
-              <span className="text-[12px] font-medium text-[var(--color-on-surface-variant)] hidden sm:inline max-w-[80px] truncate">
-                {user?.name?.split(' ')[0] || 'User'}
+              <span className="hidden max-w-[80px] truncate text-sm font-medium text-[var(--color-whisper)] sm:inline">
+                {user?.name?.split(' ')[0] || 'Account'}
               </span>
-              <motion.div
-                animate={{ rotate: showProfile ? 180 : 0 }}
-                transition={{ duration: 0.2, ease: [0.22, 1, 0.36, 1] }}
-              >
-                <ChevronDown size={11} className="text-[var(--color-on-surface-variant)]" />
-              </motion.div>
+              <ChevronDown
+                size={12}
+                className="text-[var(--color-whisper)]"
+                style={{ transform: showProfile ? 'rotate(180deg)' : 'none' }}
+                aria-hidden
+              />
             </button>
 
-            <AnimatePresence>
-              {showProfile && (
-                <motion.div
-                  key="profile-dropdown"
-                  variants={DROPDOWN_VARIANTS}
-                  initial="hidden"
-                  animate="visible"
-                  exit="exit"
-                  className="absolute top-10 right-0 w-[210px] rounded-xl border border-[var(--color-outline-variant)] bg-[var(--color-surface-container)] p-1 z-[100] shadow-floating origin-top-right"
-                  style={{ backdropFilter: 'blur(20px)' }}
+            {showProfile && (
+              <div className="absolute right-0 top-11 z-[100] w-[210px] rounded-[var(--radius-panel)] border border-[var(--color-rule)] bg-[var(--color-folio)] p-[var(--space-1)] shadow-[0_8px_24px_rgba(0,0,0,0.45)]">
+                <div className="mb-[var(--space-1)] border-b border-[var(--color-rule)] px-[var(--space-3)] py-[var(--space-3)]">
+                  <p className="m-0 truncate text-sm font-medium text-[var(--color-ink)]">
+                    {user?.name || 'User'}
+                  </p>
+                  <p className="m-0 mt-[var(--space-1)] truncate text-xs text-[var(--color-whisper)]">
+                    {user?.email || ''}
+                  </p>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => { setShowProfile(false); setChangePasswordOpen(true) }}
+                  className="flex w-full cursor-pointer items-center gap-[var(--space-3)] rounded-[var(--radius-control)] border-none bg-transparent px-[var(--space-3)] py-[var(--space-2)] text-left hover:bg-[var(--color-ledger)]"
                 >
-                  {/* User info */}
-                  <div className="px-3 py-2.5 border-b border-[var(--color-outline-variant)] mb-1">
-                    <p className="m-0 text-[12px] font-semibold text-[var(--color-on-surface)] truncate">
-                      {user?.name || 'User'}
-                    </p>
-                    <p className="m-0 text-[10px] text-[var(--color-on-surface-variant)] truncate mt-0.5">
-                      {user?.email || ''}
-                    </p>
-                  </div>
-
-                  <button
-                    onClick={() => { setShowProfile(false); setChangePasswordOpen(true) }}
-                    className="w-full flex items-center gap-2.5 px-3 py-2 rounded-lg cursor-pointer bg-transparent border-none text-left hover:bg-[var(--color-surface-high)] transition-colors"
-                  >
-                    <KeyRound size={13} className="text-[var(--color-on-surface-variant)]" />
-                    <span className="text-[12px] font-medium text-[var(--color-on-surface)]">Change Password</span>
-                  </button>
-
-                  <button
-                    onClick={handleLogout}
-                    className="w-full flex items-center gap-2.5 px-3 py-2 rounded-lg cursor-pointer bg-transparent border-none text-left hover:bg-[var(--color-error-muted)] transition-colors group"
-                  >
-                    <LogOut size={13} className="text-[var(--color-error)]" />
-                    <span className="text-[12px] font-medium text-[var(--color-error)]">Sign Out</span>
-                  </button>
-                </motion.div>
-              )}
-            </AnimatePresence>
+                  <KeyRound size={14} className="text-[var(--color-whisper)]" aria-hidden />
+                  <span className="text-sm font-medium text-[var(--color-ink)]">Change password</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={handleLogout}
+                  className="flex w-full cursor-pointer items-center gap-[var(--space-3)] rounded-[var(--radius-control)] border-none bg-transparent px-[var(--space-3)] py-[var(--space-2)] text-left hover:bg-[var(--color-flag-muted)]"
+                >
+                  <LogOut size={14} className="text-[var(--color-flag)]" aria-hidden />
+                  <span className="text-sm font-medium text-[var(--color-flag)]">Sign out</span>
+                </button>
+              </div>
+            )}
           </div>
         </div>
       </header>
 
-      {/* Session warning banner */}
-      <AnimatePresence>
-        {sessionWarning && (
-          <motion.div
-            initial={{ height: 0, opacity: 0 }}
-            animate={{ height: 'auto', opacity: 1 }}
-            exit={{ height: 0, opacity: 0 }}
-            transition={{ duration: 0.25, ease: [0.22, 1, 0.36, 1] }}
-            className="sticky top-14 z-40 overflow-hidden"
-          >
-            <div className="flex items-center justify-center gap-2 px-4 py-2 bg-[var(--color-warning-muted)] border-b border-[var(--color-warning)]/20 text-[var(--color-warning)]">
-              <Clock size={13} className="shrink-0" />
-              <span className="text-[12px] font-semibold">
-                Your session expires in less than 5 minutes. Any activity will extend it automatically.
-              </span>
-            </div>
-          </motion.div>
-        )}
-      </AnimatePresence>
+      {sessionWarning && (
+        <div
+          className="sticky top-[var(--layout-topbar)] z-40 flex items-center justify-center gap-[var(--space-2)] border-b border-[var(--color-hold)] bg-[var(--color-hold-muted)] px-[var(--space-4)] py-[var(--space-2)] text-[var(--color-hold)]"
+          role="status"
+        >
+          <Clock size={14} className="shrink-0" aria-hidden />
+          <span className="text-sm font-medium">
+            Your session ends in less than 5 minutes. Move the mouse or press a key to stay signed in.
+          </span>
+        </div>
+      )}
 
       <ChangePasswordModal
         open={changePasswordOpen}

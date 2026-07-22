@@ -6,8 +6,6 @@ node_modules/
 .env.local
 .env.*.local
 
-# Box Configuration (NEVER COMMIT THIS!)
-box_config.json
 *.json.bak
 
 # Logs

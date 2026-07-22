@@ -25,4 +25,15 @@ export class NotificationRepository extends BaseRepository {
   async markAsRead(id, trx) {
     await this.query(trx).where('id', id).update({ read: true });
   }
+
+  /**
+   * Marks a notification read only if it belongs to the recipient.
+   * @returns {Promise<boolean>} true if a row was updated
+   */
+  async markAsReadForRecipient(id, recipientId, trx) {
+    const count = await this.query(trx)
+      .where({ id, recipient_id: recipientId })
+      .update({ read: true });
+    return count > 0;
+  }
 }

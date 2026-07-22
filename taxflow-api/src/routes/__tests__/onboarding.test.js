@@ -19,6 +19,15 @@ vi.mock('../../services/projectService.js', () => {
   };
 });
 
+// Mock authMiddleware to bypass auth in tests
+vi.mock('../../middleware/authMiddleware.js', () => ({
+  requireAuth: (req, _res, next) => {
+    req.user = { userId: 'demo-employee', email: 'employee@demo.taxflow', name: 'Demo employee', role: 'employee' };
+    next();
+  },
+  requireRole: () => (_req, _res, next) => next(),
+}));
+
 import onboardingService from '../../services/onboardingService.js';
 import onboardingRouter from '../onboarding.js';
 

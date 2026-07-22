@@ -299,6 +299,74 @@ export class BoxService {
   }
 
   /**
+   * Lists collaborations on a Box file or folder.
+   * @param {string} resourceId
+   * @param {'file'|'folder'} resourceType
+   * @returns {Promise<Array>}
+   */
+  async getResourceCollaborations(resourceId, resourceType = 'folder') {
+    this.ensureInitialized();
+    const client = this.getBoxClient();
+    try {
+      const result = resourceType === 'file'
+        ? await client.listCollaborations.getFileCollaborations(resourceId)
+        : await client.listCollaborations.getFolderCollaborations(resourceId);
+      return result.entries || [];
+    } catch (error) {
+      if (error.statusCode === 404 || error.status === 404) return [];
+      throw error;
+    }
+  }
+
+  /**
+   * Creates or updates a collaboration for a Box App User by ID.
+   */
+  async upsertUserCollaboration(resourceId, resourceType, boxUserId, role) {
+    this.ensureInitialized();
+    const client = this.getBoxClient();
+    const collabs = await this.getResourceCollaborations(resourceId, resourceType);
+    const existing = collabs.find((c) => c.accessible_by?.id === boxUserId);
+
+    if (existing) {
+      if (existing.role !== role) {
+        await client.userCollaborations.updateCollaborationById(existing.id, { role });
+      }
+      return existing.id;
+    }
+
+    try {
+      const result = await client.userCollaborations.createCollaboration({
+        item: { type: resourceType, id: resourceId },
+        accessibleBy: { type: 'user', id: boxUserId },
+        role,
+      });
+      return result.id || null;
+    } catch (error) {
+      if (error.statusCode === 409 || error.status === 409) return null;
+      throw error;
+    }
+  }
+
+  /**
+   * Removes a Box App User collaboration from a file or folder.
+   */
+  async removeUserCollaboration(resourceId, resourceType, boxUserId) {
+    this.ensureInitialized();
+    const client = this.getBoxClient();
+    const collabs = await this.getResourceCollaborations(resourceId, resourceType);
+    const existing = collabs.find((c) => c.accessible_by?.id === boxUserId);
+    if (!existing) return false;
+
+    try {
+      await client.userCollaborations.deleteCollaborationById(existing.id);
+      return true;
+    } catch (error) {
+      if (error.statusCode === 404 || error.status === 404) return false;
+      throw error;
+    }
+  }
+
+  /**
    * Lightweight health check — verifies Box API connectivity.
    * Caches result for 60 seconds to avoid rate limit consumption.
    * @returns {Promise<{ connected: boolean, tier: string, enterpriseId: string, serviceAccount?: string, error?: string }>}

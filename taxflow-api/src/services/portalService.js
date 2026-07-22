@@ -13,6 +13,7 @@
  */
 
 import boxService from './boxService.js';
+import boxDocumentStatusService from './boxDocumentStatusService.js';
 import cacheLayer from './cacheLayer.js';
 import paginationHelper from './paginationHelper.js';
 import { config } from '../config.js';
@@ -40,7 +41,20 @@ export class PortalService {
   }
 
   /**
-   * Client progress via metadata query, with DB fallback. Cached 60s. (Reqs 19.1-19.5)
+   * Resolves clientId (UUID or external_id) to the canonical DB client UUID.
+   * @param {string} clientId
+   * @returns {Promise<string>}
+   */
+  async _resolveClientId(clientId) {
+    if (!this._clientRepo) return clientId;
+    const clientRecord = await this._clientRepo.findById(clientId);
+    if (clientRecord) return clientRecord.id;
+    const byExternal = await this._clientRepo.findByExternalId(clientId);
+    return byExternal?.id || clientId;
+  }
+
+  /**
+   * Client progress via Box metadata + DB requests. Cached 60s. (Reqs 19.1-19.5)
    *
    * @param {string} clientId
    * @returns {Promise<{ clientId: string, documents: Array, statusCounts: object }>}
@@ -49,81 +63,70 @@ export class PortalService {
     const cacheKey = `portal:client:${clientId}`;
 
     return cacheLayer.getOrFetch(cacheKey, 60, async () => {
-      // Try Box metadata query first
+      const resolvedClientId = await this._resolveClientId(clientId);
       let documents = [];
-      try {
-        const client = boxService.getBoxClient();
-        const queryResult = await client.metadataQueries?.executeRead?.({
-          from: `${METADATA_SCOPE}_${METADATA_TEMPLATE}`,
-          query: 'client_id = :clientId',
-          queryParams: { clientId },
-          ancestorFolderId: config.boxRootFolderId,
-          fields: [
-            'id', 'name', 'metadata.enterprise.taxflow_document.document_type',
-            'metadata.enterprise.taxflow_document.status',
-            'metadata.enterprise.taxflow_document.priority',
-            'metadata.enterprise.taxflow_document.reviewed_at',
-            'metadata.enterprise.taxflow_document.review_comments',
-          ],
-        }) || { entries: [] };
 
-        const entries = queryResult.entries || [];
-        documents = entries.map((entry) => {
-          const meta = entry.metadata?.enterprise?.taxflow_document || {};
-          return {
-            fileId: entry.id,
-            fileName: entry.name,
-            name: entry.name,
-            documentType: meta.document_type || '',
-            status: meta.status || '',
-            priority: meta.priority || 'normal',
-            reviewedAt: meta.reviewed_at || undefined,
-            reviewComments: meta.status === 'revision_requested' ? (meta.review_comments || undefined) : undefined,
-          };
-        });
-      } catch (err) {
-        console.warn('Box metadata query failed for client progress, trying DB fallback:', err.message);
+      if (this._docRepo) {
+        const dbDocs = await this._docRepo.findByClientId(resolvedClientId);
+        const merged = await boxDocumentStatusService.buildClientDocumentList(
+          resolvedClientId,
+          (dbDocs || []).filter((d) => !d.is_draft),
+          (d) => ({
+            id: d.id,
+            fileId: d.box_file_id,
+            fileName: d.uploaded_file_name || d.name,
+            name: d.name,
+            description: d.description,
+            documentType: d.document_type || '',
+            status: d.status || 'Not_Requested',
+            priority: d.priority || 'Medium',
+            dueDate: d.due_date,
+            isDraft: d.is_draft,
+            clientId: d.client_id,
+            revisionComments: d.revision_comments,
+            uploadedFileName: d.uploaded_file_name,
+          })
+        );
+
+        documents = merged.map((doc) => ({
+          fileId: doc.fileId || doc.id,
+          fileName: doc.uploadedFileName || doc.fileName || doc.name,
+          name: doc.name,
+          description: doc.description,
+          documentType: doc.documentType || '',
+          status: doc.status || 'Not_Requested',
+          priority: doc.priority || 'Medium',
+          dueDate: doc.dueDate,
+          reviewedAt: doc.boxMetadata?.reviewedAt || undefined,
+          reviewComments: doc.status === 'Revision_Requested'
+            ? (doc.revisionComments || undefined)
+            : undefined,
+          statusSource: doc.statusSource || 'db',
+        }));
+      } else {
+        const boxEntries = await boxDocumentStatusService.queryDocumentsByClientId(resolvedClientId);
+        documents = boxEntries.map((entry) => ({
+          fileId: entry.fileId,
+          fileName: entry.fileName,
+          name: entry.fileName,
+          documentType: entry.documentType || '',
+          status: entry.apiStatus || 'Uploaded',
+          priority: entry.priority || 'normal',
+          reviewedAt: entry.reviewedAt || undefined,
+          reviewComments: entry.apiStatus === 'Revision_Requested'
+            ? (entry.reviewComments || undefined)
+            : undefined,
+          statusSource: 'box',
+        }));
       }
 
-      // DB fallback: if Box returned nothing, query local document_requests table
-      if (documents.length === 0 && this._docRepo && this._clientRepo) {
-        try {
-          // clientId could be a UUID (client.id) or an external_id
-          let dbClientId = clientId;
-          const clientRecord = await this._clientRepo.findById(clientId);
-          if (!clientRecord) {
-            const byExternal = await this._clientRepo.findByExternalId(clientId);
-            if (byExternal) dbClientId = byExternal.id;
-          }
-
-          const docs = await this._docRepo.findByClientId(dbClientId);
-          documents = (docs || [])
-            .filter(d => !d.is_draft)
-            .map(d => ({
-              fileId: d.box_file_id || d.id,
-              fileName: d.uploaded_file_name || d.name,
-              name: d.name,
-              description: d.description,
-              documentType: d.document_type || '',
-              status: d.status || 'Not_Requested',
-              priority: d.priority || 'Medium',
-              dueDate: d.due_date,
-              reviewedAt: undefined,
-              reviewComments: d.revision_comments || undefined,
-            }));
-        } catch (dbErr) {
-          console.warn('DB fallback for client progress failed:', dbErr.message);
-        }
-      }
-
-      // Group by status
       const statusCounts = {};
       for (const doc of documents) {
         const s = doc.status || 'unknown';
         statusCounts[s] = (statusCounts[s] || 0) + 1;
       }
 
-      return { clientId, documents, statusCounts };
+      return { clientId: resolvedClientId, documents, statusCounts };
     });
   }
 

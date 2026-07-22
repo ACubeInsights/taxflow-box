@@ -1,86 +1,89 @@
 /**
  * Project routes — Client → Project → Document hierarchy endpoints.
- *
- * Requirements: 2.2, 3.1, 4.3, 5.1, 7.4, 7.5
  */
 
 import express from 'express';
+import crypto from 'crypto';
 import projectService from '../services/projectService.js';
-import { initDatabase } from '../db/db.js';
+import { getDb } from '../db/db.js';
+import { hashPassword } from '../utils/authUtils.js';
+import { requireAuth, requireRole, requireStaff } from '../middleware/authMiddleware.js';
 
 const router = express.Router();
 
 /**
  * POST /api/admin/clients/fix-missing
- * Creates a client record for a user that completed signup but doesn't have a client entry.
- * Admin utility endpoint.
+ * Superadmin-only recovery utility for orphaned signups.
  */
-router.post('/admin/clients/fix-missing', async (req, res, next) => {
-  try {
-    const { email, name, password } = req.body;
-    if (!email) return res.status(400).json({ error: 'email required' });
+router.post(
+  '/admin/clients/fix-missing',
+  requireAuth,
+  requireRole('superadmin'),
+  async (req, res, next) => {
+    try {
+      const { email, name } = req.body;
+      if (!email) return res.status(400).json({ error: 'email required' });
 
-    const db = await initDatabase();
+      const db = getDb();
 
-    // Check if client already exists
-    const existing = await db('clients').where('email', email).first();
-    if (existing) return res.json({ message: 'Client already exists', client: existing });
+      const existing = await db('clients').where('email', email).first();
+      if (existing) return res.json({ message: 'Client already exists', client: existing });
 
-    // Find or create the user record
-    let user = await db('users').where('email', email).first();
-    if (!user) {
-      const userId = crypto.randomUUID();
-      const clientName = name || email.split('@')[0];
-      await db('users').insert({
-        id: userId,
-        email,
+      let user = await db('users').where('email', email).first();
+      if (!user) {
+        const userId = crypto.randomUUID();
+        const clientName = name || email.split('@')[0];
+        const passwordHash = await hashPassword(crypto.randomBytes(32).toString('hex'));
+        await db('users').insert({
+          id: userId,
+          email,
+          name: clientName,
+          role: 'client',
+          password_hash: passwordHash,
+          box_user_id: '',
+          created_at: new Date().toISOString(),
+          updated_at: new Date().toISOString(),
+        });
+        user = await db('users').where('id', userId).first();
+      }
+
+      const clientId = crypto.randomUUID();
+      const clientName = name || user.name || email.split('@')[0];
+      await db('clients').insert({
+        id: clientId,
         name: clientName,
-        role: 'client',
-        password_hash: password || 'temp-hash',
-        box_user_id: '',
+        email,
+        entity_type: 'Individual',
+        engagement_status: 'Active',
+        box_folder_id: '',
+        box_user_id: user.box_user_id || '',
+        external_id: `CL-${Date.now()}`,
         created_at: new Date().toISOString(),
         updated_at: new Date().toISOString(),
       });
-      user = await db('users').where('id', userId).first();
+
+      const projectId = crypto.randomUUID();
+      await db('projects').insert({
+        id: projectId,
+        client_id: clientId,
+        name: `${new Date().getFullYear()} Tax Return`,
+        description: `Tax filing for ${clientName}`,
+        status: 'Active',
+        created_at: new Date().toISOString(),
+        updated_at: new Date().toISOString(),
+      });
+
+      res.status(201).json({ message: 'Client record created', clientId, projectId, userId: user.id });
+    } catch (error) {
+      next(error);
     }
-
-    // Create client record
-    const clientId = crypto.randomUUID();
-    const clientName = name || user.name || email.split('@')[0];
-    await db('clients').insert({
-      id: clientId,
-      name: clientName,
-      email,
-      entity_type: 'Individual',
-      engagement_status: 'Active',
-      box_folder_id: '',
-      box_user_id: user.box_user_id || '',
-      external_id: `CL-${Date.now()}`,
-      created_at: new Date().toISOString(),
-      updated_at: new Date().toISOString(),
-    });
-
-    // Create a default project
-    const projectId = crypto.randomUUID();
-    await db('projects').insert({
-      id: projectId,
-      client_id: clientId,
-      name: `${new Date().getFullYear()} Tax Return`,
-      description: `Tax filing for ${clientName}`,
-      status: 'Active',
-      created_at: new Date().toISOString(),
-      updated_at: new Date().toISOString(),
-    });
-
-    res.status(201).json({ message: 'Client record created', clientId, projectId, userId: user.id });
-  } catch (error) {
-    next(error);
   }
-});
+);
+
+router.use(...requireStaff);
 
 /**
  * GET /api/admin/clients
- * Returns ALL clients with optional search/filter query params.
  */
 router.get('/admin/clients', async (req, res, next) => {
   try {
@@ -94,7 +97,6 @@ router.get('/admin/clients', async (req, res, next) => {
 
 /**
  * GET /api/clients/:clientId/projects
- * Returns projects for a client.
  */
 router.get('/clients/:clientId/projects', async (req, res, next) => {
   try {
@@ -108,7 +110,6 @@ router.get('/clients/:clientId/projects', async (req, res, next) => {
 
 /**
  * GET /api/projects/:projectId
- * Returns project detail. 404 if not found.
  */
 router.get('/projects/:projectId', async (req, res, next) => {
   try {
@@ -123,10 +124,8 @@ router.get('/projects/:projectId', async (req, res, next) => {
   }
 });
 
-
 /**
  * GET /api/projects/:projectId/documents
- * Returns project documents with optional ?status= filter (supports comma-separated statuses).
  */
 router.get('/projects/:projectId/documents', async (req, res, next) => {
   try {
@@ -145,7 +144,6 @@ router.get('/projects/:projectId/documents', async (req, res, next) => {
 
 /**
  * POST /api/projects/:projectId/documents
- * Creates a document request. Validates required fields: name, documentType, dueDate.
  */
 router.post('/projects/:projectId/documents', async (req, res, next) => {
   try {
@@ -178,7 +176,6 @@ router.post('/projects/:projectId/documents', async (req, res, next) => {
 
 /**
  * POST /api/projects/:projectId/documents/check-duplicate
- * Checks for duplicate document requests. Requires documentType in body.
  */
 router.post('/projects/:projectId/documents/check-duplicate', async (req, res, next) => {
   try {

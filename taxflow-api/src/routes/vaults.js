@@ -18,10 +18,9 @@ router.get('/:folderId/files', requireAuth, requireRole('client', 'employee', 's
     // For client role: use folder-level access as baseline, override with explicit file permissions
     if (req.user.role === 'client' && req.clientId) {
       const fileIds = files.map(f => f.id);
-      const accessMap = await permissionService.getAccessibleResources(req.clientId, fileIds);
+      const accessMap = await permissionService.getAccessibleResources(req.clientId, fileIds, folderId);
 
-      // Get the folder's own access level as the inherited baseline
-      const folderPerm = await permissionService.getPermission(req.clientId, folderId);
+      const folderPerm = await permissionService.getPermission(req.clientId, folderId, 'folder');
       const folderLevel = folderPerm?.accessLevel || 'viewer'; // Default to viewer if folder is accessible
 
       const enriched = files.map(f => ({

@@ -6,6 +6,8 @@
 import authService from '../services/authService.js';
 import { getRepositories } from '../db/repositories/index.js';
 import permissionService from '../services/permissionService.js';
+import vaultDiscoveryService from '../services/vaultDiscoveryService.js';
+import { isMinimalSchema } from '../db/schemaMode.js';
 import { config } from '../config.js';
 
 /**
@@ -19,8 +21,8 @@ export async function requireAuth(req, res, next) {
 
   const token = header.slice(7);
 
-  // Support demo/mock tokens in development only (format: mock-token-{role}-{timestamp})
-  if (config.nodeEnv !== 'production') {
+  // Support demo/mock tokens only when explicitly enabled (never in production)
+  if (config.nodeEnv !== 'production' && config.allowMockAuth) {
     const mockMatch = token.match(/^mock-token-(superadmin|employee|client)-/);
     if (mockMatch) {
       req.user = {
@@ -72,65 +74,46 @@ export function requireRole(...roles) {
 /**
  * Validates that the requesting client has permission to access the folder.
  * Employees/superadmins bypass this check.
- * Uses the resource_permissions table for granular access control.
+ * Uses Box collaborations as source of truth (Phase 2c), with vault/DB fallback.
  * Must be used after requireAuth.
  */
 export async function validateFolderOwnership(req, res, next) {
   try {
-    // Employees and superadmins bypass folder ownership checks
     if (['employee', 'superadmin'].includes(req.user.role)) {
       return next();
     }
 
-    let repos;
-    try {
-      repos = getRepositories();
-    } catch {
-      return res.status(503).json({ error: 'Service temporarily unavailable' });
-    }
-
-    const { clientRepo } = repos;
-    const userId = req.user.userId;
-    const userEmail = req.user.email;
     const folderId = req.params.folderId;
-
-    // Resolve client record from the clients table (not users table)
-    let client = await clientRepo.findByEmail(userEmail);
-    if (!client) client = await clientRepo.findById(userId);
-    if (!client) client = await clientRepo.findByBoxUserId(userId);
+    const client = await resolveClientForUser(req.user);
 
     if (!client) {
       return res.status(404).json({ error: 'Resource not found' });
     }
 
-    // Check granular permission for this folder
-    const hasAccess = await permissionService.hasAccess(client.id, folderId, 'viewer');
+    // Check Box collaboration access for this folder
+    const hasAccess = await permissionService.hasAccess(client.id, folderId, 'viewer', 'folder');
     if (hasAccess) {
       req.clientId = client.id;
       return next();
     }
 
-    // Fallback: check if folder belongs to the client's vault (for clients onboarded
-    // before granular permissions were introduced)
-    const { clientVaultRepo } = repos;
-    if (clientVaultRepo) {
-      const vault = await clientVaultRepo.findByClientId(client.id);
-      if (vault) {
-        const vaultFolderIds = [
-          vault.root_folder_id,
-          vault.year_folder_id,
-          vault.projects_folder_id,
-          vault.tax_folder_id,
-          vault.uploads_folder_id,
-          vault.supporting_docs_folder_id,
-          vault.signed_documents_folder_id,
-          vault.internal_notes_folder_id,
-        ].filter(Boolean);
+    // Fallback: discover vault folders from Box (legacy clients without explicit collabs)
+    const vault = await vaultDiscoveryService.getVaultForClient(client.id);
+    if (vault) {
+      const vaultFolderIds = [
+        vault.root,
+        vault.year,
+        vault.projects,
+        vault.tax,
+        vault.uploads,
+        vault.supportingDocs,
+        vault.signedDocuments,
+        vault.internalNotes,
+      ].filter(Boolean);
 
-        if (vaultFolderIds.includes(folderId)) {
-          req.clientId = client.id;
-          return next();
-        }
+      if (vaultFolderIds.includes(folderId)) {
+        req.clientId = client.id;
+        return next();
       }
     }
 
@@ -144,50 +127,45 @@ export async function validateFolderOwnership(req, res, next) {
 /**
  * Middleware factory that checks granular permissions for client users on file operations.
  * Employees/superadmins bypass this check.
- * Supports folder inheritance: if no explicit file permission exists, checks if the client
- * has sufficient access to any folder in their vault (since files inherit parent folder access).
+ * Uses Box collaborations with parent-folder inheritance.
  * @param {string} requiredLevel - Minimum access level required ('viewer','commenter','writer','delete')
  */
 export function permissionCheck(requiredLevel) {
   const LEVEL_HIERARCHY = { no_access: 0, viewer: 1, commenter: 2, writer: 3, delete: 4 };
 
   return async (req, res, next) => {
-    // Employees and superadmins bypass permission checks
     if (['employee', 'superadmin'].includes(req.user?.role)) {
       return next();
     }
 
     try {
-      const repos = getRepositories();
-      const { clientRepo } = repos;
-      const userId = req.user.userId;
-      const userEmail = req.user.email;
       const resourceId = req.params.folderId || req.params.fileId;
+      const resourceType = req.params.fileId ? 'file' : 'folder';
 
       if (!resourceId) return next();
 
-      // Resolve client from clients table (by email first, then by ID)
-      let client = await clientRepo.findByEmail(userEmail);
-      if (!client) client = await clientRepo.findById(userId);
-      if (!client) client = await clientRepo.findByBoxUserId(userId);
+      const client = await resolveClientForUser(req.user);
 
       if (!client) {
         return res.status(404).json({ error: 'Resource not found' });
       }
 
-      // Check explicit permission for this resource
-      const hasAccess = await permissionService.hasAccess(client.id, resourceId, requiredLevel);
+      const hasAccess = await permissionService.hasAccess(
+        client.id,
+        resourceId,
+        requiredLevel,
+        resourceType
+      );
       if (hasAccess) {
         req.clientId = client.id;
         return next();
       }
 
-      // Fallback: check if client has sufficient folder-level access (inheritance)
-      // This covers files inside accessible folders that don't have explicit per-file permissions
+      // DB fallback: any folder permission at or above required level
       const allPerms = await permissionService.getClientPermissions(client.id);
       const requiredNum = LEVEL_HIERARCHY[requiredLevel] || 1;
-      const hasFolderAccess = allPerms.some(p =>
-        p.resourceType === 'folder' && (LEVEL_HIERARCHY[p.accessLevel] || 0) >= requiredNum
+      const hasFolderAccess = allPerms.some(
+        (p) => p.resourceType === 'folder' && (LEVEL_HIERARCHY[p.accessLevel] || 0) >= requiredNum
       );
 
       if (hasFolderAccess) {
@@ -200,4 +178,86 @@ export function permissionCheck(requiredLevel) {
       next(err);
     }
   };
+}
+
+/** Staff-only shorthand: requireAuth + employee or superadmin */
+export const requireStaff = [requireAuth, requireRole('employee', 'superadmin')];
+
+/**
+ * Resolves the clients-table record for the authenticated client user.
+ * @param {object} user - req.user
+ * @returns {Promise<object|null>}
+ */
+export async function resolveClientForUser(user) {
+  const repos = getRepositories();
+  if (isMinimalSchema()) {
+    let clientUser = await repos.userRepo.findByEmail(user.email);
+    if (!clientUser) clientUser = await repos.userRepo.findByBoxUserId(user.userId);
+    if (clientUser?.role === 'client') {
+      return {
+        id: clientUser.id,
+        email: clientUser.email,
+        name: clientUser.name,
+        external_id: clientUser.external_id,
+        box_user_id: clientUser.box_user_id,
+        box_folder_id: clientUser.box_folder_id,
+      };
+    }
+    return null;
+  }
+  let client = await repos.clientRepo.findByEmail(user.email);
+  if (!client) client = await repos.clientRepo.findByBoxUserId(user.userId);
+  return client;
+}
+
+/**
+ * Employees/superadmins pass; clients may only access their own clientId param.
+ */
+export async function requireClientAccess(req, res, next) {
+  try {
+    if (['employee', 'superadmin'].includes(req.user.role)) {
+      return next();
+    }
+    if (req.user.role !== 'client') {
+      return res.status(403).json({ error: 'Access denied' });
+    }
+    const client = await resolveClientForUser(req.user);
+    if (client && client.id === req.params.clientId) {
+      req.clientId = client.id;
+      return next();
+    }
+    return res.status(404).json({ error: 'Resource not found' });
+  } catch (err) {
+    next(err);
+  }
+}
+
+/**
+ * Superadmin may access any employee; employees may only access their own id param.
+ * @param {string} [paramName='employeeId']
+ */
+export function requireEmployeeSelfOrAdmin(paramName = 'employeeId') {
+  return (req, res, next) => {
+    if (req.user.role === 'superadmin') return next();
+    if (req.user.role === 'employee' && req.params[paramName] === req.user.userId) {
+      return next();
+    }
+    return res.status(403).json({ error: 'Access denied' });
+  };
+}
+
+/**
+ * Validates upload target folderId in req.body for client users.
+ * Must run after requireAuth.
+ */
+export async function validateUploadFolder(req, res, next) {
+  if (['employee', 'superadmin'].includes(req.user.role)) {
+    return next();
+  }
+  const folderId = req.body?.folderId;
+  if (!folderId) {
+    return res.status(400).json({ error: 'Missing folderId' });
+  }
+  req.params.folderId = folderId;
+  return validateFolderOwnership(req, res, next);
 }

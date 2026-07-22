@@ -1,14 +1,10 @@
 import { useState } from 'react'
-import { motion, AnimatePresence } from 'framer-motion'
-import { ArrowLeft, AlertCircle, Loader2 } from 'lucide-react'
+import { AlertCircle, Loader2, ArrowLeft } from 'lucide-react'
 import { authApi } from '../services/api'
 import FloatingLabel from './FloatingLabel'
 
 /**
- * ForgotPasswordForm — handles the forgot-password flow UI including
- * email input, submission, and confirmation message.
- *
- * @param {{ onBack: () => void, initialEmail?: string, displayError: string|null, setError: (err: string|null) => void }} props
+ * Forgot-password form — lives inside the auth split panel.
  */
 export default function ForgotPasswordForm({ onBack, initialEmail = '', displayError, setError }) {
   const [forgotEmail, setForgotEmail] = useState(initialEmail)
@@ -24,7 +20,7 @@ export default function ForgotPasswordForm({ onBack, initialEmail = '', displayE
       await authApi.forgotPassword(forgotEmail.trim())
       setForgotSent(true)
     } catch (err) {
-      setError(err.message || 'Failed to send reset email')
+      setError(err.message || 'Could not send reset link')
     } finally {
       setForgotLoading(false)
     }
@@ -35,49 +31,64 @@ export default function ForgotPasswordForm({ onBack, initialEmail = '', displayE
       <button
         type="button"
         onClick={onBack}
-        className="flex items-center gap-1.5 mb-4 bg-transparent border-none text-[12px] font-semibold text-[var(--color-primary)] cursor-pointer p-0"
+        className="mb-[var(--space-6)] flex cursor-pointer items-center gap-[var(--space-2)] border-none bg-transparent p-0 text-sm font-medium text-[var(--color-trace)] hover:text-[var(--color-ink)]"
       >
-        <ArrowLeft size={14} /> Back to login
+        <ArrowLeft size={14} aria-hidden />
+        Back to sign in
       </button>
 
       {forgotSent ? (
-        <div className="text-center py-4">
-          <p className="m-0 text-[14px] font-bold text-[var(--color-on-surface)] mb-2">Check your email</p>
-          <p className="m-0 text-[12px] text-[var(--color-on-surface-variant)] leading-relaxed">
-            If an account exists for {forgotEmail}, we've sent a password reset link. Check your inbox and spam folder.
-          </p>
-          <p className="m-0 mt-3 text-[11px] text-[var(--color-on-surface-variant)]">
-            The reset link expires in 15 minutes.
+        <div>
+          <h2 className="m-0 mb-[var(--space-2)] font-display text-lg font-semibold text-[var(--color-ink)]">
+            Reset link sent
+          </h2>
+          <p className="m-0 text-sm text-[var(--color-whisper)] leading-relaxed">
+            If an account exists for <span className="text-[var(--color-ink)]">{forgotEmail}</span>,
+            we sent a reset link. It expires in 15 minutes — check inbox and spam.
           </p>
         </div>
       ) : (
-        <form onSubmit={handleForgotPassword}>
-          <p className="m-0 mb-4 text-[12px] text-[var(--color-on-surface-variant)] leading-relaxed">
-            Enter your email address and we'll send you a link to reset your password.
-          </p>
-          <div className="mb-4">
-            <FloatingLabel label="Email address" type="email" value={forgotEmail} onChange={(e) => setForgotEmail(e.target.value)} autoComplete="email" />
+        <form onSubmit={handleForgotPassword} className="flex flex-col gap-[var(--space-4)]">
+          <div>
+            <h2 className="m-0 mb-[var(--space-2)] font-display text-lg font-semibold text-[var(--color-ink)]">
+              Reset your password
+            </h2>
+            <p className="m-0 text-sm text-[var(--color-whisper)] leading-relaxed">
+              Enter the email on your TaxFlow account. We will send a one-time reset link.
+            </p>
           </div>
 
-          <AnimatePresence>
-            {displayError && (
-              <motion.div initial={{ opacity: 0, height: 0 }} animate={{ opacity: 1, height: 'auto' }} exit={{ opacity: 0, height: 0 }} className="mb-4 flex items-start gap-2 p-3 rounded-xl border border-[var(--color-error)]/25 bg-[var(--color-error-muted)]">
-                <AlertCircle size={16} className="text-[var(--color-error)] shrink-0 mt-0.5" />
-                <p className="m-0 text-[12px] text-[var(--color-error)] leading-relaxed">{displayError}</p>
-              </motion.div>
-            )}
-          </AnimatePresence>
+          <FloatingLabel
+            label="Email"
+            type="email"
+            value={forgotEmail}
+            onChange={(e) => setForgotEmail(e.target.value)}
+            autoComplete="email"
+          />
+
+          {displayError && (
+            <div
+              className="flex items-start gap-[var(--space-2)] rounded-[var(--radius-control)] border border-[var(--color-flag)] bg-[var(--color-flag-muted)] px-[var(--space-4)] py-[var(--space-3)]"
+              role="alert"
+            >
+              <AlertCircle size={16} className="mt-0.5 shrink-0 text-[var(--color-flag)]" aria-hidden />
+              <p className="m-0 text-sm text-[var(--color-flag)]">{displayError}</p>
+            </div>
+          )}
 
           <button
             type="submit"
             disabled={!forgotEmail.trim() || forgotLoading}
-            className="w-full py-4 rounded-xl text-[15px] font-bold tracking-tight transition-all duration-300 cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed border-none"
-            style={{
-              background: forgotEmail.trim() ? 'linear-gradient(180deg, var(--color-primary), var(--color-primary-container))' : 'var(--color-surface-highest)',
-              color: forgotEmail.trim() ? 'var(--color-surface-lowest)' : 'var(--color-on-surface-variant)',
-            }}
+            className="btn-signal w-full"
           >
-            {forgotLoading ? <span className="flex items-center justify-center gap-2"><Loader2 size={18} className="animate-spin" />Sending...</span> : 'Send Reset Link'}
+            {forgotLoading ? (
+              <>
+                <Loader2 size={16} className="animate-spin" aria-hidden />
+                Sending reset link…
+              </>
+            ) : (
+              'Send reset link'
+            )}
           </button>
         </form>
       )}

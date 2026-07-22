@@ -4,7 +4,7 @@ import {
   Shield, Folder, FolderOpen, FileText, ChevronRight, ChevronDown,
   Loader2, AlertCircle, Search, Check,
 } from 'lucide-react'
-import { GlassPanel } from './ui'
+import { FolioPanel as GlassPanel } from './ui'
 import { useAuth } from '../context/AuthContext'
 import { projectApi, vaultApi, permissionApi } from '../services/api'
 

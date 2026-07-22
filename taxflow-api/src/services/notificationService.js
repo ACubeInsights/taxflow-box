@@ -158,6 +158,10 @@ export class NotificationService {
     return this._store.markAsRead(notificationId);
   }
 
+  async markAsReadForRecipient(notificationId, recipientId) {
+    return this._store.markAsReadForRecipient(notificationId, recipientId);
+  }
+
   /**
    * Dispatches a revision email to the client with a 7-day signed deep-link token.
    * Retries 3x with exponential backoff (2s, 4s, 8s). If all retries fail,

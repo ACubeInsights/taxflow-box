@@ -1,10 +1,5 @@
 /**
  * Auth routes — Login (no signup), session validation, logout.
- *
- * POST /api/auth/login          — Authenticate client or staff
- * POST /api/auth/logout         — Destroy session
- * GET  /api/auth/me             — Validate session & return user
- * POST /api/auth/refresh        — Extend session
  */
 
 import express from 'express';
@@ -13,12 +8,6 @@ import { requireAuth } from '../middleware/authMiddleware.js';
 
 const router = express.Router();
 
-/**
- * POST /api/auth/login
- * Body: { email, password }
- *
- * Unified login — authenticates any user (client, employee, superadmin) by email + password.
- */
 router.post('/login', async (req, res, next) => {
   try {
     const { email, password } = req.body;
@@ -31,7 +20,6 @@ router.post('/login', async (req, res, next) => {
     }
 
     const result = await authService.login(email, password);
-
     res.json(result);
   } catch (error) {
     if (error.statusCode === 401) {
@@ -41,18 +29,13 @@ router.post('/login', async (req, res, next) => {
   }
 });
 
-/**
- * GET /api/auth/me
- * Header: Authorization: Bearer <sessionToken>
- * Returns current user info if session is valid.
- */
-router.get('/me', (req, res) => {
+router.get('/me', async (req, res) => {
   const token = extractToken(req);
   if (!token) {
     return res.status(401).json({ error: 'No session token provided' });
   }
 
-  const session = authService.validateSession(token);
+  const session = await authService.validateSession(token);
   if (!session) {
     return res.status(401).json({ error: 'Session expired or invalid' });
   }
@@ -68,30 +51,21 @@ router.get('/me', (req, res) => {
   });
 });
 
-/**
- * POST /api/auth/logout
- * Header: Authorization: Bearer <sessionToken>
- */
-router.post('/logout', (req, res) => {
+router.post('/logout', async (req, res) => {
   const token = extractToken(req);
   if (token) {
-    authService.logout(token);
+    await authService.logout(token);
   }
   res.json({ success: true });
 });
 
-/**
- * POST /api/auth/refresh
- * Header: Authorization: Bearer <sessionToken>
- * Extends the session expiry.
- */
-router.post('/refresh', (req, res) => {
+router.post('/refresh', async (req, res) => {
   const token = extractToken(req);
   if (!token) {
     return res.status(401).json({ error: 'No session token provided' });
   }
 
-  const result = authService.refreshSession(token);
+  const result = await authService.refreshSession(token);
   if (!result) {
     return res.status(401).json({ error: 'Session expired or invalid' });
   }
@@ -99,11 +73,6 @@ router.post('/refresh', (req, res) => {
   res.json(result);
 });
 
-/**
- * POST /api/auth/change-password
- * Header: Authorization: Bearer <sessionToken>
- * Body: { currentPassword, newPassword }
- */
 router.post('/change-password', requireAuth, async (req, res, next) => {
   try {
     const { currentPassword, newPassword } = req.body;
@@ -120,11 +89,6 @@ router.post('/change-password', requireAuth, async (req, res, next) => {
   }
 });
 
-/**
- * POST /api/auth/forgot-password
- * Body: { email }
- * Always returns 200 to prevent email enumeration.
- */
 router.post('/forgot-password', async (req, res, next) => {
   try {
     const { email } = req.body;
@@ -138,10 +102,6 @@ router.post('/forgot-password', async (req, res, next) => {
   }
 });
 
-/**
- * POST /api/auth/reset-password
- * Body: { token, newPassword }
- */
 router.post('/reset-password', async (req, res, next) => {
   try {
     const { token, newPassword } = req.body;
@@ -158,11 +118,6 @@ router.post('/reset-password', async (req, res, next) => {
   }
 });
 
-/**
- * Extracts Bearer token from Authorization header.
- * @param {import('express').Request} req
- * @returns {string|null}
- */
 function extractToken(req) {
   const header = req.headers.authorization;
   if (!header || !header.startsWith('Bearer ')) return null;

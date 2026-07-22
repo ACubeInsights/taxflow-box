@@ -1,27 +1,18 @@
 import { useState, useEffect, useRef, useCallback } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
-import { motion } from 'framer-motion'
 import {
   FileText, Loader2, AlertCircle, RefreshCw, CheckCircle,
-  RotateCcw, ShieldOff, Calendar, Clock, Undo2, Send, Edit3,
+  RotateCcw, ShieldOff, Calendar, Undo2, Send, Edit3,
 } from 'lucide-react'
 import { projectApi, reviewApi, tokenApi } from '../../services/api'
 import Breadcrumb from '../Breadcrumb'
-import { GlassPanel, StatusBadge, Badge } from '../ui'
+import { FolioPanel, StatusBadge, Badge } from '../ui'
 import CommentsThread from '../CommentsThread'
 import DocumentEditor from '../DocumentEditor'
 import { useAuth } from '../../context/AuthContext'
 import { useToast } from '../../context/ToastContext'
 import { PRIORITY_COLORS } from '../../constants/roles'
-
-const leftPaneVariants = {
-  hidden: { opacity: 0, y: 24 },
-  visible: { opacity: 1, y: 0, transition: { duration: 0.4, ease: [0.22, 1, 0.36, 1], delay: 0 } },
-}
-const rightPaneVariants = {
-  hidden: { opacity: 0, y: 24 },
-  visible: { opacity: 1, y: 0, transition: { duration: 0.4, ease: [0.22, 1, 0.36, 1], delay: 0.12 } },
-}
+import { STATUS_COLORS } from '../../constants/statusColors'
 
 function formatDate(dateStr) {
   if (!dateStr) return '—'
@@ -41,22 +32,20 @@ function isOverdue(dateStr) {
   }
 }
 
-// Undo countdown hook
 function useUndoCountdown(approvedAt) {
   const [remaining, setRemaining] = useState(0)
 
   useEffect(() => {
     if (!approvedAt) { setRemaining(0); return }
     const endMs = new Date(approvedAt).getTime() + 10 * 60 * 1000
-
+    let id
     const tick = () => {
       const left = Math.max(0, endMs - Date.now())
       setRemaining(left)
-      if (left <= 0) clearInterval(id)
+      if (left <= 0 && id) clearInterval(id)
     }
-
     tick()
-    const id = setInterval(tick, 1000)
+    id = setInterval(tick, 1000)
     return () => clearInterval(id)
   }, [approvedAt])
 
@@ -65,24 +54,11 @@ function useUndoCountdown(approvedAt) {
   return { remaining, label: `${minutes}:${String(seconds).padStart(2, '0')}` }
 }
 
-function LoadingSkeleton() {
-  return (
-    <div className="max-w-[1400px] mx-auto">
-      <div className="h-3 w-64 rounded bg-[var(--color-surface-high)] mb-4 animate-pulse" />
-      <div className="h-8 w-48 rounded bg-[var(--color-surface-highest)] mb-6 animate-pulse" />
-      <div className="grid grid-cols-1 lg:grid-cols-[1fr_400px] xl:grid-cols-[1fr_480px] gap-6">
-        <div className="rounded-xl bg-[var(--color-surface-container)] h-[500px] animate-pulse" />
-        <div className="rounded-xl bg-[var(--color-surface-container)] h-[500px] animate-pulse" />
-      </div>
-    </div>
-  )
-}
-
 export default function DocumentDetailView() {
   const { clientId, projectId, documentId } = useParams()
   const navigate = useNavigate()
   const { user, token } = useAuth()
-  const employeeId = user?.id || 'employee-1'
+  const employeeId = user?.id
   const { error: toastError, success: toastSuccess } = useToast()
 
   const [doc, setDoc] = useState(null)
@@ -91,34 +67,26 @@ export default function DocumentDetailView() {
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState(null)
 
-  // Preview token
   const [previewToken, setPreviewToken] = useState(null)
   const [previewError, setPreviewError] = useState(null)
   const refreshTimerRef = useRef(null)
 
-  // Action state
-  const [actionLoading, setActionLoading] = useState(null) // 'approve' | 'revision' | 'waive' | 'undo' | 'auto'
+  const [actionLoading, setActionLoading] = useState(null)
   const [actionError, setActionError] = useState(null)
   const [conflictError, setConflictError] = useState(false)
 
-  // Revision comment
   const [showRevision, setShowRevision] = useState(false)
   const [revisionComment, setRevisionComment] = useState('')
   const [revisionError, setRevisionError] = useState('')
-
-  // Waive confirmation
   const [showWaiveConfirm, setShowWaiveConfirm] = useState(false)
   const [waiveReason, setWaiveReason] = useState('')
-
-  // Approve confirmation
   const [showApproveConfirm, setShowApproveConfirm] = useState(false)
-
-  // Document editor state
   const [showEditor, setShowEditor] = useState(false)
 
-  // Undo state
   const [approvedAt, setApprovedAt] = useState(null)
   const { remaining: undoRemaining, label: undoLabel } = useUndoCountdown(approvedAt)
+
+  const spineColor = STATUS_COLORS[doc?.status] || 'var(--color-whisper)'
 
   const fetchData = useCallback(async () => {
     setLoading(true)
@@ -141,31 +109,29 @@ export default function DocumentDetailView() {
 
       setDoc(found)
 
-      const client = (clients || []).find((c) => c.id === clientId)
+      const clientList = clients?.clients || clients || []
+      const client = clientList.find((c) => c.id === clientId)
       setClientName(client?.name || 'Client')
 
-      const proj = (projects || []).find((p) => p.id === projectId)
+      const projectList = Array.isArray(projects) ? projects : projects?.projects || []
+      const proj = projectList.find((p) => p.id === projectId)
       setProjectName(proj?.name || 'Project')
 
-      // Track approvedAt for undo
       if (found.status === 'Approved' && found.approvedAt) {
         setApprovedAt(found.approvedAt)
       }
     } catch (err) {
-      toastError(err.message || 'Failed to load document')
-      setError(err.message || 'Failed to load document')
+      toastError(err.message || 'Could not load document')
+      setError(err.message || 'Could not load document')
     } finally {
       setLoading(false)
     }
-  }, [projectId, clientId, documentId])
+  }, [projectId, clientId, documentId, toastError])
+
+  useEffect(() => { fetchData() }, [fetchData])
 
   useEffect(() => {
-    fetchData()
-  }, [fetchData])
-
-  // Auto-transition: if status is Uploaded, transition to Under_Review
-  useEffect(() => {
-    if (!doc || doc.status !== 'Uploaded') return
+    if (!doc || doc.status !== 'Uploaded' || !employeeId) return
     let cancelled = false
 
     const autoTransition = async () => {
@@ -177,7 +143,9 @@ export default function DocumentDetailView() {
           version: doc.version,
         })
         if (!cancelled) {
-          setDoc((prev) => prev ? { ...prev, status: 'Under_Review', version: result?.version ?? (prev.version + 1) } : prev)
+          setDoc((prev) => prev
+            ? { ...prev, status: 'Under_Review', version: result?.version ?? (prev.version + 1) }
+            : prev)
         }
       } catch (err) {
         console.warn('Auto-transition failed:', err.message)
@@ -188,18 +156,16 @@ export default function DocumentDetailView() {
 
     autoTransition()
     return () => { cancelled = true }
-  }, [doc?.id, doc?.status]) // eslint-disable-line react-hooks/exhaustive-deps
+  }, [doc?.id, doc?.status, documentId, employeeId, doc?.version])
 
-  // Fetch preview token
   useEffect(() => {
-    if (!doc?.fileId) return
+    if (!doc?.fileId || !employeeId) return
 
     const fetchToken = async () => {
       try {
         const result = await tokenApi.getPreviewToken(doc.fileId, employeeId)
         setPreviewToken(result)
         setPreviewError(null)
-
         if (result.expiresAt) {
           const expiresMs = new Date(result.expiresAt).getTime()
           const refreshIn = expiresMs - Date.now() - 5 * 60 * 1000
@@ -216,36 +182,21 @@ export default function DocumentDetailView() {
     return () => {
       if (refreshTimerRef.current) clearTimeout(refreshTimerRef.current)
     }
-  }, [doc?.fileId])
+  }, [doc?.fileId, employeeId])
 
-  // Mutation helper
   const doTransition = async (toStatus, extra = {}) => {
     setActionError(null)
     setConflictError(false)
-    try {
-      const result = await reviewApi.transitionStatus(documentId, {
-        toStatus,
-        employeeId,
-        version: doc.version,
-        ...extra,
-      })
-      const newVersion = result?.version ?? (doc.version + 1)
-      const newApprovedAt = toStatus === 'Approved' ? (result?.approvedAt || new Date().toISOString()) : null
-
-      setDoc((prev) => prev ? { ...prev, status: toStatus, version: newVersion } : prev)
-
-      if (toStatus === 'Approved') {
-        setApprovedAt(newApprovedAt)
-      }
-    } catch (err) {
-      if (err.message?.includes('409') || err.message?.includes('modified')) {
-        setConflictError(true)
-      } else {
-        toastError(err.message || 'Action failed')
-        setActionError(err.message || 'Action failed')
-      }
-      throw err
-    }
+    const result = await reviewApi.transitionStatus(documentId, {
+      toStatus,
+      employeeId,
+      version: doc.version,
+      ...extra,
+    })
+    const newVersion = result?.version ?? (doc.version + 1)
+    const newApprovedAt = toStatus === 'Approved' ? (result?.approvedAt || new Date().toISOString()) : null
+    setDoc((prev) => prev ? { ...prev, status: toStatus, version: newVersion } : prev)
+    if (toStatus === 'Approved') setApprovedAt(newApprovedAt)
   }
 
   const handleApprove = async () => {
@@ -254,18 +205,25 @@ export default function DocumentDetailView() {
       await doTransition('Approved')
       toastSuccess('Document approved')
       setShowApproveConfirm(false)
-    } catch { /* error already set */ }
-    finally { setActionLoading(null) }
+    } catch (err) {
+      if (err.message?.includes('409') || err.message?.includes('modified')) setConflictError(true)
+      else {
+        toastError(err.message || 'Approve failed')
+        setActionError(err.message || 'Approve failed')
+      }
+    } finally {
+      setActionLoading(null)
+    }
   }
 
   const handleRevision = async () => {
     const trimmed = revisionComment.trim()
     if (trimmed.length < 10) {
-      setRevisionError('Revision comment must be at least 10 characters.')
+      setRevisionError('Revision note must be at least 10 characters.')
       return
     }
     if (trimmed.length > 1000) {
-      setRevisionError('Revision comment must be 1000 characters or fewer.')
+      setRevisionError('Revision note must be 1000 characters or fewer.')
       return
     }
     setActionLoading('revision')
@@ -274,18 +232,30 @@ export default function DocumentDetailView() {
       toastSuccess('Revision requested')
       setShowRevision(false)
       setRevisionComment('')
-    } catch { /* error already set */ }
-    finally { setActionLoading(null) }
+    } catch (err) {
+      if (err.message?.includes('409') || err.message?.includes('modified')) setConflictError(true)
+      else {
+        toastError(err.message || 'Revision request failed')
+        setActionError(err.message || 'Revision request failed')
+      }
+    } finally {
+      setActionLoading(null)
+    }
   }
 
   const handleWaive = async () => {
     setActionLoading('waive')
     try {
       await doTransition('Waived', waiveReason ? { reason: waiveReason } : {})
+      toastSuccess('Requirement waived')
       setShowWaiveConfirm(false)
       setWaiveReason('')
-    } catch { /* error already set */ }
-    finally { setActionLoading(null) }
+    } catch (err) {
+      if (err.message?.includes('409') || err.message?.includes('modified')) setConflictError(true)
+      else setActionError(err.message || 'Waive failed')
+    } finally {
+      setActionLoading(null)
+    }
   }
 
   const handleUndo = async () => {
@@ -296,22 +266,30 @@ export default function DocumentDetailView() {
       await reviewApi.undoApprove(documentId, employeeId, doc.version)
       setDoc((prev) => prev ? { ...prev, status: 'Under_Review', version: prev.version + 1 } : prev)
       setApprovedAt(null)
+      toastSuccess('Approval undone')
     } catch (err) {
-      if (err.message?.includes('409') || err.message?.includes('modified')) {
-        setConflictError(true)
-      } else {
-        setActionError(err.message || 'Undo failed')
-      }
+      if (err.message?.includes('409') || err.message?.includes('modified')) setConflictError(true)
+      else setActionError(err.message || 'Undo failed')
     } finally {
       setActionLoading(null)
     }
   }
 
-  if (loading) return <LoadingSkeleton />
+  if (loading) {
+    return (
+      <div className="mx-auto max-w-[var(--layout-content-max)]">
+        <div className="mb-[var(--space-4)] h-3 w-64 animate-pulse rounded bg-[var(--color-ledger)]" />
+        <div className="grid gap-[var(--space-6)] lg:grid-cols-[1fr_360px]">
+          <div className="h-[400px] animate-pulse rounded-[var(--radius-panel)] bg-[var(--color-folio)]" />
+          <div className="h-[400px] animate-pulse rounded-[var(--radius-panel)] bg-[var(--color-folio)]" />
+        </div>
+      </div>
+    )
+  }
 
   if (error) {
     return (
-      <div className="max-w-[1400px] mx-auto">
+      <div className="mx-auto max-w-[var(--layout-content-max)]">
         <Breadcrumb
           segments={[
             { label: 'Dashboard', path: '/dashboard' },
@@ -319,25 +297,19 @@ export default function DocumentDetailView() {
             { label: projectName || 'Project', path: `/clients/${clientId}/projects/${projectId}` },
           ]}
         />
-        <GlassPanel className="flex flex-col items-center justify-center py-16 text-center">
-          <AlertCircle size={40} className="text-[var(--color-error)]/60 mb-4" />
-          <p className="text-[15px] font-semibold text-[var(--color-error)]/80 mb-2">{error}</p>
-          {error === 'Document not found' ? (
-            <button
-              onClick={() => navigate(`/clients/${clientId}/projects/${projectId}`)}
-              className="mt-4 flex items-center gap-2 rounded-xl border border-[var(--color-outline-variant)] bg-[var(--color-surface-container)] px-4 py-2 text-[13px] font-bold text-[var(--color-on-surface-variant)] transition-all hover:bg-[var(--color-surface-high)]"
-            >
-              Back to Project
-            </button>
-          ) : (
-            <button
-              onClick={fetchData}
-              className="mt-4 flex items-center gap-2 rounded-xl border border-[var(--color-outline-variant)] bg-[var(--color-surface-container)] px-4 py-2 text-[13px] font-bold text-[var(--color-on-surface-variant)] transition-all hover:bg-[var(--color-surface-high)]"
-            >
-              <RefreshCw size={14} /> Retry
-            </button>
-          )}
-        </GlassPanel>
+        <FolioPanel className="py-[var(--space-12)] text-center">
+          <AlertCircle size={36} className="mx-auto mb-[var(--space-4)] text-[var(--color-flag)]" aria-hidden />
+          <p className="m-0 mb-[var(--space-2)] text-sm font-medium text-[var(--color-flag)]">{error}</p>
+          <button
+            type="button"
+            onClick={error === 'Document not found'
+              ? () => navigate(`/clients/${clientId}/projects/${projectId}`)
+              : fetchData}
+            className="btn-ghost mt-[var(--space-4)]"
+          >
+            {error === 'Document not found' ? 'Back to project' : <><RefreshCw size={14} aria-hidden /> Retry</>}
+          </button>
+        </FolioPanel>
       </div>
     )
   }
@@ -347,316 +319,281 @@ export default function DocumentDetailView() {
   const showUndoButton = isApproved && undoRemaining > 0
 
   return (
-    <div className="max-w-[1400px] mx-auto pb-10">
-      <Breadcrumb
-        segments={[
-          { label: 'Dashboard', path: '/dashboard' },
-          { label: clientName, path: `/clients/${clientId}` },
-          { label: projectName, path: `/clients/${clientId}/projects/${projectId}` },
-          { label: doc.name, path: `/clients/${clientId}/projects/${projectId}/documents/${documentId}` },
-        ]}
-      />
+    <div className="-mx-[var(--space-4)] flex min-h-[calc(100vh-var(--layout-topbar)-3rem)] sm:-mx-[var(--space-6)] lg:-mx-[var(--space-8)]">
+      {/* Folio Rail — genuine Client → Project → Document sequence */}
+      <aside
+        className="hidden w-[var(--layout-rail)] shrink-0 flex-col border-r border-[var(--color-rule)] md:flex"
+        aria-label="Document workflow location"
+      >
+        <div
+          className="folio-spine mx-auto mt-[var(--space-6)] w-[4px] flex-1 rounded-[2px]"
+          style={{ background: spineColor }}
+          aria-hidden
+        />
+        <ol className="m-0 flex list-none flex-col gap-[var(--space-8)] px-[var(--space-2)] py-[var(--space-6)]">
+          {[
+            { label: clientName, current: false },
+            { label: projectName, current: false },
+            { label: doc.name, current: true },
+          ].map((step) => (
+            <li
+              key={step.label}
+              className={`text-center text-xs font-medium ${step.current ? 'text-[var(--color-ink)]' : 'text-[var(--color-whisper)]'}`}
+              style={{ writingMode: 'vertical-rl', transform: 'rotate(180deg)' }}
+            >
+              {step.label}
+            </li>
+          ))}
+        </ol>
+      </aside>
 
-      {/* Conflict toast */}
-      {conflictError && (
-        <motion.div
-          initial={{ opacity: 0, y: -10 }}
-          animate={{ opacity: 1, y: 0 }}
-          className="mb-4 flex items-center justify-between rounded-xl border border-[var(--color-warning)]/30 bg-[var(--color-warning-muted)] px-4 py-3"
-        >
-          <span className="text-[13px] font-medium text-[var(--color-warning)]">
-            This document was modified by another user.
-          </span>
-          <button
-            onClick={() => { setConflictError(false); fetchData() }}
-            className="flex items-center gap-1.5 rounded-lg border border-[var(--color-warning)]/30 bg-[var(--color-warning)]/15 px-3 py-1.5 text-[12px] font-bold text-[var(--color-warning)] transition-all hover:bg-[var(--color-warning)]/25"
-          >
-            <RefreshCw size={12} /> Reload
-          </button>
-        </motion.div>
-      )}
+      <div className="min-w-0 flex-1 px-[var(--space-4)] py-[var(--space-6)] sm:px-[var(--space-6)] lg:px-[var(--space-8)]">
+        <Breadcrumb
+          segments={[
+            { label: 'Dashboard', path: '/dashboard' },
+            { label: clientName, path: `/clients/${clientId}` },
+            { label: projectName, path: `/clients/${clientId}/projects/${projectId}` },
+            { label: doc.name, path: `/clients/${clientId}/projects/${projectId}/documents/${documentId}` },
+          ]}
+        />
 
-      {/* Two-panel layout */}
-      <div className="grid grid-cols-1 lg:grid-cols-[1fr_400px] xl:grid-cols-[1fr_480px] gap-6">
-        {/* Left panel — Document Viewer */}
-        <motion.div variants={leftPaneVariants} initial="hidden" animate="visible" className="flex flex-col h-full">
-          <GlassPanel className="h-full flex flex-col flex-1">
-            <div className="flex items-center justify-between mb-6">
-              <h3 className="m-0 text-[12px] font-bold uppercase tracking-[0.15em] text-[var(--color-on-surface-variant)]/70 flex items-center gap-2">
-                <FileText size={14} /> Document Preview
-              </h3>
+        <h1 className="m-0 mb-[var(--space-6)] font-display text-lg font-semibold text-[var(--color-ink)] sm:text-xl">
+          {doc.name}
+        </h1>
+
+        {conflictError && (
+          <div className="mb-[var(--space-4)] flex flex-wrap items-center justify-between gap-[var(--space-3)] rounded-[var(--radius-panel)] border border-[var(--color-hold)] bg-[var(--color-hold-muted)] px-[var(--space-4)] py-[var(--space-3)]">
+            <span className="text-sm font-medium text-[var(--color-hold)]">
+              Someone else changed this document.
+            </span>
+            <button
+              type="button"
+              onClick={() => { setConflictError(false); fetchData() }}
+              className="btn-ghost h-8 text-xs"
+            >
+              <RefreshCw size={12} aria-hidden /> Reload document
+            </button>
+          </div>
+        )}
+
+        <div className="grid grid-cols-1 gap-[var(--space-6)] lg:grid-cols-[1fr_var(--layout-procedure)]">
+          {/* Paper well — preview */}
+          <FolioPanel className="flex min-h-[400px] flex-col !bg-[var(--color-paper-well)]">
+            <div className="mb-[var(--space-4)] flex items-center justify-between gap-[var(--space-3)]">
+              <p className="label-caps m-0 flex items-center gap-[var(--space-2)]">
+                <FileText size={14} aria-hidden /> Document preview
+              </p>
               {doc.fileId && (
-                <button
-                  onClick={() => setShowEditor(true)}
-                  className="flex items-center gap-1.5 rounded-lg border border-[var(--color-primary)]/30 bg-[var(--color-primary)]/10 px-3 py-1.5 text-[12px] font-bold text-[var(--color-primary)] transition-all hover:bg-[var(--color-primary)]/20 active:scale-95"
-                >
-                  <Edit3 size={13} /> Edit Document
+                <button type="button" onClick={() => setShowEditor(true)} className="btn-ghost h-8 text-xs">
+                  <Edit3 size={13} aria-hidden /> Edit document
                 </button>
               )}
             </div>
-            <div className="flex flex-col items-center justify-center rounded-2xl border border-[var(--color-outline-variant)] bg-[var(--color-surface-highest)]/30 p-10 min-h-[400px]">
+            <div className="flex min-h-[400px] flex-1 flex-col items-center justify-center rounded-[var(--radius-control)] border border-[var(--color-rule)] bg-[var(--color-archive)] p-[var(--space-4)]">
               {doc.fileId && previewToken ? (
                 <iframe
                   src={`https://app.box.com/embed/preview/${doc.fileId}?token=${previewToken.token}`}
-                  style={{ width: '100%', height: 450, border: 'none', borderRadius: 12 }}
-                  title="Document Preview"
+                  style={{ width: '100%', height: 450, border: 'none', borderRadius: 'var(--radius-control)' }}
+                  title={`Preview: ${doc.name}`}
                   sandbox="allow-scripts allow-same-origin allow-popups"
                 />
               ) : doc.fileId && previewError ? (
                 <>
-                  <div className="mb-4 flex h-16 w-16 items-center justify-center rounded-2xl bg-[var(--color-error-muted)] border border-[var(--color-error)]/10">
-                    <FileText size={28} className="text-[var(--color-error)]/50" />
-                  </div>
-                  <p className="mb-1 text-sm font-semibold text-[var(--color-error)]/70">Preview unavailable</p>
-                  <p className="text-xs text-[var(--color-on-surface-variant)]/50">{previewError}</p>
+                  <FileText size={28} className="mb-[var(--space-3)] text-[var(--color-flag)]" aria-hidden />
+                  <p className="m-0 text-sm font-medium text-[var(--color-flag)]">Preview unavailable</p>
+                  <p className="m-0 mt-[var(--space-1)] text-xs text-[var(--color-whisper)]">{previewError}</p>
                 </>
               ) : !doc.fileId ? (
                 <>
-                  <div className="mb-4 flex h-16 w-16 items-center justify-center rounded-2xl bg-[var(--color-surface-high)] border border-[var(--color-outline-variant)]">
-                    <FileText size={28} className="text-[var(--color-on-surface-variant)]/40" />
-                  </div>
-                  <p className="mb-1 text-sm font-semibold text-[var(--color-on-surface-variant)]/60">No file uploaded yet</p>
-                  <p className="text-xs text-[var(--color-on-surface-variant)]/40">Status: {doc.status?.replace(/_/g, ' ')}</p>
+                  <FileText size={28} className="mb-[var(--space-3)] text-[var(--color-whisper)]" aria-hidden />
+                  <p className="m-0 text-sm font-medium text-[var(--color-whisper)]">No file uploaded yet</p>
+                  <p className="mono-sm m-0 mt-[var(--space-1)] text-[var(--color-whisper)]">
+                    Status: {doc.status?.replace(/_/g, ' ')}
+                  </p>
                 </>
               ) : (
-                <Loader2 size={24} className="animate-spin text-[var(--color-primary)]/40" />
+                <Loader2 size={24} className="animate-spin text-[var(--color-signal)]" aria-hidden />
               )}
             </div>
-          </GlassPanel>
-        </motion.div>
+          </FolioPanel>
 
-        {/* Right panel — Action Panel */}
-        <motion.div variants={rightPaneVariants} initial="hidden" animate="visible" className="flex flex-col gap-6">
-          {/* Document details */}
-          <GlassPanel>
-            <h3 className="m-0 mb-5 text-[12px] font-bold uppercase tracking-[0.15em] text-[var(--color-on-surface-variant)]/70">
-              Document Details
-            </h3>
-            <div className="space-y-4">
-              <div>
-                <p className="m-0 text-[11px] font-bold uppercase tracking-wide text-[var(--color-on-surface-variant)]">Name</p>
-                <p className="m-0 mt-1 text-[14px] font-semibold text-[var(--color-on-surface)]">{doc.name}</p>
-              </div>
-              {doc.documentType && (
+          {/* Procedure panel */}
+          <div className="flex flex-col gap-[var(--space-4)]">
+            <FolioPanel>
+              <p className="label-caps m-0 mb-[var(--space-4)]">Document details</p>
+              <dl className="m-0 space-y-[var(--space-4)]">
                 <div>
-                  <p className="m-0 text-[11px] font-bold uppercase tracking-wide text-[var(--color-on-surface-variant)]">Document Type</p>
-                  <p className="m-0 mt-1 text-[13px] text-[var(--color-on-surface)]">{doc.documentType}</p>
+                  <dt className="label-caps m-0">Status</dt>
+                  <dd className="m-0 mt-[var(--space-1)]"><StatusBadge status={doc.status} /></dd>
                 </div>
-              )}
-              <div className="flex items-center gap-3">
-                <div>
-                  <p className="m-0 text-[11px] font-bold uppercase tracking-wide text-[var(--color-on-surface-variant)]">Status</p>
-                  <div className="mt-1"><StatusBadge status={doc.status} /></div>
-                </div>
+                {doc.documentType && (
+                  <div>
+                    <dt className="label-caps m-0">Type</dt>
+                    <dd className="m-0 mt-[var(--space-1)] text-sm text-[var(--color-ink)]">{doc.documentType}</dd>
+                  </div>
+                )}
                 {doc.priority && (
                   <div>
-                    <p className="m-0 text-[11px] font-bold uppercase tracking-wide text-[var(--color-on-surface-variant)]">Priority</p>
-                    <div className="mt-1"><Badge color={PRIORITY_COLORS[doc.priority] || '#6b7280'}>{doc.priority}</Badge></div>
+                    <dt className="label-caps m-0">Priority</dt>
+                    <dd className="m-0 mt-[var(--space-1)]">
+                      <Badge color={PRIORITY_COLORS[doc.priority] || 'var(--color-whisper)'}>{doc.priority}</Badge>
+                    </dd>
                   </div>
                 )}
-              </div>
-              {doc.dueDate && (
+                {doc.dueDate && (
+                  <div>
+                    <dt className="label-caps m-0">Due</dt>
+                    <dd className={`m-0 mt-[var(--space-1)] flex items-center gap-[var(--space-2)] text-sm ${isOverdue(doc.dueDate) ? 'font-medium text-[var(--color-flag)]' : 'text-[var(--color-ink)]'}`}>
+                      <Calendar size={12} aria-hidden />
+                      <span className="mono-sm">{formatDate(doc.dueDate)}</span>
+                      {isOverdue(doc.dueDate) && <span className="text-xs uppercase tracking-[0.04em]">Overdue</span>}
+                    </dd>
+                  </div>
+                )}
+                {doc.description && (
+                  <div>
+                    <dt className="label-caps m-0">Description</dt>
+                    <dd className="m-0 mt-[var(--space-1)] text-sm text-[var(--color-whisper)]">{doc.description}</dd>
+                  </div>
+                )}
                 <div>
-                  <p className="m-0 text-[11px] font-bold uppercase tracking-wide text-[var(--color-on-surface-variant)]">Due Date</p>
-                  <p className={`m-0 mt-1 text-[13px] flex items-center gap-1.5 ${isOverdue(doc.dueDate) ? 'text-[var(--color-error)] font-semibold' : 'text-[var(--color-on-surface)]'}`}>
-                    <Calendar size={12} />
-                    {formatDate(doc.dueDate)}
-                    {isOverdue(doc.dueDate) && <span className="text-[10px] font-bold uppercase tracking-wider text-[var(--color-error)]/80">Overdue</span>}
-                  </p>
+                  <dt className="label-caps m-0">Version</dt>
+                  <dd className="mono-sm m-0 mt-[var(--space-1)] text-[var(--color-ink)]">{doc.version || 1}</dd>
                 </div>
-              )}
-              {doc.uploadedBy && (
-                <div>
-                  <p className="m-0 text-[11px] font-bold uppercase tracking-wide text-[var(--color-on-surface-variant)]">Uploaded By</p>
-                  <p className="m-0 mt-1 text-[13px] text-[var(--color-on-surface)]">{doc.uploadedBy}</p>
-                </div>
-              )}
-              {doc.description && (
-                <div>
-                  <p className="m-0 text-[11px] font-bold uppercase tracking-wide text-[var(--color-on-surface-variant)]">Description</p>
-                  <p className="m-0 mt-1 text-[13px] text-[var(--color-on-surface-variant)]">{doc.description}</p>
-                </div>
-              )}
-              {doc.instructions && (
-                <div>
-                  <p className="m-0 text-[11px] font-bold uppercase tracking-wide text-[var(--color-on-surface-variant)]">Instructions</p>
-                  <p className="m-0 mt-1 text-[13px] text-[var(--color-on-surface-variant)]">{doc.instructions}</p>
-                </div>
-              )}
-            </div>
-          </GlassPanel>
+              </dl>
+            </FolioPanel>
 
-          {/* Version history placeholder */}
-          <GlassPanel>
-            <h3 className="m-0 mb-3 text-[12px] font-bold uppercase tracking-[0.15em] text-[var(--color-on-surface-variant)]/70 flex items-center gap-2">
-              <Clock size={14} /> Version History
-            </h3>
-            <p className="m-0 text-[12px] text-[var(--color-on-surface-variant)]">Version {doc.version || 1}</p>
-          </GlassPanel>
+            {isUnderReview && (
+              <FolioPanel>
+                <p className="label-caps m-0 mb-[var(--space-4)]">Review</p>
+                <div className="space-y-[var(--space-3)]">
+                  {!showApproveConfirm ? (
+                    <button
+                      type="button"
+                      onClick={() => setShowApproveConfirm(true)}
+                      disabled={!!actionLoading}
+                      className="btn-commit w-full"
+                    >
+                      <CheckCircle size={16} aria-hidden /> Approve document
+                    </button>
+                  ) : (
+                    <div className="rounded-[var(--radius-control)] border border-[var(--color-commit)] bg-[var(--color-commit-muted)] p-[var(--space-4)]">
+                      <p className="m-0 mb-[var(--space-3)] text-sm font-medium text-[var(--color-commit)]">
+                        Approve this document?
+                      </p>
+                      <div className="flex gap-[var(--space-2)]">
+                        <button type="button" onClick={handleApprove} disabled={!!actionLoading} className="btn-commit flex-1">
+                          {actionLoading === 'approve' ? <Loader2 size={14} className="animate-spin" aria-hidden /> : 'Approve'}
+                        </button>
+                        <button type="button" onClick={() => setShowApproveConfirm(false)} className="btn-ghost flex-1">
+                          Cancel
+                        </button>
+                      </div>
+                    </div>
+                  )}
 
-          {/* Review actions — only when Under_Review */}
-          {isUnderReview && (
-            <GlassPanel>
-              <h3 className="m-0 mb-5 text-[12px] font-bold uppercase tracking-[0.15em] text-[var(--color-on-surface-variant)]/70">
-                Review Actions
-              </h3>
-              <div className="space-y-3">
-                {/* Approve */}
-                {!showApproveConfirm ? (
-                  <button
-                    onClick={() => setShowApproveConfirm(true)}
-                    disabled={!!actionLoading}
-                    className="w-full flex items-center justify-center gap-2 rounded-xl border border-[var(--color-success)]/30 bg-[var(--color-success-muted)] px-6 py-3 text-[13px] font-bold text-[var(--color-success)] transition-all hover:bg-[var(--color-success)]/20 disabled:opacity-50"
-                  >
-                    <CheckCircle size={16} /> Approve Document
+                  {!showRevision ? (
+                    <button
+                      type="button"
+                      onClick={() => setShowRevision(true)}
+                      disabled={!!actionLoading}
+                      className="btn-flag w-full"
+                    >
+                      <RotateCcw size={16} aria-hidden /> Request revision
+                    </button>
+                  ) : (
+                    <div className="space-y-[var(--space-3)] rounded-[var(--radius-control)] border border-[var(--color-flag)] bg-[var(--color-flag-muted)] p-[var(--space-4)]">
+                      <label className="label-caps m-0 block" htmlFor="revision-note">
+                        Revision note <span className="text-[var(--color-flag)]">*</span>
+                      </label>
+                      <textarea
+                        id="revision-note"
+                        value={revisionComment}
+                        onChange={(e) => { setRevisionComment(e.target.value); setRevisionError('') }}
+                        placeholder="What needs to change (10–1000 characters)…"
+                        rows={4}
+                        className="folio-input min-h-[96px] resize-none"
+                      />
+                      <span className="mono-xs text-[var(--color-whisper)]">{revisionComment.trim().length}/1000</span>
+                      {revisionError && <p className="m-0 text-sm text-[var(--color-flag)]" role="alert">{revisionError}</p>}
+                      <div className="flex gap-[var(--space-2)]">
+                        <button type="button" onClick={handleRevision} disabled={!!actionLoading} className="btn-flag flex-1">
+                          {actionLoading === 'revision' ? <Loader2 size={14} className="animate-spin" aria-hidden /> : <Send size={12} aria-hidden />}
+                          Request revision
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => { setShowRevision(false); setRevisionComment(''); setRevisionError('') }}
+                          className="btn-ghost flex-1"
+                        >
+                          Cancel
+                        </button>
+                      </div>
+                    </div>
+                  )}
+
+                  {!showWaiveConfirm ? (
+                    <button
+                      type="button"
+                      onClick={() => setShowWaiveConfirm(true)}
+                      disabled={!!actionLoading}
+                      className="btn-ghost w-full"
+                    >
+                      <ShieldOff size={16} aria-hidden /> Waive requirement
+                    </button>
+                  ) : (
+                    <div className="space-y-[var(--space-3)] rounded-[var(--radius-control)] border border-[var(--color-rule)] bg-[var(--color-ledger)] p-[var(--space-4)]">
+                      <p className="m-0 text-sm font-medium text-[var(--color-ink)]">Waive this requirement?</p>
+                      <textarea
+                        value={waiveReason}
+                        onChange={(e) => setWaiveReason(e.target.value)}
+                        placeholder="Optional reason…"
+                        rows={2}
+                        className="folio-input min-h-[64px] resize-none"
+                      />
+                      <div className="flex gap-[var(--space-2)]">
+                        <button type="button" onClick={handleWaive} disabled={!!actionLoading} className="btn-ghost flex-1">
+                          {actionLoading === 'waive' ? <Loader2 size={14} className="animate-spin" aria-hidden /> : 'Waive requirement'}
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => { setShowWaiveConfirm(false); setWaiveReason('') }}
+                          className="btn-ghost flex-1"
+                        >
+                          Cancel
+                        </button>
+                      </div>
+                    </div>
+                  )}
+                </div>
+                {actionError && (
+                  <div className="mt-[var(--space-3)] rounded-[var(--radius-control)] border border-[var(--color-flag)] bg-[var(--color-flag-muted)] px-[var(--space-3)] py-[var(--space-2)] text-sm text-[var(--color-flag)]" role="alert">
+                    {actionError}
+                  </div>
+                )}
+              </FolioPanel>
+            )}
+
+            {showUndoButton && (
+              <FolioPanel>
+                <div className="flex items-center justify-between gap-[var(--space-3)]">
+                  <div>
+                    <p className="m-0 text-sm font-medium text-[var(--color-ink)]">Undo approval</p>
+                    <p className="mono-sm m-0 text-[var(--color-whisper)]">{undoLabel} remaining</p>
+                  </div>
+                  <button type="button" onClick={handleUndo} disabled={!!actionLoading} className="btn-ghost">
+                    {actionLoading === 'undo' ? <Loader2 size={14} className="animate-spin" aria-hidden /> : <Undo2 size={14} aria-hidden />}
+                    Undo approval
                   </button>
-                ) : (
-                  <div className="rounded-xl border border-[var(--color-success)]/20 bg-[var(--color-success-muted)] p-4">
-                    <p className="m-0 text-[12px] font-semibold text-[var(--color-success)] mb-3">Confirm approval?</p>
-                    <div className="flex gap-2">
-                      <button
-                        onClick={handleApprove}
-                        disabled={!!actionLoading}
-                        className="flex-1 rounded-lg bg-[var(--color-success)]/20 px-3 py-2 text-[12px] font-bold text-[var(--color-success)] border border-[var(--color-success)]/30 transition-all hover:bg-[var(--color-success)]/30 disabled:opacity-50"
-                      >
-                        {actionLoading === 'approve' ? <Loader2 size={14} className="animate-spin mx-auto" /> : 'Confirm'}
-                      </button>
-                      <button
-                        onClick={() => setShowApproveConfirm(false)}
-                        className="flex-1 rounded-lg bg-[var(--color-surface-high)] px-3 py-2 text-[12px] font-bold text-[var(--color-on-surface-variant)] border border-[var(--color-outline-variant)] transition-all hover:bg-[var(--color-surface-highest)]"
-                      >
-                        Cancel
-                      </button>
-                    </div>
-                  </div>
-                )}
-
-                {/* Request Revision */}
-                {!showRevision ? (
-                  <button
-                    onClick={() => setShowRevision(true)}
-                    disabled={!!actionLoading}
-                    className="w-full flex items-center justify-center gap-2 rounded-xl border border-[var(--color-error)]/30 bg-[var(--color-error-muted)] px-6 py-3 text-[13px] font-bold text-[var(--color-error)] transition-all hover:bg-[var(--color-error)]/20 disabled:opacity-50"
-                  >
-                    <RotateCcw size={16} /> Request Revision
-                  </button>
-                ) : (
-                  <div className="rounded-xl border border-[var(--color-error)]/20 bg-[var(--color-error-muted)] p-4 space-y-3">
-                    <label className="text-[11px] font-bold uppercase tracking-widest text-[var(--color-on-surface-variant)]">
-                      Revision Comment <span className="text-[var(--color-error)]">*</span>
-                    </label>
-                    <textarea
-                      value={revisionComment}
-                      onChange={(e) => { setRevisionComment(e.target.value); setRevisionError('') }}
-                      placeholder="Detail what needs to be changed (10-1000 chars)..."
-                      rows={4}
-                      className="w-full resize-none rounded-xl border border-[var(--color-outline-variant)] bg-[var(--color-surface-high)] px-4 py-3 text-[13px] text-[var(--color-on-surface)] placeholder:text-[var(--color-on-surface-variant)]/50 outline-none focus:border-[var(--color-error)]/50 transition-colors"
-                    />
-                    <div className="flex items-center justify-between">
-                      <span className="text-[10px] text-[var(--color-on-surface-variant)]">
-                        {revisionComment.trim().length}/1000
-                      </span>
-                    </div>
-                    {revisionError && (
-                      <p className="m-0 text-[11px] font-bold text-[var(--color-error)]">{revisionError}</p>
-                    )}
-                    <div className="flex gap-2">
-                      <button
-                        onClick={handleRevision}
-                        disabled={!!actionLoading}
-                        className="flex-1 flex items-center justify-center gap-1.5 rounded-lg bg-[var(--color-error)]/20 px-3 py-2 text-[12px] font-bold text-[var(--color-error)] border border-[var(--color-error)]/30 transition-all hover:bg-[var(--color-error)]/30 disabled:opacity-50"
-                      >
-                        {actionLoading === 'revision' ? <Loader2 size={14} className="animate-spin" /> : <Send size={12} />}
-                        Submit
-                      </button>
-                      <button
-                        onClick={() => { setShowRevision(false); setRevisionComment(''); setRevisionError('') }}
-                        className="flex-1 rounded-lg bg-[var(--color-surface-high)] px-3 py-2 text-[12px] font-bold text-[var(--color-on-surface-variant)] border border-[var(--color-outline-variant)] transition-all hover:bg-[var(--color-surface-highest)]"
-                      >
-                        Cancel
-                      </button>
-                    </div>
-                  </div>
-                )}
-
-                {/* Waive */}
-                {!showWaiveConfirm ? (
-                  <button
-                    onClick={() => setShowWaiveConfirm(true)}
-                    disabled={!!actionLoading}
-                    className="w-full flex items-center justify-center gap-2 rounded-xl border border-[var(--color-on-surface-variant)]/20 bg-[var(--color-surface-high)] px-6 py-3 text-[13px] font-bold text-[var(--color-on-surface-variant)] transition-all hover:bg-[var(--color-surface-highest)] hover:text-[var(--color-on-surface)] disabled:opacity-50"
-                  >
-                    <ShieldOff size={16} /> Waive Requirement
-                  </button>
-                ) : (
-                  <div className="rounded-xl border border-[var(--color-outline-variant)] bg-[var(--color-surface-high)] p-4 space-y-3">
-                    <p className="m-0 text-[12px] font-semibold text-[var(--color-on-surface-variant)]">Waive this requirement?</p>
-                    <textarea
-                      value={waiveReason}
-                      onChange={(e) => setWaiveReason(e.target.value)}
-                      placeholder="Optional reason..."
-                      rows={2}
-                      className="w-full resize-none rounded-xl border border-[var(--color-outline-variant)] bg-[var(--color-surface-container)] px-4 py-2 text-[13px] text-[var(--color-on-surface)] placeholder:text-[var(--color-on-surface-variant)]/50 outline-none transition-colors focus:border-[var(--color-primary)]/50"
-                    />
-                    <div className="flex gap-2">
-                      <button
-                        onClick={handleWaive}
-                        disabled={!!actionLoading}
-                        className="flex-1 rounded-lg bg-[var(--color-surface-highest)] px-3 py-2 text-[12px] font-bold text-[var(--color-on-surface)] border border-[var(--color-outline)] transition-all hover:brightness-110 disabled:opacity-50"
-                      >
-                        {actionLoading === 'waive' ? <Loader2 size={14} className="animate-spin mx-auto" /> : 'Confirm Waive'}
-                      </button>
-                      <button
-                        onClick={() => { setShowWaiveConfirm(false); setWaiveReason('') }}
-                        className="flex-1 rounded-lg bg-transparent px-3 py-2 text-[12px] font-bold text-[var(--color-on-surface-variant)] border border-[var(--color-outline-variant)] transition-all hover:bg-[var(--color-surface-high)]"
-                      >
-                        Cancel
-                      </button>
-                    </div>
-                  </div>
-                )}
-              </div>
-
-              {/* Action error */}
-              {actionError && (
-                <div className="mt-3 rounded-lg border border-[var(--color-error)]/20 bg-[var(--color-error-muted)] px-3 py-2 text-[12px] text-[var(--color-error)]">
-                  {actionError}
                 </div>
-              )}
-            </GlassPanel>
-          )}
+              </FolioPanel>
+            )}
 
-          {/* Undo approval */}
-          {showUndoButton && (
-            <GlassPanel>
-              <div className="flex items-center justify-between">
-                <div>
-                  <p className="m-0 text-[12px] font-bold text-[var(--color-on-surface-variant)]">Undo window</p>
-                  <p className="m-0 text-[11px] text-[var(--color-on-surface-variant)]/60">{undoLabel} remaining</p>
-                </div>
-                <button
-                  onClick={handleUndo}
-                  disabled={!!actionLoading}
-                  className="flex items-center gap-1.5 rounded-xl border border-[var(--color-warning)]/30 bg-[var(--color-warning-muted)] px-4 py-2 text-[12px] font-bold text-[var(--color-warning)] transition-all hover:bg-[var(--color-warning)]/20 disabled:opacity-50"
-                >
-                  {actionLoading === 'undo' ? <Loader2 size={14} className="animate-spin" /> : <Undo2 size={14} />}
-                  Undo Approval
-                </button>
-              </div>
-              {actionError && (
-                <div className="mt-3 rounded-lg border border-[var(--color-error)]/20 bg-[var(--color-error-muted)] px-3 py-2 text-[12px] text-[var(--color-error)]">
-                  {actionError}
-                </div>
-              )}
-            </GlassPanel>
-          )}
-
-          {/* Comments thread */}
-          <CommentsThread documentId={documentId} />
-        </motion.div>
+            <CommentsThread documentId={documentId} />
+          </div>
+        </div>
       </div>
 
-      {/* Document Editor Modal */}
       {showEditor && doc.fileId && (
         <DocumentEditor
           fileId={doc.fileId}
