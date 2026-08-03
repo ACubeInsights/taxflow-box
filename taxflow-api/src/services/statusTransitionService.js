@@ -12,8 +12,10 @@
 import projectService from './projectService.js';
 import commentService from './commentService.js';
 import notificationService from './notificationService.js';
+import boxDocumentStatusService from './boxDocumentStatusService.js';
 import cacheLayer from './cacheLayer.js';
 import { createHttpError } from '../utils/httpError.js';
+import { logger } from '../utils/logger.js';
 
 /** 10-minute undo window in milliseconds */
 const UNDO_WINDOW_MS = 10 * 60 * 1000;
@@ -60,24 +62,44 @@ export class StatusTransitionService {
       throw createHttpError('Document not found', 404);
     }
 
-    // Validate transition against state machine
-    const allowed = VALID_TRANSITIONS[doc.status];
+    // Box metadata is authoritative when a file exists on enterprise tier
+    const currentStatus = await boxDocumentStatusService.resolveStatus({
+      fileId: doc.fileId,
+      status: doc.status,
+    });
+
+    const allowed = VALID_TRANSITIONS[currentStatus];
     if (!allowed || !allowed.includes(toStatus)) {
-      throw createHttpError(`Invalid transition from ${doc.status} to ${toStatus}`, 400);
+      throw createHttpError(`Invalid transition from ${currentStatus} to ${toStatus}`, 400);
     }
 
-    // Revision_Requested requires a comment between 10-1000 chars
     if (toStatus === 'Revision_Requested') {
       if (!comment || comment.trim().length < 10 || comment.trim().length > 1000) {
         throw createHttpError('Revision comment must be between 10 and 1000 characters', 400);
       }
     }
 
-    const previousStatus = doc.status;
+    const previousStatus = currentStatus;
     const extra = {};
     if (toStatus === 'Revision_Requested' && comment) {
       extra.revisionComments = comment.trim();
     }
+
+    // Write status to Box first (source of truth)
+    if (doc.fileId) {
+      const reviewedAt = ['Approved', 'Revision_Requested', 'Waived'].includes(toStatus)
+        ? new Date().toISOString()
+        : undefined;
+      await boxDocumentStatusService.setFileStatus(doc.fileId, toStatus, {
+        requestId: doc.id,
+        clientId: doc.clientId,
+        documentType: doc.documentType,
+        reviewer: employeeId,
+        reviewComments: extra.revisionComments || '',
+        reviewedAt,
+      });
+    }
+
     const updated = await this._projectService.updateDocumentStatus(documentId, toStatus, version, extra);
 
     // Record approval timestamp for undo window
@@ -121,9 +143,36 @@ export class StatusTransitionService {
     if (toStatus === 'Revision_Requested') {
       if (client && client.email) {
         this._notificationService.dispatchRevisionEmail(client.email, documentId, comment).catch((err) => {
-          console.error(`Revision email dispatch failed for document ${documentId}:`, err.message);
+          logger.error(`Revision email dispatch failed for document ${documentId}:`, err.message);
         });
       }
+      this._notificationService.notifyClient(
+        { clientId: doc.clientId, email: client?.email },
+        'revision_requested',
+        {
+          fileId: doc.fileId || documentId,
+          fileName: doc.name,
+          clientId: doc.clientId,
+          message: comment,
+        }
+      ).catch((err) => {
+        logger.error(`Revision in-app notify failed for document ${documentId}:`, err.message);
+      });
+    }
+
+    if (toStatus === 'Approved' || toStatus === 'Waived') {
+      const eventType = toStatus === 'Approved' ? 'document_approved' : 'document_waived';
+      this._notificationService.notifyClient(
+        { clientId: doc.clientId, email: client?.email },
+        eventType,
+        {
+          fileId: doc.fileId || documentId,
+          fileName: doc.name,
+          clientId: doc.clientId,
+        }
+      ).catch((err) => {
+        logger.error(`${eventType} notify failed for document ${documentId}:`, err.message);
+      });
     }
 
     // Invalidate portal caches so dashboards show fresh data
@@ -151,6 +200,14 @@ export class StatusTransitionService {
       throw createHttpError('Document is not in Approved status', 400);
     }
 
+    const resolvedStatus = await boxDocumentStatusService.resolveStatus({
+      fileId: doc.fileId,
+      status: doc.status,
+    });
+    if (resolvedStatus !== 'Approved') {
+      throw createHttpError('Document is not in Approved status', 400);
+    }
+
     let approvedAt;
 
     if (this._approvalUndoRepo) {
@@ -172,6 +229,16 @@ export class StatusTransitionService {
     }
 
     const updated = await this._projectService.updateDocumentStatus(fileId, 'Under_Review', version);
+
+    if (doc.fileId) {
+      await boxDocumentStatusService.setFileStatus(doc.fileId, 'Under_Review', {
+        requestId: doc.id,
+        clientId: doc.clientId,
+        documentType: doc.documentType,
+        reviewer: employeeId,
+        reviewComments: '',
+      });
+    }
 
     // Remove approvedAt entry
     if (this._approvalUndoRepo) {
@@ -222,14 +289,19 @@ export class StatusTransitionService {
         continue;
       }
 
-      if (doc.status !== 'Uploaded') {
+      const currentStatus = await boxDocumentStatusService.resolveStatus({
+        fileId: doc.fileId,
+        status: doc.status,
+      });
+
+      if (currentStatus !== 'Uploaded') {
         results.skipped++;
         continue;
       }
 
       try {
         await this.transitionStatus(docId, {
-          fromStatus: doc.status,
+          fromStatus: currentStatus,
           toStatus: 'Under_Review',
           employeeId,
           version: doc.version,

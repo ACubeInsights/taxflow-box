@@ -1,5 +1,6 @@
 import knex from 'knex';
 import { config } from '../config.js';
+import { getMigrationsDirectoryName } from './schemaMode.js';
 import { logger } from '../utils/logger.js';
 
 let db = null;
@@ -59,7 +60,9 @@ async function cleanupExpired() {
  * @returns {Promise<import('knex').Knex>}
  */
 export async function initDatabase() {
-  const { dbDialect, databaseUrl, dbPoolMin, dbPoolMax } = config;
+  const { dbDialect, databaseUrl, dbPoolMin, dbPoolMax, dbSchema } = config;
+
+  const migrationsDir = new URL(`./${getMigrationsDirectoryName()}`, import.meta.url).pathname;
 
   let knexConfig;
 
@@ -71,19 +74,22 @@ export async function initDatabase() {
       },
       useNullAsDefault: true,
       migrations: {
-        directory: new URL('./migrations', import.meta.url).pathname,
+        directory: migrationsDir,
       },
     };
   } else if (dbDialect === 'postgres') {
     knexConfig = {
       client: 'pg',
-      connection: databaseUrl,
+      connection: {
+        connectionString: databaseUrl,
+        ssl: config.dbSsl ? { rejectUnauthorized: false } : false,
+      },
       pool: {
         min: dbPoolMin,
         max: dbPoolMax,
       },
       migrations: {
-        directory: new URL('./migrations', import.meta.url).pathname,
+        directory: migrationsDir,
       },
     };
   } else {
@@ -94,7 +100,7 @@ export async function initDatabase() {
       },
       useNullAsDefault: true,
       migrations: {
-        directory: new URL('./migrations', import.meta.url).pathname,
+        directory: migrationsDir,
       },
     };
   }
@@ -104,7 +110,7 @@ export async function initDatabase() {
   // Test connection
   try {
     await db.raw('SELECT 1');
-    logger.info('Database connection established', { dialect: dbDialect });
+    logger.info('Database connection established', { dialect: dbDialect, schema: dbSchema });
   } catch (err) {
     logger.error('Database connection failed', {
       dialect: dbDialect,

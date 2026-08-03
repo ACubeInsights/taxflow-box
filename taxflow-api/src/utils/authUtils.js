@@ -14,6 +14,57 @@ import bcrypt from 'bcrypt';
 /** bcrypt cost factor. 12 yields ~250ms hash time — secure against brute force. */
 const BCRYPT_COST = 12;
 
+/** Minimum password length for all create/change/reset paths. */
+export const MIN_PASSWORD_LENGTH = 12;
+
+const ALLOWED_ROLES = new Set(['client', 'employee', 'superadmin']);
+
+/**
+ * Hashes a high-entropy bearer/reset token for at-rest storage (SHA-256).
+ * Not for passwords — use hashPassword/bcrypt for those.
+ * @param {string} token
+ * @returns {string} hex digest
+ */
+export function hashBearerToken(token) {
+  return crypto.createHash('sha256').update(String(token), 'utf8').digest('hex');
+}
+
+/**
+ * Validates password strength. Throws an Error with statusCode 400 on failure.
+ * @param {string} password
+ */
+export function assertPasswordPolicy(password) {
+  if (!password || typeof password !== 'string') {
+    const err = new Error('Password is required');
+    err.statusCode = 400;
+    err.code = 'VALIDATION_ERROR';
+    throw err;
+  }
+  if (password.length < MIN_PASSWORD_LENGTH) {
+    const err = new Error(`Password must be at least ${MIN_PASSWORD_LENGTH} characters`);
+    err.statusCode = 400;
+    err.code = 'VALIDATION_ERROR';
+    throw err;
+  }
+  if (!/[A-Za-z]/.test(password) || !/[0-9]/.test(password)) {
+    const err = new Error('Password must include at least one letter and one number');
+    err.statusCode = 400;
+    err.code = 'VALIDATION_ERROR';
+    throw err;
+  }
+}
+
+/**
+ * Normalizes a role string to an allowlisted value.
+ * @param {string} role
+ * @param {string} [fallback='client']
+ * @returns {string}
+ */
+export function sanitizeRole(role, fallback = 'client') {
+  if (ALLOWED_ROLES.has(role)) return role;
+  return fallback;
+}
+
 // ─── Password Hashing ────────────────────────────────────────────────────
 
 /**

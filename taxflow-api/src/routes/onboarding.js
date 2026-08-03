@@ -5,12 +5,15 @@
  */
 
 import express from 'express';
+import crypto from 'crypto';
 import onboardingService from '../services/onboardingService.js';
 import projectService from '../services/projectService.js';
 import { requireAuth, requireRole } from '../middleware/authMiddleware.js';
 import { getRepositories } from '../db/repositories/index.js';
 import boxService from '../services/boxService.js';
-import { extractOriginalEmail, extractRole } from '../utils/authUtils.js';
+import vaultDiscoveryService from '../services/vaultDiscoveryService.js';
+import { isBoxFirstSchema } from '../db/schemaMode.js';
+import { extractOriginalEmail, extractRole, hashPassword } from '../utils/authUtils.js';
 import { logger } from '../utils/logger.js';
 
 const router = express.Router();
@@ -90,12 +93,13 @@ router.post('/', requireAuth, requireRole('employee', 'superadmin'), async (req,
             if (boxUser) {
               const extId = boxUser.externalAppUserId || '';
               const role = extractRole(extId);
+              const placeholderHash = await hashPassword(crypto.randomBytes(32).toString('hex'));
               empUser = await repos.userRepo.create({
                 box_user_id: boxUser.id,
                 email: normalizedEmail,
                 name: boxUser.name,
                 role,
-                password_hash: extId,
+                password_hash: placeholderHash,
               });
               logger.info('Auto-synced employee to local DB', { email: normalizedEmail, userId: empUser.id });
             } else {
@@ -174,7 +178,7 @@ router.post('/', requireAuth, requireRole('employee', 'superadmin'), async (req,
       throw new Error(`Client onboarding succeeded in Box but failed to register locally: ${regErr.message}`);
     }
 
-    // Persist vault manifest in client_vaults table
+    // Write-through cache: persist vault manifest locally; Box remains source of truth
     if (registeredClient && result.folders) {
       let repos;
       try {
@@ -206,57 +210,26 @@ router.post('/', requireAuth, requireRole('employee', 'superadmin'), async (req,
             await repos.clientRepo.update(registeredClient.id, {
               box_folder_id: result.folders.root,
             });
+          } else if (repos.userRepo && isBoxFirstSchema()) {
+            await repos.userRepo.updateProfile(registeredClient.id, {
+              box_folder_id: result.folders.root,
+            });
           }
+
+          await vaultDiscoveryService.invalidate(registeredClient.id);
         } catch (vaultErr) {
           logger.error('Vault persistence failed during onboarding', { error: vaultErr.message });
           throw vaultErr;
         }
-      }
-    }
-
-    // Grant default resource_permissions so the client can access their own vault folders
-    if (registeredClient && result.folders) {
-      try {
-        const repos = getRepositories();
-        if (repos) {
-          const { randomUUID } = await import('crypto');
-          const db = repos.clientRepo?.db || (await import('../db/db.js')).initDatabase();
-          const resolvedDb = typeof db === 'function' ? await db() : db;
-          const now = new Date().toISOString();
-          const clientId = registeredClient.id;
-
-          const folderPermissions = [
-            { id: result.folders.uploads, name: 'Uploads', level: 'writer' },
-            { id: result.folders.tax, name: 'Tax', level: 'viewer' },
-            { id: result.folders.signedDocuments, name: 'Signed Documents', level: 'viewer' },
-            { id: result.folders.supportingDocs, name: 'Supporting Docs', level: 'viewer' },
-            { id: result.folders.root, name: 'Root', level: 'viewer' },
-          ].filter(f => f.id);
-
-          for (const folder of folderPermissions) {
-            try {
-              await resolvedDb('resource_permissions').insert({
-                id: randomUUID(),
-                client_id: clientId,
-                resource_id: folder.id,
-                resource_type: 'folder',
-                access_level: folder.level,
-                resource_name: folder.name,
-                granted_by: 'system',
-                is_cascaded: '0',
-                created_at: now,
-                updated_at: now,
-              });
-            } catch (permErr) {
-              // Ignore duplicate key errors (idempotent)
-              if (!permErr.message?.includes('UNIQUE constraint')) {
-                logger.warn('Permission grant failed for folder', { folder: folder.name, error: permErr.message });
-              }
-            }
-          }
+      } else if (repos?.userRepo && isBoxFirstSchema() && registeredClient && result.folders) {
+        try {
+          await repos.userRepo.updateProfile(registeredClient.id, {
+            box_folder_id: result.folders.root,
+          });
+          await vaultDiscoveryService.invalidate(registeredClient.id);
+        } catch (vaultErr) {
+          logger.error('Client profile update failed during onboarding', { error: vaultErr.message });
         }
-      } catch (permErr) {
-        logger.warn('Resource permissions setup failed (non-fatal)', { error: permErr.message });
       }
     }
 

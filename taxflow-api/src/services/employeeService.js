@@ -10,6 +10,7 @@
 import boxService from './boxService.js';
 import { buildExternalId, isEmailRegistered, extractOriginalEmail, extractRole, extractDbUserId, isLegacyExternalId } from '../utils/authUtils.js';
 import crypto from 'crypto';
+import { logger } from '../utils/logger.js';
 
 export class EmployeeService {
   constructor() {
@@ -96,7 +97,7 @@ export class EmployeeService {
     const dbUserId = crypto.randomUUID();
 
     try {
-      console.log(`[Employee] Creating app user: ${name} (${email}), role: ${role}`);
+      logger.info(`[Employee] Creating app user: ${name} (${email}), role: ${role}`);
 
       const createBody = {
         name,
@@ -106,7 +107,7 @@ export class EmployeeService {
 
       const user = await client.users.createUser(createBody);
 
-      console.log(`[Employee] Created: ${user.id} ${user.name} ${user.login}`);
+      logger.info(`[Employee] Created: ${user.id} ${user.name} ${user.login}`);
 
       // Store employee in local DB with bcrypt hash
       if (this._userRepo) {
@@ -123,7 +124,7 @@ export class EmployeeService {
           });
         } catch (dbErr) {
           if (!dbErr.message?.includes('UNIQUE constraint')) {
-            console.error('[Employee] Failed to persist to local DB:', dbErr.message);
+            logger.error('[Employee] Failed to persist to local DB:', dbErr.message);
           }
         }
       }
@@ -139,7 +140,7 @@ export class EmployeeService {
     } catch (error) {
       if (error.statusCode === 409 || error.status === 409) {
         // User already exists — look them up
-        console.log(`[Employee] 409 conflict, looking up existing user: ${email}`);
+        logger.info(`[Employee] 409 conflict, looking up existing user: ${email}`);
         const existing = await client.users.getUsers({ filterTerm: email });
         const entries = existing.entries || [];
         const found = entries.find(

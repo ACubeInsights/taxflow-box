@@ -1,10 +1,23 @@
 import { useState, useEffect } from 'react'
 import { useSearchParams, useNavigate } from 'react-router-dom'
-import { motion } from 'framer-motion'
-import { Loader2, AlertCircle, CheckCircle, Lock, Eye, EyeOff } from 'lucide-react'
+import { Loader2, AlertCircle, CheckCircle } from 'lucide-react'
 import { inviteApi } from '../services/api'
 import { useAuth } from '../context/AuthContext'
-import AnimatedBackground from './AnimatedBackground'
+import FloatingLabel from './FloatingLabel'
+import { AuthSplit } from './LoginScreen'
+
+function AuthMessage({ title, message, icon, action }) {
+  return (
+    <div className="text-center">
+      <div className="mb-[var(--space-4)] flex justify-center">{icon}</div>
+      <h2 className="m-0 font-display text-lg font-semibold text-[var(--color-ink)]">{title}</h2>
+      <p className="m-0 mt-[var(--space-3)] text-sm leading-relaxed text-[var(--color-whisper)]">
+        {message}
+      </p>
+      {action}
+    </div>
+  )
+}
 
 export default function SignupPage() {
   const [searchParams] = useSearchParams()
@@ -12,23 +25,18 @@ export default function SignupPage() {
   const { user, login } = useAuth()
   const token = searchParams.get('token')
 
-  const [state, setState] = useState('loading') // loading | valid | expired | used | invalid | submitting | error
-  const [clientName, setClientName] = useState('')
+  const [state, setState] = useState('loading')
   const [clientEmail, setClientEmail] = useState('')
   const [password, setPassword] = useState('')
   const [confirmPassword, setConfirmPassword] = useState('')
   const [fullName, setFullName] = useState('')
   const [externalId, setExternalId] = useState('')
-  const [showPassword, setShowPassword] = useState(false)
-  const [validationError, setValidationError] = useState('')
   const [serverError, setServerError] = useState('')
 
-  // If already logged in, redirect
   useEffect(() => {
     if (user) navigate('/dashboard', { replace: true })
   }, [user, navigate])
 
-  // Validate token on mount
   useEffect(() => {
     if (!token) {
       setState('invalid')
@@ -38,7 +46,6 @@ export default function SignupPage() {
     inviteApi.validateToken(token)
       .then((result) => {
         if (result.valid) {
-          setClientName(result.clientName || '')
           setClientEmail(result.email || '')
           setState('valid')
         } else {
@@ -53,7 +60,7 @@ export default function SignupPage() {
       })
   }, [token])
 
-  const passwordValid = password.length >= 6
+  const passwordValid = password.length >= 12 && /[A-Za-z]/.test(password) && /[0-9]/.test(password)
   const passwordsMatch = password === confirmPassword
   const nameValid = fullName.trim().length > 0
   const emailValid = clientEmail.trim().length > 0 && clientEmail.includes('@')
@@ -63,224 +70,171 @@ export default function SignupPage() {
     e.preventDefault()
     if (!canSubmit) return
 
-    setValidationError('')
     setServerError('')
     setState('submitting')
 
     try {
-      // Complete the invite signup — this registers the account server-side
-      await inviteApi.completeSignup(token, password, fullName.trim(), externalId.trim(), clientEmail.trim())
-
-      // Log in via AuthContext so all session state (timers, token, vault) is properly initialized
+      await inviteApi.completeSignup(
+        token,
+        password,
+        fullName.trim(),
+        externalId.trim(),
+        clientEmail.trim(),
+      )
       await login(clientEmail.trim(), password)
-
       navigate('/dashboard', { replace: true })
     } catch (err) {
-      const msg = err.message || 'Signup failed'
+      const msg = err.message || 'Could not create account'
       if (msg.includes('expired') || msg.includes('410')) setState('expired')
       else if (msg.includes('already exists')) {
-        setServerError('An account with this email already exists. Please log in instead.')
+        setServerError('An account with this email already exists. Sign in instead.')
         setState('valid')
-      }
-      else if (msg.includes('already') || msg.includes('409')) setState('used')
+      } else if (msg.includes('already') || msg.includes('409')) setState('used')
       else {
         setServerError(msg)
-        setState('valid') // Allow retry
+        setState('valid')
       }
     }
   }
 
-  // Error states
+  const shell = (body) => (
+    <AuthSplit
+      railTitle="Finish your vault invite"
+      railBody="Your preparer invited you to upload tax documents into a secure Box vault."
+      steps={['Open invite', 'Create password', 'Upload documents']}
+    >
+      {body}
+    </AuthSplit>
+  )
+
   if (state === 'loading') {
-    return (
-      <PageWrapper>
-        <div className="flex flex-col items-center gap-4">
-          <Loader2 size={32} className="animate-spin text-[var(--color-primary)]" />
-          <p className="text-[var(--color-on-surface-variant)] text-sm">Validating your invitation...</p>
-        </div>
-      </PageWrapper>
+    return shell(
+      <div className="flex flex-col items-center gap-[var(--space-4)] py-[var(--space-8)]">
+        <Loader2 size={28} className="animate-spin text-[var(--color-signal)]" aria-hidden />
+        <p className="m-0 text-sm text-[var(--color-whisper)]">Checking your invite…</p>
+      </div>,
     )
   }
 
   if (state === 'expired') {
-    return (
-      <PageWrapper>
-        <ErrorCard
-          title="Invitation Expired"
-          message="This invitation link has expired. Please contact your tax preparer for a new invitation."
-          icon={<AlertCircle size={32} className="text-[var(--color-warning)]" />}
-        />
-      </PageWrapper>
+    return shell(
+      <AuthMessage
+        title="Invite expired"
+        message="Ask your tax preparer to send a new invite link."
+        icon={<AlertCircle size={32} className="text-[var(--color-hold)]" aria-hidden />}
+      />,
     )
   }
 
   if (state === 'used') {
-    return (
-      <PageWrapper>
-        <ErrorCard
-          title="Account Already Created"
-          message="This invitation has already been used. Your account is ready — head to the login page."
-          icon={<CheckCircle size={32} className="text-[var(--color-success)]" />}
-          action={<a href="/" className="mt-4 inline-flex items-center gap-2 px-6 py-2.5 rounded-xl text-[13px] font-semibold no-underline bg-[var(--color-primary)]/15 border border-[var(--color-primary)]/25 text-[var(--color-primary)]">Go to Login</a>}
-        />
-      </PageWrapper>
+    return shell(
+      <AuthMessage
+        title="Account already created"
+        message="This invite was already used. Sign in with the password you set."
+        icon={<CheckCircle size={32} className="text-[var(--color-commit)]" aria-hidden />}
+        action={
+          <a href="/" className="btn-signal mt-[var(--space-6)] inline-flex no-underline">
+            Sign in
+          </a>
+        }
+      />,
     )
   }
 
   if (state === 'invalid') {
-    return (
-      <PageWrapper>
-        <ErrorCard
-          title="Invalid Link"
-          message="This invitation link is invalid or malformed. Please check the link in your email or contact your tax preparer."
-          icon={<AlertCircle size={32} className="text-[var(--color-error)]" />}
-        />
-      </PageWrapper>
+    return shell(
+      <AuthMessage
+        title="Invalid invite link"
+        message="Check the link in your email, or ask your preparer for a new invite."
+        icon={<AlertCircle size={32} className="text-[var(--color-flag)]" aria-hidden />}
+      />,
     )
   }
 
-  // Valid state — show signup form
-  return (
-    <PageWrapper>
-      <motion.div
-        initial={{ opacity: 0, y: 20 }}
-        animate={{ opacity: 1, y: 0 }}
-        className="w-full max-w-[420px] rounded-2xl border border-[var(--color-outline-variant)] overflow-hidden"
-        style={{ background: 'var(--color-surface-container)', boxShadow: '0 40px 80px rgba(0,0,0,0.5)' }}
-      >
-        <div className="px-8 pt-8 pb-4 text-center">
-          <div className="w-14 h-14 mx-auto mb-4 rounded-2xl flex items-center justify-center bg-[var(--color-primary)]/15 border border-[var(--color-primary)]/30">
-            <Lock size={24} className="text-[var(--color-primary)]" />
+  return shell(
+    <form onSubmit={handleSubmit} className="flex flex-col gap-[var(--space-4)]">
+      <div>
+        <h2 className="m-0 font-display text-xl font-bold text-[var(--color-ink)]">
+          Create your account
+        </h2>
+        <p className="m-0 mt-[var(--space-2)] text-sm text-[var(--color-whisper)]">
+          You will land in your document vault after this step.
+        </p>
+      </div>
+
+      <FloatingLabel
+        label="Email"
+        type="email"
+        value={clientEmail}
+        onChange={(e) => setClientEmail(e.target.value)}
+        autoComplete="email"
+      />
+      <FloatingLabel
+        label="Full name"
+        type="text"
+        value={fullName}
+        onChange={(e) => setFullName(e.target.value)}
+        autoComplete="name"
+      />
+      <FloatingLabel
+        label="Company or external ID (optional)"
+        type="text"
+        value={externalId}
+        onChange={(e) => setExternalId(e.target.value)}
+      />
+      <FloatingLabel
+        label="Password (min 6 characters)"
+        type="password"
+        value={password}
+        onChange={(e) => setPassword(e.target.value)}
+        autoComplete="new-password"
+      />
+      <FloatingLabel
+        label="Confirm password"
+        type="password"
+        value={confirmPassword}
+        onChange={(e) => setConfirmPassword(e.target.value)}
+        autoComplete="new-password"
+      />
+
+      {password.length > 0 && !passwordValid && (
+        <p className="m-0 text-sm text-[var(--color-hold)]">Password must be at least 12 characters and include a letter and a number</p>
+      )}
+      {confirmPassword.length > 0 && !passwordsMatch && (
+        <p className="m-0 text-sm text-[var(--color-flag)]" role="alert">Passwords do not match</p>
+      )}
+
+      {serverError && (
+        <div
+          className="flex flex-col gap-[var(--space-2)] rounded-[var(--radius-control)] border border-[var(--color-flag)] bg-[var(--color-flag-muted)] p-[var(--space-3)]"
+          role="alert"
+        >
+          <div className="flex items-start gap-[var(--space-2)]">
+            <AlertCircle size={14} className="mt-0.5 shrink-0 text-[var(--color-flag)]" aria-hidden />
+            <p className="m-0 text-sm text-[var(--color-flag)]">{serverError}</p>
           </div>
-          <h1 className="m-0 text-[22px] font-bold text-[var(--color-on-surface)]">Welcome to TaxFlow Pro</h1>
-          <p className="m-0 mt-2 text-[13px] text-[var(--color-on-surface-variant)]">
-            Complete your account setup to get started.
-          </p>
+          {serverError.includes('already exists') && (
+            <a href="/" className="btn-ghost self-start no-underline">
+              Sign in
+            </a>
+          )}
         </div>
+      )}
 
-        <form onSubmit={handleSubmit} className="px-8 pb-8 flex flex-col gap-4">
-          {/* Email (prefilled from invite, editable) */}
-          <input
-            type="email"
-            value={clientEmail}
-            onChange={(e) => setClientEmail(e.target.value)}
-            placeholder="Email address"
-            className="w-full px-4 py-3.5 rounded-xl border border-[var(--color-outline-variant)] bg-[var(--color-surface-high)] text-[14px] text-[var(--color-on-surface)] placeholder:text-[var(--color-on-surface-variant)]/50 outline-none focus:border-[var(--color-primary)] transition-colors"
-          />
-
-          {/* Full Name */}
-          <input
-            type="text"
-            value={fullName}
-            onChange={(e) => setFullName(e.target.value)}
-            placeholder="Your full name"
-            className="w-full px-4 py-3.5 rounded-xl border border-[var(--color-outline-variant)] bg-[var(--color-surface-high)] text-[14px] text-[var(--color-on-surface)] placeholder:text-[var(--color-on-surface-variant)]/50 outline-none focus:border-[var(--color-primary)] transition-colors"
-          />
-
-          {/* External ID (optional) */}
-          <input
-            type="text"
-            value={externalId}
-            onChange={(e) => setExternalId(e.target.value)}
-            placeholder="Company / External ID (optional)"
-            className="w-full px-4 py-3.5 rounded-xl border border-[var(--color-outline-variant)] bg-[var(--color-surface-high)] text-[14px] text-[var(--color-on-surface)] placeholder:text-[var(--color-on-surface-variant)]/50 outline-none focus:border-[var(--color-primary)] transition-colors"
-          />
-
-          {/* Password field */}
-          <div className="relative">
-            <input
-              type={showPassword ? 'text' : 'password'}
-              value={password}
-              onChange={(e) => { setPassword(e.target.value); setValidationError('') }}
-              placeholder="Password (min 6 characters)"
-              className="w-full px-4 py-3.5 rounded-xl border border-[var(--color-outline-variant)] bg-[var(--color-surface-high)] text-[14px] text-[var(--color-on-surface)] placeholder:text-[var(--color-on-surface-variant)]/50 outline-none focus:border-[var(--color-primary)] transition-colors pr-10"
-            />
-            <button
-              type="button"
-              onClick={() => setShowPassword(!showPassword)}
-              className="absolute right-3 top-1/2 -translate-y-1/2 bg-transparent border-none cursor-pointer text-[var(--color-on-surface-variant)]"
-            >
-              {showPassword ? <EyeOff size={16} /> : <Eye size={16} />}
-            </button>
-          </div>
-
-          {/* Confirm password */}
-          <input
-            type={showPassword ? 'text' : 'password'}
-            value={confirmPassword}
-            onChange={(e) => { setConfirmPassword(e.target.value); setValidationError('') }}
-            placeholder="Confirm password"
-            className="w-full px-4 py-3.5 rounded-xl border border-[var(--color-outline-variant)] bg-[var(--color-surface-high)] text-[14px] text-[var(--color-on-surface)] placeholder:text-[var(--color-on-surface-variant)]/50 outline-none focus:border-[var(--color-primary)] transition-colors"
-          />
-
-          {password.length > 0 && password.length < 6 && (
-            <p className="m-0 text-[11px] text-[var(--color-warning)]">Password must be at least 6 characters</p>
-          )}
-          {confirmPassword.length > 0 && !passwordsMatch && (
-            <p className="m-0 text-[11px] text-[var(--color-error)]">Passwords do not match</p>
-          )}
-
-          {serverError && (
-            <div className="flex flex-col gap-2 p-3 rounded-xl border border-[var(--color-error)]/30 bg-[var(--color-error-muted)]">
-              <div className="flex items-start gap-2">
-                <AlertCircle size={14} className="text-[var(--color-error)] shrink-0 mt-0.5" />
-                <p className="m-0 text-[12px] text-[var(--color-error)]">{serverError}</p>
-              </div>
-              {serverError.includes('already exists') && (
-                <a
-                  href="/"
-                  className="self-start ml-6 inline-flex items-center gap-1 px-4 py-1.5 rounded-lg text-[12px] font-semibold no-underline bg-[var(--color-primary-muted)] border border-[var(--color-primary)]/25 text-[var(--color-primary)] hover:bg-[var(--color-primary)]/20 transition-colors"
-                >
-                  Go to Login
-                </a>
-              )}
-            </div>
-          )}
-
-          <button
-            type="submit"
-            disabled={!canSubmit || state === 'submitting'}
-            className="w-full py-3.5 rounded-xl text-[14px] font-bold transition-all cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed border-none"
-            style={{
-              background: canSubmit ? 'linear-gradient(180deg, var(--color-primary), var(--color-primary-container))' : 'var(--color-surface-highest)',
-              color: canSubmit ? 'var(--color-surface-lowest)' : 'var(--color-on-surface-variant)',
-            }}
-          >
-            {state === 'submitting' ? (
-              <span className="flex items-center justify-center gap-2">
-                <Loader2 size={16} className="animate-spin" /> Setting up your account...
-              </span>
-            ) : (
-              'Create Account'
-            )}
-          </button>
-        </form>
-      </motion.div>
-    </PageWrapper>
-  )
-}
-
-function PageWrapper({ children }) {
-  return (
-    <div className="min-h-screen flex items-center justify-center p-4 relative" style={{ background: 'var(--color-surface-lowest)' }}>
-      <AnimatedBackground />
-      <div className="relative z-10">{children}</div>
-    </div>
-  )
-}
-
-function ErrorCard({ title, message, icon, action }) {
-  return (
-    <motion.div
-      initial={{ opacity: 0, scale: 0.95 }}
-      animate={{ opacity: 1, scale: 1 }}
-      className="w-full max-w-[400px] rounded-2xl border border-[var(--color-outline-variant)] p-8 text-center"
-      style={{ background: 'var(--color-surface-container)', boxShadow: '0 40px 80px rgba(0,0,0,0.5)' }}
-    >
-      <div className="mb-4">{icon}</div>
-      <h2 className="m-0 text-[18px] font-bold text-[var(--color-on-surface)]">{title}</h2>
-      <p className="m-0 mt-3 text-[13px] text-[var(--color-on-surface-variant)] leading-relaxed">{message}</p>
-      {action}
-    </motion.div>
+      <button
+        type="submit"
+        disabled={!canSubmit || state === 'submitting'}
+        className="btn-signal w-full"
+      >
+        {state === 'submitting' ? (
+          <>
+            <Loader2 size={16} className="animate-spin" aria-hidden />
+            Creating account…
+          </>
+        ) : (
+          'Create account'
+        )}
+      </button>
+    </form>,
   )
 }

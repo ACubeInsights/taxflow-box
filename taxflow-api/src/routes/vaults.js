@@ -2,6 +2,7 @@ import express from 'express';
 import boxService from '../services/boxService.js';
 import permissionService from '../services/permissionService.js';
 import { requireAuth, requireRole, validateFolderOwnership, permissionCheck } from '../middleware/authMiddleware.js';
+import { isPlaceholderBoxFileId, isRealBoxFileId } from '../utils/boxIds.js';
 
 const router = express.Router();
 
@@ -18,10 +19,9 @@ router.get('/:folderId/files', requireAuth, requireRole('client', 'employee', 's
     // For client role: use folder-level access as baseline, override with explicit file permissions
     if (req.user.role === 'client' && req.clientId) {
       const fileIds = files.map(f => f.id);
-      const accessMap = await permissionService.getAccessibleResources(req.clientId, fileIds);
+      const accessMap = await permissionService.getAccessibleResources(req.clientId, fileIds, folderId);
 
-      // Get the folder's own access level as the inherited baseline
-      const folderPerm = await permissionService.getPermission(req.clientId, folderId);
+      const folderPerm = await permissionService.getPermission(req.clientId, folderId, 'folder');
       const folderLevel = folderPerm?.accessLevel || 'viewer'; // Default to viewer if folder is accessible
 
       const enriched = files.map(f => ({
@@ -65,6 +65,16 @@ router.get('/files/:fileId/download', requireAuth, requireRole('client', 'employ
 router.get('/files/:fileId/embed', requireAuth, requireRole('client', 'employee', 'superadmin'), permissionCheck('viewer'), async (req, res, next) => {
   try {
     const { fileId } = req.params;
+
+    if (isPlaceholderBoxFileId(fileId)) {
+      return res.status(422).json({
+        error: 'This document is demo seed data and is not linked to a Box file yet. Run: node scripts/sync-seed-files-to-box.js',
+      });
+    }
+    if (!isRealBoxFileId(fileId)) {
+      return res.status(422).json({ error: 'Invalid Box file ID' });
+    }
+
     const client = boxService.getBoxClient();
 
     const file = await client.files.getFileById(fileId, {
@@ -78,8 +88,9 @@ router.get('/files/:fileId/embed', requireAuth, requireRole('client', 'employee'
 
     res.json({ embedUrl, fileName: file.name, extension: file.extension });
   } catch (error) {
-    if (error.statusCode === 404) {
-      return res.status(404).json({ error: 'File not found' });
+    const status = error.statusCode || error.status || error.responseInfo?.statusCode;
+    if (status === 404 || String(error.message || '').includes('404')) {
+      return res.status(404).json({ error: 'File not found in Box' });
     }
     next(error);
   }
@@ -205,16 +216,23 @@ router.put('/folders/:folderId', requireAuth, requireRole('employee', 'superadmi
 
 /**
  * DELETE /api/vaults/folders/:folderId
- * Delete a folder (recursively deletes contents).
- * Auth: requireAuth → requireRole('employee', 'superadmin')
+ * Recursively delete a folder. Superadmin only + explicit confirmation header.
+ * Auth: requireAuth → requireRole('superadmin')
  */
-router.delete('/folders/:folderId', requireAuth, requireRole('employee', 'superadmin'), async (req, res, next) => {
+router.delete('/folders/:folderId', requireAuth, requireRole('superadmin'), async (req, res, next) => {
   try {
     const { folderId } = req.params;
 
-    // Safety: prevent deletion of the root folder (Box root = '0')
     if (folderId === '0') {
       return res.status(400).json({ error: 'Cannot delete root folder' });
+    }
+
+    // Require intentional confirmation to reduce accidental mass deletion
+    if (req.get('X-Confirm-Delete') !== 'true') {
+      return res.status(400).json({
+        error: 'Recursive folder delete requires header X-Confirm-Delete: true',
+        code: 'CONFIRMATION_REQUIRED',
+      });
     }
 
     const client = boxService.getBoxClient();

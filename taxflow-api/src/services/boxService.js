@@ -1,6 +1,11 @@
 import { BoxWrapperService } from '../../../box-wrapper-service/dist/index.js';
 import { config } from '../config.js';
 import { logger } from '../utils/logger.js';
+import {
+  findCollaborationForUser,
+  isAlreadyCollaboratorError,
+  isBoxNotFoundError,
+} from '../utils/boxCollabUtils.js';
 
 export class BoxService {
   constructor() {
@@ -299,6 +304,87 @@ export class BoxService {
   }
 
   /**
+   * Lists collaborations on a Box file or folder.
+   * @param {string} resourceId
+   * @param {'file'|'folder'} resourceType
+   * @returns {Promise<Array>}
+   */
+  async getResourceCollaborations(resourceId, resourceType = 'folder') {
+    this.ensureInitialized();
+    const client = this.getBoxClient();
+    try {
+      const result = resourceType === 'file'
+        ? await client.listCollaborations.getFileCollaborations(resourceId)
+        : await client.listCollaborations.getFolderCollaborations(resourceId);
+      return result.entries || [];
+    } catch (error) {
+      if (isBoxNotFoundError(error)) return [];
+      throw error;
+    }
+  }
+
+  /**
+   * Creates or updates a collaboration for a Box App User by ID.
+   */
+  async upsertUserCollaboration(resourceId, resourceType, boxUserId, role) {
+    this.ensureInitialized();
+    const client = this.getBoxClient();
+    const collabs = await this.getResourceCollaborations(resourceId, resourceType);
+    let existing = findCollaborationForUser(collabs, boxUserId);
+
+    if (existing) {
+      if (existing.role !== role) {
+        await client.userCollaborations.updateCollaborationById(existing.id, {
+          requestBody: { role },
+        });
+      }
+      return existing.id;
+    }
+
+    try {
+      const result = await client.userCollaborations.createCollaboration({
+        item: { type: resourceType, id: resourceId },
+        accessibleBy: { type: 'user', id: String(boxUserId) },
+        role,
+      });
+      return result.id || null;
+    } catch (error) {
+      // Box Gen SDK returns 400 user_already_collaborator when list miss (e.g. camelCase id mismatch historically)
+      if (!isAlreadyCollaboratorError(error)) throw error;
+
+      const refreshed = await this.getResourceCollaborations(resourceId, resourceType);
+      existing = findCollaborationForUser(refreshed, boxUserId);
+      if (!existing) throw error;
+
+      if (existing.role !== role) {
+        await client.userCollaborations.updateCollaborationById(existing.id, {
+          requestBody: { role },
+        });
+      }
+      return existing.id;
+    }
+  }
+
+  /**
+   * Removes a Box App User collaboration from a file or folder.
+   */
+  async removeUserCollaboration(resourceId, resourceType, boxUserId) {
+    this.ensureInitialized();
+    const client = this.getBoxClient();
+    const collabs = await this.getResourceCollaborations(resourceId, resourceType);
+    const existing = findCollaborationForUser(collabs, boxUserId);
+    if (!existing) return false;
+
+    try {
+      await client.userCollaborations.deleteCollaborationById(existing.id);
+      return true;
+    } catch (error) {
+      if (isBoxNotFoundError(error)) return false;
+      throw error;
+    }
+  }
+
+  /**
    * Lightweight health check — verifies Box API connectivity.
    * Caches result for 60 seconds to avoid rate limit consumption.
    * @returns {Promise<{ connected: boolean, tier: string, enterpriseId: string, serviceAccount?: string, error?: string }>}
@@ -311,7 +397,7 @@ export class BoxService {
     try {
       this.ensureInitialized();
       const client = this.getBoxClient();
-      const me = await client.users.getCurrentUser();
+      const me = await client.users.getUserMe();
       const result = {
         connected: true,
         tier: this.tier,

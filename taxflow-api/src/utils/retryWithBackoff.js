@@ -5,7 +5,7 @@
  * Wraps an async function so that transient failures are retried with
  * exponentially increasing delays (`baseDelayMs * 2^(attempt-1)`).
  * Replaces duplicate retry loops formerly scattered across
- * notificationService, uploadService, and webhookService.
+ * Used by notificationService and webhookService.
  *
  * Public API:
  * - retryWithBackoff(fn, options?) → Promise<T>

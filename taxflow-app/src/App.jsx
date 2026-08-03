@@ -20,7 +20,7 @@ function AppContent() {
     <div
       style={{
         opacity: transitioning ? 0 : 1,
-        transition: 'opacity 0.3s ease',
+        transition: 'opacity var(--duration-standard) var(--ease-standard)',
         minHeight: '100vh',
       }}
     >
@@ -31,7 +31,7 @@ function AppContent() {
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
-            transition={{ duration: 0.25 }}
+            transition={{ duration: 0.24, ease: [0.4, 0, 0.2, 1] }}
           >
             <LoginScreen />
           </motion.div>
@@ -41,7 +41,7 @@ function AppContent() {
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
-            transition={{ duration: 0.25 }}
+            transition={{ duration: 0.24, ease: [0.4, 0, 0.2, 1] }}
             style={{ minHeight: '100vh' }}
           >
             <AppShell />

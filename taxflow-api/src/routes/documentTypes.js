@@ -7,7 +7,11 @@
 import express from 'express';
 import documentTypeService from '../services/documentTypeService.js';
 
+import { requireAuth } from '../middleware/authMiddleware.js';
+
 const router = express.Router();
+
+router.use(requireAuth);
 
 /**
  * GET /api/document-types

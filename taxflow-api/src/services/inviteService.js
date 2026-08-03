@@ -6,6 +6,7 @@ import deepLinkTokenService from './deepLinkTokenService.js';
 import emailService from './emailService.js';
 import { config } from '../config.js';
 import { createHttpError } from '../utils/httpError.js';
+import { logger } from '../utils/logger.js';
 
 const INVITE_EXPIRY_HOURS = 72;
 const MAX_RESENDS_PER_DAY = 5;
@@ -60,22 +61,38 @@ class InviteService {
       { expiryHours: INVITE_EXPIRY_HOURS }
     );
 
-    // Send email (fire-and-forget — don't block response)
     const frontendUrl = config.frontendUrl || 'http://localhost:5173';
     const signupUrl = `${frontendUrl}/signup?token=${encodeURIComponent(token)}`;
 
-    this._sendInviteEmail(record.id, email, clientName, signupUrl).catch(() => {});
+    const emailResult = await this._sendInviteEmail(record.id, email, clientName, signupUrl);
 
-    return { id: record.id, status: 'pending_invite', email };
+    return {
+      id: record.id,
+      status: 'pending_invite',
+      email,
+      signupUrl,
+      emailSent: !!emailResult?.sent,
+      tokenExpiresAt,
+    };
   }
 
   /**
    * Resend invitation email with fresh token.
+   * @param {string} inviteId
+   * @param {{ requesterEmail?: string, requesterRole?: string }} [opts]
    */
-  async resendInvite(inviteId) {
+  async resendInvite(inviteId, opts = {}) {
     const record = await this.inviteRepo.findById(inviteId);
     if (!record) throw createHttpError('Invite not found', 404);
     if (record.status === 'accepted') throw createHttpError('Cannot resend — invite already accepted', 400);
+
+    if (
+      opts.requesterRole === 'employee' &&
+      opts.requesterEmail &&
+      String(record.employee_email || '').toLowerCase() !== String(opts.requesterEmail).toLowerCase()
+    ) {
+      throw createHttpError('Invite not found', 404);
+    }
 
     // Rate limit check
     const resendCount = await this.inviteRepo.getResendCountInWindow(inviteId);
@@ -95,9 +112,16 @@ class InviteService {
     const frontendUrl = config.frontendUrl || 'http://localhost:5173';
     const signupUrl = `${frontendUrl}/signup?token=${encodeURIComponent(token)}`;
 
-    this._sendInviteEmail(record.id, record.email, record.client_name, signupUrl).catch(() => {});
+    const emailResult = await this._sendInviteEmail(record.id, record.email, record.client_name, signupUrl);
 
-    return { id: record.id, status: 'pending_invite', email: record.email, tokenExpiresAt };
+    return {
+      id: record.id,
+      status: 'pending_invite',
+      email: record.email,
+      signupUrl,
+      emailSent: !!emailResult?.sent,
+      tokenExpiresAt,
+    };
   }
 
   /**
@@ -123,16 +147,18 @@ class InviteService {
   /** @private */
   async _sendInviteEmail(inviteId, email, clientName, signupUrl) {
     try {
-      await emailService.sendEmail(email, 'client_invite', {
+      const result = await emailService.sendEmail(email, 'client_invite', {
         clientName,
         message: `Hi ${clientName},\n\nYou've been invited to TaxFlow Pro — your secure tax document portal. Click the button below to set up your account and get started.`,
         deepLinkUrl: signupUrl,
       });
+      return result || { sent: false };
     } catch (err) {
-      console.error(`[InviteService] Email dispatch failed for invite ${inviteId}:`, err.message);
+      logger.error(`[InviteService] Email dispatch failed for invite ${inviteId}:`, err.message);
       try {
         await this.inviteRepo.setDeliveryFailure(inviteId, true);
       } catch { /* ignore */ }
+      return { sent: false, reason: err.message };
     }
   }
 }

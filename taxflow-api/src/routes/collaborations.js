@@ -9,7 +9,9 @@ import express from 'express';
 import { requireAuth, requireRole } from '../middleware/authMiddleware.js';
 import { initDatabase } from '../db/db.js';
 import boxService from '../services/boxService.js';
+import vaultDiscoveryService from '../services/vaultDiscoveryService.js';
 import { randomUUID } from 'crypto';
+import { logger } from '../utils/logger.js';
 
 const router = express.Router();
 
@@ -94,13 +96,13 @@ router.post('/clients/:clientId/collaborators', requireAuth, requireRole('supera
       return res.status(400).json({ error: 'Employee does not have a Box login email configured' });
     }
 
-    // Look up client's vault root folder
-    const vault = await db('client_vaults').where('client_id', clientId).first();
-    if (!vault) {
+    // Look up client's vault root folder (discovered from Box)
+    const vault = await vaultDiscoveryService.getVaultForClient(clientId);
+    if (!vault?.root) {
       return res.status(404).json({ error: 'Client vault not found' });
     }
 
-    const folderId = vault.root_folder_id;
+    const folderId = vault.root;
 
     // Check if collaboration already exists locally
     const existing = await db('box_collaborations')
@@ -204,7 +206,7 @@ router.delete('/clients/:clientId/collaborators/:employeeId', requireAuth, requi
       } catch (err) {
         // If Box says 404 (already gone), proceed with local cleanup
         if (err.statusCode !== 404) {
-          console.error('Box collaboration delete failed:', err.message);
+          logger.error('Box collaboration delete failed:', err.message);
         }
       }
     }
@@ -276,14 +278,11 @@ router.post('/employees/:id/sync-collaborations', requireAuth, requireRole('supe
       return res.json({ employeeId: id, totalClients: 0, succeeded: 0, alreadyExists: 0, failed: 0 });
     }
 
-    // Get vault folders for these clients
-    const vaults = await db('client_vaults').whereIn('client_id', clientIds).select('client_id', 'root_folder_id');
-    const vaultMap = Object.fromEntries(vaults.map(v => [v.client_id, v.root_folder_id]));
-
     const results = { totalClients: clientIds.length, succeeded: 0, alreadyExists: 0, failed: 0 };
 
     for (const clientId of clientIds) {
-      const folderId = vaultMap[clientId];
+      const vault = await vaultDiscoveryService.getVaultForClient(clientId);
+      const folderId = vault?.root;
       if (!folderId) { results.failed++; continue; }
 
       // Check if already exists
@@ -311,7 +310,7 @@ router.post('/employees/:id/sync-collaborations', requireAuth, requireRole('supe
 
         results.succeeded++;
       } catch (err) {
-        console.error(`Collaboration sync failed for client ${clientId}:`, err.message);
+        logger.error(`Collaboration sync failed for client ${clientId}:`, err.message);
         results.failed++;
       }
     }

@@ -1,47 +1,37 @@
 import { Link } from 'react-router-dom'
-import { motion } from 'framer-motion'
 import { ChevronRight } from 'lucide-react'
 
 /**
- * Breadcrumb — animated navigation trail.
- * segments: [{ label: string, path: string }]
- * Last segment is the current page (non-interactive).
+ * Breadcrumb — Client → Project → Document trail.
+ * Last segment is current page (non-link).
  */
 export default function Breadcrumb({ segments = [] }) {
   if (segments.length === 0) return null
 
   return (
-    <motion.nav
+    <nav
       aria-label="Breadcrumb"
-      initial={{ opacity: 0, y: -4 }}
-      animate={{ opacity: 1, y: 0 }}
-      transition={{ duration: 0.3, ease: [0.22, 1, 0.36, 1] }}
-      className="flex items-center gap-1 text-[12px] font-medium mb-4 flex-wrap"
+      className="flex items-center gap-[var(--space-1)] text-xs font-medium mb-[var(--space-4)] flex-wrap"
     >
       {segments.map((segment, index) => {
         const isLast = index === segments.length - 1
-
         return (
-          <span key={`${segment.path}-${index}`} className="flex items-center gap-1">
+          <span key={`${segment.path}-${index}`} className="flex items-center gap-[var(--space-1)]">
             {index > 0 && (
               <ChevronRight
                 size={12}
-                className="text-[var(--color-on-surface-variant)] shrink-0"
-                style={{ opacity: 0.35 }}
+                className="text-[var(--color-whisper)] shrink-0"
+                aria-hidden
               />
             )}
             {isLast ? (
-              <span
-                className="text-[var(--color-on-surface)] font-semibold"
-                style={{ opacity: 0.75 }}
-                aria-current="page"
-              >
+              <span className="text-[var(--color-ink)] font-medium" aria-current="page">
                 {segment.label}
               </span>
             ) : (
               <Link
                 to={segment.path}
-                className="text-[var(--color-on-surface-variant)] hover:text-[var(--color-primary)] transition-colors duration-150 no-underline"
+                className="text-[var(--color-whisper)] hover:text-[var(--color-ink)] no-underline"
               >
                 {segment.label}
               </Link>
@@ -49,6 +39,6 @@ export default function Breadcrumb({ segments = [] }) {
           </span>
         )
       })}
-    </motion.nav>
+    </nav>
   )
 }

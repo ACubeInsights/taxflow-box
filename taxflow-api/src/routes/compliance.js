@@ -6,8 +6,11 @@
 
 import express from 'express';
 import complianceService from '../services/complianceService.js';
+import { requireStaff } from '../middleware/authMiddleware.js';
 
 const router = express.Router();
+
+router.use(...requireStaff);
 
 /**
  * POST /api/compliance/retention/assign

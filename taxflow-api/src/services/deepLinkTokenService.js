@@ -16,6 +16,16 @@ import crypto from 'crypto';
 import { config } from '../config.js';
 import { createHttpError } from '../utils/httpError.js';
 
+function getDeepLinkSecret() {
+  if (config.deepLinkSecret) {
+    return config.deepLinkSecret;
+  }
+  if (config.nodeEnv === 'production') {
+    throw createHttpError('DEEP_LINK_SECRET is not configured', 500, 'CONFIG_ERROR');
+  }
+  return 'default-dev-secret-change-me';
+}
+
 export class DeepLinkTokenService {
   /**
    * Base64url encode a string (no padding).
@@ -35,7 +45,7 @@ export class DeepLinkTokenService {
    * @returns {string} Signed JWT token
    */
   generateDeepLinkToken(payload, options = {}) {
-    const secret = config.deepLinkSecret || 'default-dev-secret';
+    const secret = getDeepLinkSecret();
     const expiryHours = options.expiryHours || config.deepLinkExpiryHours || 72;
     const exp = Math.floor(Date.now() / 1000) + expiryHours * 3600;
 
@@ -70,7 +80,7 @@ export class DeepLinkTokenService {
    * @returns {{ fileId?: string, clientId?: string, action?: string, exp: number }}
    */
   verifyDeepLinkToken(token) {
-    const secret = config.deepLinkSecret || 'default-dev-secret';
+    const secret = getDeepLinkSecret();
     const parts = token.split('.');
 
     if (parts.length !== 3) {
@@ -109,9 +119,12 @@ export class DeepLinkTokenService {
       throw createHttpError('Invalid deep-link token payload', 401);
     }
 
-    // Check expiry (Req 27.3)
+    // Check expiry (Req 27.3) — exp is required
     const now = Math.floor(Date.now() / 1000);
-    if (payload.exp && payload.exp < now) {
+    if (!payload.exp || typeof payload.exp !== 'number') {
+      throw createHttpError('Deep-link token missing expiry', 401);
+    }
+    if (payload.exp < now) {
       throw createHttpError('Deep-link token has expired', 401);
     }
 

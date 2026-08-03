@@ -1,22 +1,49 @@
 /**
  * Comment routes — Document comments and employee search for @mentions.
- *
- * Requirements: 10.1, 10.2, 10.3, 10.5, 10.7, 10.8
  */
 
 import express from 'express';
 import commentService from '../services/commentService.js';
+import projectService from '../services/projectService.js';
+import { requireAuth, requireRole, resolveClientForUser } from '../middleware/authMiddleware.js';
 
 const router = express.Router();
 
+router.use(requireAuth);
+
+/**
+ * Clients may only access comments on document requests that belong to them.
+ * Staff bypass. Returns false if access denied.
+ */
+async function assertDocumentCommentAccess(req, documentId) {
+  if (['employee', 'superadmin'].includes(req.user.role)) {
+    return true;
+  }
+  if (req.user.role !== 'client') {
+    return false;
+  }
+  const client = await resolveClientForUser(req.user);
+  if (!client) return false;
+  const doc = await projectService.getDocument(documentId);
+  if (!doc) return false;
+  return doc.clientId === client.id;
+}
+
 /**
  * GET /api/documents/:documentId/comments
- * Returns comments for a document.
  */
 router.get('/documents/:documentId/comments', async (req, res, next) => {
   try {
     const { documentId } = req.params;
-    const comments = await commentService.getComments(documentId);
+    const allowed = await assertDocumentCommentAccess(req, documentId);
+    if (!allowed) {
+      return res.status(404).json({ error: 'Resource not found' });
+    }
+
+    const includeInternal = ['employee', 'superadmin'].includes(req.user.role);
+    const comments = await commentService.getComments(documentId, { includeInternal });
+
+
     res.json(comments);
   } catch (error) {
     next(error);
@@ -25,21 +52,34 @@ router.get('/documents/:documentId/comments', async (req, res, next) => {
 
 /**
  * POST /api/documents/:documentId/comments
- * Adds a comment. Validates type (review|internal) and text required.
  */
 router.post('/documents/:documentId/comments', async (req, res, next) => {
   try {
     const { documentId } = req.params;
-    const { type, authorId, authorName, text, mentions } = req.body;
+    const { type, text, mentions } = req.body;
+
+    const allowed = await assertDocumentCommentAccess(req, documentId);
+    if (!allowed) {
+      return res.status(404).json({ error: 'Resource not found' });
+    }
 
     if (!type || (type !== 'review' && type !== 'internal')) {
       return res.status(400).json({ error: 'Comment type must be "review" or "internal"' });
+    }
+    if (type === 'internal' && !['employee', 'superadmin'].includes(req.user.role)) {
+      return res.status(403).json({ error: 'Access denied' });
     }
     if (!text || !text.trim()) {
       return res.status(400).json({ error: 'Comment text is required' });
     }
 
-    const comment = await commentService.addComment(documentId, { type, authorId, authorName, text, mentions });
+    const comment = await commentService.addComment(documentId, {
+      type,
+      authorId: req.user.userId,
+      authorName: req.user.name || req.user.email,
+      text,
+      mentions,
+    });
     res.status(201).json(comment);
   } catch (error) {
     if (error.statusCode === 400) {
@@ -49,24 +89,22 @@ router.post('/documents/:documentId/comments', async (req, res, next) => {
   }
 });
 
-
 /**
  * PUT /api/comments/:commentId
- * Edits a comment. Validates text required and requesterId required.
  */
 router.put('/comments/:commentId', async (req, res, next) => {
   try {
     const { commentId } = req.params;
-    const { text, requesterId } = req.body;
+    const { text } = req.body;
 
     if (!text || !text.trim()) {
       return res.status(400).json({ error: 'Comment text is required' });
     }
-    if (!requesterId) {
-      return res.status(400).json({ error: 'Missing required field: requesterId' });
-    }
 
-    const comment = await commentService.editComment(commentId, { text, requesterId });
+    const comment = await commentService.editComment(commentId, {
+      text,
+      requesterId: req.user.userId,
+    });
     res.json(comment);
   } catch (error) {
     if (error.statusCode) {
@@ -78,9 +116,8 @@ router.put('/comments/:commentId', async (req, res, next) => {
 
 /**
  * GET /api/employees/search
- * Employee name search with ?prefix= query param for @mention autocomplete.
  */
-router.get('/employees/search', async (req, res, next) => {
+router.get('/employees/search', requireRole('employee', 'superadmin'), async (req, res, next) => {
   try {
     const { prefix } = req.query;
     const employees = commentService.searchEmployees(prefix || '');

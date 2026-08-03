@@ -1,21 +1,27 @@
-# Kiro IDE
+# Kiro / Cursor
 .kiro/
+.cursor/
 
 # IDE
 .idea/
+.vscode/
 
 # Secrets — NEVER commit these
-box_config.json
 *.pem
 *.key
 .env
 *.env.local
+*.env.production
+taxflow-app/.env
 
 # Dependencies
 node_modules/
 
-# Build artifacts
+# Build artifacts (keep Box wrapper dist committed for API relative imports)
 dist/
+!box-wrapper-service/dist/
+!box-wrapper-service/dist/**
+box_config.json
 
 # OS
 .DS_Store
@@ -23,6 +29,13 @@ Thumbs.db
 
 # Database
 *.db
+
+# Terraform
+infrastructure/terraform/terraform.tfvars
+infrastructure/terraform/.terraform/
+infrastructure/terraform/*.tfstate
+infrastructure/terraform/*.tfstate.*
+infrastructure/terraform/.terraform.lock.hcl
 
 # Upload temp files
 /tmp/taxflow-uploads/

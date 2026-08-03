@@ -1,9 +1,9 @@
 /**
  * Document workflow status enum and valid state machine transitions.
  *
- * NOTE: The backend `reviewService.js` is the authoritative source for status
- * transitions. This frontend copy must stay in sync with the backend definition.
- * Any discrepancy should be resolved in favor of the backend.
+ * NOTE: Box metadata (taxflow_document.status) is the authoritative source when a
+ * file exists on enterprise tier. This frontend copy must stay aligned with
+ * boxDocumentStatusService API_TO_BOX_STATUS mappings.
  *
  * @module statusTransitions
  * @see Requirements 5.5

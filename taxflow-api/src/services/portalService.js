@@ -13,6 +13,7 @@
  */
 
 import boxService from './boxService.js';
+import boxDocumentStatusService from './boxDocumentStatusService.js';
 import cacheLayer from './cacheLayer.js';
 import paginationHelper from './paginationHelper.js';
 import { config } from '../config.js';
@@ -28,19 +29,41 @@ export class PortalService {
     this._docRepo = null;
     this._clientRepo = null;
     this._projectRepo = null;
+    this._userRepo = null;
   }
 
   /**
    * Injects DB repositories for fallback when Box metadata queries are unavailable.
    */
-  setRepositories({ docRepo, clientRepo, projectRepo } = {}) {
+  setRepositories({ docRepo, clientRepo, projectRepo, userRepo } = {}) {
     if (docRepo) this._docRepo = docRepo;
     if (clientRepo) this._clientRepo = clientRepo;
     if (projectRepo) this._projectRepo = projectRepo;
+    if (userRepo) this._userRepo = userRepo;
   }
 
   /**
-   * Client progress via metadata query, with DB fallback. Cached 60s. (Reqs 19.1-19.5)
+   * Resolves clientId (UUID or external_id) to the canonical client UUID.
+   * @param {string} clientId
+   * @returns {Promise<string>}
+   */
+  async _resolveClientId(clientId) {
+    if (this._clientRepo) {
+      const clientRecord = await this._clientRepo.findById(clientId);
+      if (clientRecord) return clientRecord.id;
+      const byExternal = await this._clientRepo.findByExternalId(clientId);
+      return byExternal?.id || clientId;
+    }
+    if (this._userRepo) {
+      let user = await this._userRepo.findById(clientId);
+      if (!user) user = await this._userRepo.findByExternalId(clientId);
+      if (user?.role === 'client') return user.id;
+    }
+    return clientId;
+  }
+
+  /**
+   * Client progress via Box metadata + DB requests. Cached 60s. (Reqs 19.1-19.5)
    *
    * @param {string} clientId
    * @returns {Promise<{ clientId: string, documents: Array, statusCounts: object }>}
@@ -49,81 +72,74 @@ export class PortalService {
     const cacheKey = `portal:client:${clientId}`;
 
     return cacheLayer.getOrFetch(cacheKey, 60, async () => {
-      // Try Box metadata query first
+      const resolvedClientId = await this._resolveClientId(clientId);
       let documents = [];
-      try {
-        const client = boxService.getBoxClient();
-        const queryResult = await client.metadataQueries?.executeRead?.({
-          from: `${METADATA_SCOPE}_${METADATA_TEMPLATE}`,
-          query: 'client_id = :clientId',
-          queryParams: { clientId },
-          ancestorFolderId: config.boxRootFolderId,
-          fields: [
-            'id', 'name', 'metadata.enterprise.taxflow_document.document_type',
-            'metadata.enterprise.taxflow_document.status',
-            'metadata.enterprise.taxflow_document.priority',
-            'metadata.enterprise.taxflow_document.reviewed_at',
-            'metadata.enterprise.taxflow_document.review_comments',
-          ],
-        }) || { entries: [] };
 
-        const entries = queryResult.entries || [];
-        documents = entries.map((entry) => {
-          const meta = entry.metadata?.enterprise?.taxflow_document || {};
-          return {
-            fileId: entry.id,
-            fileName: entry.name,
-            name: entry.name,
-            documentType: meta.document_type || '',
-            status: meta.status || '',
-            priority: meta.priority || 'normal',
-            reviewedAt: meta.reviewed_at || undefined,
-            reviewComments: meta.status === 'revision_requested' ? (meta.review_comments || undefined) : undefined,
-          };
-        });
-      } catch (err) {
-        console.warn('Box metadata query failed for client progress, trying DB fallback:', err.message);
+      if (this._docRepo) {
+        const dbDocs = await this._docRepo.findByClientId(resolvedClientId);
+        const merged = await boxDocumentStatusService.buildClientDocumentList(
+          resolvedClientId,
+          (dbDocs || []).filter((d) => !d.is_draft),
+          (d) => ({
+            id: d.id,
+            fileId: d.box_file_id,
+            fileName: d.uploaded_file_name || d.name,
+            name: d.name,
+            description: d.description,
+            documentType: d.document_type || '',
+            status: d.status || 'Not_Requested',
+            priority: d.priority || 'Medium',
+            dueDate: d.due_date,
+            isDraft: d.is_draft,
+            clientId: d.client_id,
+            revisionComments: d.revision_comments,
+            uploadedFileName: d.uploaded_file_name,
+          })
+        );
+
+        documents = merged.map((doc) => ({
+          id: doc.id,
+          fileId: doc.fileId || null,
+          fileName: doc.uploadedFileName || doc.fileName || doc.name,
+          name: doc.name,
+          description: doc.description,
+          documentType: doc.documentType || '',
+          status: doc.status || 'Not_Requested',
+          priority: doc.priority || 'Medium',
+          dueDate: doc.dueDate,
+          reviewedAt: doc.boxMetadata?.reviewedAt || undefined,
+          reviewComments: doc.status === 'Revision_Requested'
+            ? (doc.revisionComments || undefined)
+            : undefined,
+          revisionComments: doc.revisionComments || undefined,
+          uploadedFileName: doc.uploadedFileName || undefined,
+          statusSource: doc.statusSource || 'db',
+        }));
+      } else {
+        const boxEntries = await boxDocumentStatusService.queryDocumentsByClientId(resolvedClientId);
+        documents = boxEntries.map((entry) => ({
+          id: entry.requestId || entry.fileId,
+          fileId: entry.fileId,
+          fileName: entry.fileName,
+          name: entry.fileName,
+          documentType: entry.documentType || '',
+          status: entry.apiStatus || 'Uploaded',
+          priority: entry.priority || 'normal',
+          reviewedAt: entry.reviewedAt || undefined,
+          reviewComments: entry.apiStatus === 'Revision_Requested'
+            ? (entry.reviewComments || undefined)
+            : undefined,
+          statusSource: 'box',
+        }));
       }
 
-      // DB fallback: if Box returned nothing, query local document_requests table
-      if (documents.length === 0 && this._docRepo && this._clientRepo) {
-        try {
-          // clientId could be a UUID (client.id) or an external_id
-          let dbClientId = clientId;
-          const clientRecord = await this._clientRepo.findById(clientId);
-          if (!clientRecord) {
-            const byExternal = await this._clientRepo.findByExternalId(clientId);
-            if (byExternal) dbClientId = byExternal.id;
-          }
-
-          const docs = await this._docRepo.findByClientId(dbClientId);
-          documents = (docs || [])
-            .filter(d => !d.is_draft)
-            .map(d => ({
-              fileId: d.box_file_id || d.id,
-              fileName: d.uploaded_file_name || d.name,
-              name: d.name,
-              description: d.description,
-              documentType: d.document_type || '',
-              status: d.status || 'Not_Requested',
-              priority: d.priority || 'Medium',
-              dueDate: d.due_date,
-              reviewedAt: undefined,
-              reviewComments: d.revision_comments || undefined,
-            }));
-        } catch (dbErr) {
-          console.warn('DB fallback for client progress failed:', dbErr.message);
-        }
-      }
-
-      // Group by status
       const statusCounts = {};
       for (const doc of documents) {
         const s = doc.status || 'unknown';
         statusCounts[s] = (statusCounts[s] || 0) + 1;
       }
 
-      return { clientId, documents, statusCounts };
+      return { clientId: resolvedClientId, documents, statusCounts };
     });
   }
 
@@ -137,69 +153,162 @@ export class PortalService {
     const cacheKey = `portal:employee:${employeeId}`;
 
     return cacheLayer.getOrFetch(cacheKey, 30, async () => {
-      const client = boxService.getBoxClient();
+      let pendingReviews = [];
+      let clientChecklists = [];
 
-      // Metadata query by reviewer + status (Req 20.1)
-      const queryResult = await client.metadataQueries?.executeRead?.({
-        from: `${METADATA_SCOPE}_${METADATA_TEMPLATE}`,
-        query: 'reviewer = :reviewer AND status = :status',
-        queryParams: { reviewer: employeeId, status: 'uploaded' },
-        ancestorFolderId: config.boxRootFolderId,
-        fields: [
-          'id', 'name', 'created_at',
-          'metadata.enterprise.taxflow_document.client_id',
-          'metadata.enterprise.taxflow_document.priority',
-          'metadata.enterprise.taxflow_document.status',
-        ],
-      }) || { entries: [] };
+      try {
+        const client = boxService.getBoxClient();
 
-      const entries = queryResult.entries || [];
-      const now = new Date();
+        // Metadata query by reviewer + status (Req 20.1)
+        const queryResult = await client.metadataQueries?.executeRead?.({
+          from: `${METADATA_SCOPE}_${METADATA_TEMPLATE}`,
+          query: 'reviewer = :reviewer AND status = :status',
+          queryParams: { reviewer: employeeId, status: 'uploaded' },
+          ancestorFolderId: config.boxRootFolderId,
+          fields: [
+            'id', 'name', 'created_at',
+            'metadata.enterprise.taxflow_document.client_id',
+            'metadata.enterprise.taxflow_document.priority',
+            'metadata.enterprise.taxflow_document.status',
+            'metadata.enterprise.taxflow_document.request_id',
+          ],
+        }) || { entries: [] };
 
-      // Sort by priority then upload date (Req 20.2)
-      const priorityOrder = { urgent: 0, high: 1, normal: 2, low: 3 };
+        const entries = queryResult.entries || [];
+        const now = new Date();
+        const priorityOrder = { urgent: 0, high: 1, normal: 2, low: 3 };
 
-      const pendingReviews = entries
-        .map((entry) => {
+        pendingReviews = entries
+          .map((entry) => {
+            const meta = entry.metadata?.enterprise?.taxflow_document || {};
+            const uploadedAt = entry.created_at || '';
+            return {
+              fileId: entry.id,
+              documentId: meta.request_id || null,
+              fileName: entry.name,
+              clientId: meta.client_id || '',
+              clientName: meta.client_id || '',
+              priority: meta.priority || 'normal',
+              status: 'Uploaded',
+              uploadedAt,
+              isOverdue: uploadedAt ? (now - new Date(uploadedAt)) > 7 * 24 * 60 * 60 * 1000 : false,
+              source: 'box',
+            };
+          })
+          .sort((a, b) => {
+            const pa = priorityOrder[a.priority] ?? 2;
+            const pb = priorityOrder[b.priority] ?? 2;
+            if (pa !== pb) return pa - pb;
+            return new Date(a.uploadedAt) - new Date(b.uploadedAt);
+          });
+
+        const clientMap = new Map();
+        for (const entry of entries) {
           const meta = entry.metadata?.enterprise?.taxflow_document || {};
-          const uploadedAt = entry.created_at || '';
-          return {
-            fileId: entry.id,
-            fileName: entry.name,
-            clientName: meta.client_id || '',
-            priority: meta.priority || 'normal',
-            uploadedAt,
-            isOverdue: uploadedAt ? (now - new Date(uploadedAt)) > 7 * 24 * 60 * 60 * 1000 : false,
-          };
-        })
-        .sort((a, b) => {
+          const cid = meta.client_id || 'unknown';
+          if (!clientMap.has(cid)) {
+            clientMap.set(cid, { clientId: cid, clientName: cid, totalRequired: 0, submitted: 0, approved: 0, pending: 0 });
+          }
+          const cl = clientMap.get(cid);
+          cl.totalRequired++;
+          cl.submitted++;
+          const status = meta.status || '';
+          if (status === 'approved') cl.approved++;
+          else cl.pending++;
+        }
+        clientChecklists = Array.from(clientMap.values());
+      } catch {
+        // Box metadata query unavailable — fall through to DB
+      }
+
+      // DB fallback / merge so API uploads without webhook metadata still surface
+      const dbPending = await this._getDbPendingReviews();
+      if (dbPending.length) {
+        const seen = new Set(
+          pendingReviews.map((r) => r.documentId || r.fileId).filter(Boolean)
+        );
+        for (const row of dbPending) {
+          const key = row.documentId || row.fileId;
+          if (key && seen.has(key)) continue;
+          if (key) seen.add(key);
+          pendingReviews.push(row);
+        }
+        pendingReviews.sort((a, b) => {
+          const priorityOrder = { urgent: 0, high: 1, normal: 2, low: 3 };
           const pa = priorityOrder[a.priority] ?? 2;
           const pb = priorityOrder[b.priority] ?? 2;
           if (pa !== pb) return pa - pb;
-          return new Date(a.uploadedAt) - new Date(b.uploadedAt);
+          return new Date(b.uploadedAt || 0) - new Date(a.uploadedAt || 0);
         });
-
-      // Build client checklists (Req 20.4)
-      const clientMap = new Map();
-      for (const entry of entries) {
-        const meta = entry.metadata?.enterprise?.taxflow_document || {};
-        const cid = meta.client_id || 'unknown';
-        if (!clientMap.has(cid)) {
-          clientMap.set(cid, { clientId: cid, clientName: cid, totalRequired: 0, submitted: 0, approved: 0, pending: 0 });
-        }
-        const cl = clientMap.get(cid);
-        cl.totalRequired++;
-        cl.submitted++;
-        const status = meta.status || '';
-        if (status === 'approved') cl.approved++;
-        else cl.pending++;
       }
 
-      return {
-        pendingReviews,
-        clientChecklists: Array.from(clientMap.values()),
-      };
+      if (!clientChecklists.length && dbPending.length) {
+        const clientMap = new Map();
+        for (const row of dbPending) {
+          const cid = row.clientId || 'unknown';
+          if (!clientMap.has(cid)) {
+            clientMap.set(cid, {
+              clientId: cid,
+              clientName: row.clientName || cid,
+              totalRequired: 0,
+              submitted: 0,
+              approved: 0,
+              pending: 0,
+            });
+          }
+          const cl = clientMap.get(cid);
+          cl.totalRequired++;
+          cl.submitted++;
+          cl.pending++;
+        }
+        clientChecklists = Array.from(clientMap.values());
+      }
+
+      return { pendingReviews, clientChecklists };
     });
+  }
+
+  /**
+   * Pending Uploaded/Under_Review document requests from DB (local/source-of-truth index).
+   * @returns {Promise<Array<object>>}
+   */
+  async _getDbPendingReviews() {
+    if (!this._docRepo?.findPendingReview) return [];
+
+    try {
+      const rows = await this._docRepo.findPendingReview({ limit: 50 });
+      const now = Date.now();
+      const results = [];
+
+      for (const row of rows) {
+        let clientName = row.client_id || '';
+        if (this._clientRepo && row.client_id) {
+          const client = await this._clientRepo.findById(row.client_id);
+          if (client?.name) clientName = client.name;
+        }
+
+        const uploadedAt = row.updated_at || row.created_at || '';
+        results.push({
+          fileId: row.box_file_id || null,
+          documentId: row.id,
+          fileName: row.uploaded_file_name || row.name,
+          clientId: row.client_id,
+          clientName,
+          projectId: row.project_id,
+          priority: String(row.priority || 'normal').toLowerCase() === 'medium'
+            ? 'normal'
+            : String(row.priority || 'normal').toLowerCase(),
+          status: row.status,
+          uploadedAt,
+          isOverdue: uploadedAt ? (now - new Date(uploadedAt).getTime()) > 7 * 24 * 60 * 60 * 1000 : false,
+          source: 'db',
+        });
+      }
+
+      return results;
+    } catch {
+      return [];
+    }
   }
 
   /**

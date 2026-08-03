@@ -44,18 +44,93 @@ export class NotificationService {
   }
 
   /**
+   * Notify a client via in-app (users.id) + email.
+   * @param {{ clientId?: string, email?: string, userId?: string }} recipient
+   * @param {string} eventType
+   * @param {object} context
+   */
+  async notifyClient(recipient, eventType, context = {}) {
+    let email = recipient.email || null;
+    let inAppId = recipient.userId || null;
+    const clientId = recipient.clientId || context.clientId || null;
+
+    if ((!email || !inAppId) && clientId) {
+      try {
+        const { getRepositories } = await import('../db/repositories/index.js');
+        const repos = getRepositories();
+        const client = repos.clientRepo
+          ? await repos.clientRepo.findById(clientId)
+          : null;
+        if (!email && client?.email) email = client.email;
+        if (!inAppId && email && repos.userRepo) {
+          const user = await repos.userRepo.findByEmail(email);
+          if (user?.id) inAppId = user.id;
+        }
+      } catch (err) {
+        logger.warn('notifyClient recipient resolve failed', { error: err.message });
+      }
+    }
+
+    const templateFn = EVENT_TEMPLATES[eventType];
+    const message = templateFn ? templateFn(context) : `Notification: ${eventType}`;
+
+    const deepLinkToken = this.generateDeepLinkToken({
+      fileId: context.fileId || '',
+      clientId: clientId || '',
+      action: 'view',
+    });
+    const deepLinkUrl = `${config.frontendUrl}/api/deep-link?token=${deepLinkToken}`;
+
+    if (inAppId) {
+      await this.storeInAppNotification({
+        id: this._store.nextId(),
+        recipientId: inAppId,
+        eventType,
+        message,
+        documentReference: {
+          fileId: context.fileId || '',
+          fileName: context.fileName || '',
+        },
+        deepLinkUrl,
+        read: false,
+        createdAt: new Date().toISOString(),
+      });
+    }
+
+    if (email) {
+      try {
+        await this.sendEmail(email, eventType, {
+          message,
+          deepLinkUrl,
+          fileName: context.fileName || '',
+        });
+      } catch (err) {
+        logger.error('Client email dispatch failed', { email, error: err.message });
+      }
+    }
+  }
+
+  /**
    * Translates a Box event into a business notification and dispatches
    * via email and in-app channels. (Reqs 28.1, 28.2)
    *
    * @param {string} eventType - Notification event type
-   * @param {string} recipientId - Recipient identifier
+   * @param {string} recipientId - Recipient identifier (email or user id)
    * @param {{ fileId: string, fileName: string, clientId: string, message?: string }} context
    */
-  async dispatch(eventType, recipientId, context) {
+  async dispatch(eventType, recipientId, context = {}) {
+    // Prefer client-aware path when clientId is present and recipient looks like email
+    if (context?.clientId && String(recipientId).includes('@')) {
+      return this.notifyClient(
+        { email: recipientId, clientId: context.clientId },
+        eventType,
+        context
+      );
+    }
+
     const templateFn = EVENT_TEMPLATES[eventType];
     const message = templateFn ? templateFn(context) : `Notification: ${eventType}`;
 
-    // Generate deep-link token (Req 27.1)
     const deepLinkToken = this.generateDeepLinkToken({
       fileId: context.fileId || '',
       clientId: context.clientId || '',
@@ -64,7 +139,7 @@ export class NotificationService {
 
     const deepLinkUrl = `${config.frontendUrl}/api/deep-link?token=${deepLinkToken}`;
 
-    const notification = {
+    await this.storeInAppNotification({
       id: this._store.nextId(),
       recipientId,
       eventType,
@@ -76,20 +151,18 @@ export class NotificationService {
       deepLinkUrl,
       read: false,
       createdAt: new Date().toISOString(),
-    };
+    });
 
-    // Store in-app notification (Req 28.6)
-    await this.storeInAppNotification(notification);
-
-    // Send email (Req 28.2, 28.3)
-    try {
-      await this.sendEmail(recipientId, eventType, {
-        message,
-        deepLinkUrl,
-        fileName: context.fileName || '',
-      });
-    } catch (err) {
-      logger.error('Email dispatch failed', { recipientId, error: err.message });
+    if (String(recipientId).includes('@')) {
+      try {
+        await this.sendEmail(recipientId, eventType, {
+          message,
+          deepLinkUrl,
+          fileName: context.fileName || '',
+        });
+      } catch (err) {
+        logger.error('Email dispatch failed', { recipientId, error: err.message });
+      }
     }
   }
 
@@ -156,6 +229,10 @@ export class NotificationService {
    */
   async markAsRead(notificationId) {
     return this._store.markAsRead(notificationId);
+  }
+
+  async markAsReadForRecipient(notificationId, recipientId) {
+    return this._store.markAsReadForRecipient(notificationId, recipientId);
   }
 
   /**

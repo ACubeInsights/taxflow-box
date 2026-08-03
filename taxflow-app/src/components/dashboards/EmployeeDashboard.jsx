@@ -1,19 +1,20 @@
 import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { motion } from 'framer-motion'
 import { Plus, UserPlus, Shield, Upload } from 'lucide-react'
 import { useAuth } from '../../context/AuthContext'
+import { SectionHeader } from '../ui'
 import ClientListPanel from '../ClientListPanel'
+import PendingReviewsPanel from '../PendingReviewsPanel'
 import DocumentRequestCreator from '../DocumentRequestCreator'
 import OnboardClientModal from '../OnboardClientModal'
 import PermissionManagerPanel from '../PermissionManagerPanel'
 import ShareFileModal from '../ShareFileModal'
 
-const ACTION_BUTTONS = [
-  { id: 'request', label: 'New Request', icon: Plus, primary: true },
-  { id: 'share', label: 'Share File', icon: Upload },
-  { id: 'onboard', label: 'Onboard Client', icon: UserPlus },
-  { id: 'permissions', label: 'Permissions', icon: Shield },
+const ACTIONS = [
+  { id: 'request', label: 'New document request', icon: Plus, signal: true },
+  { id: 'share', label: 'Share a file', icon: Upload, signal: false },
+  { id: 'onboard', label: 'Invite a client', icon: UserPlus, signal: false },
+  { id: 'permissions', label: 'Manage access', icon: Shield, signal: false },
 ]
 
 export default function EmployeeDashboard() {
@@ -33,59 +34,36 @@ export default function EmployeeDashboard() {
     }
   }
 
-  return (
-    <div className="max-w-[1100px] mx-auto">
-      {/* Header */}
-      <motion.div
-        className="mb-8"
-        initial={{ opacity: 0, y: 10 }}
-        animate={{ opacity: 1, y: 0 }}
-        transition={{ duration: 0.4, ease: [0.22, 1, 0.36, 1] }}
-      >
-        <h1 className="m-0 text-[24px] font-bold text-[var(--color-on-surface)] tracking-tight font-display">
-          {user?.name ? `Welcome back, ${user.name.split(' ')[0]}` : 'Dashboard'}
-        </h1>
-        <p className="m-0 mt-1 text-[13px] text-[var(--color-on-surface-variant)] font-medium">
-          Manage your clients, documents, and workflows
-        </p>
-      </motion.div>
+  const firstName = user?.name?.split(' ')[0]
 
-      {/* Action buttons */}
-      <motion.div
-        className="flex flex-wrap gap-2.5 mb-8"
-        initial={{ opacity: 0, y: 10 }}
-        animate={{ opacity: 1, y: 0 }}
-        transition={{ delay: 0.05, duration: 0.4, ease: [0.22, 1, 0.36, 1] }}
-      >
-        {ACTION_BUTTONS.map((btn) => {
+  return (
+    <div className="mx-auto w-full max-w-[var(--layout-content-max)]">
+      <SectionHeader
+        title={firstName ? `Welcome back, ${firstName}` : 'Your book'}
+        subtitle="Open a client to review documents, or start a new request."
+      />
+
+      <div className="mb-[var(--space-8)] flex flex-wrap gap-[var(--space-2)]">
+        {ACTIONS.map((btn) => {
           const Icon = btn.icon
           return (
             <button
               key={btn.id}
+              type="button"
               onClick={() => handleAction(btn.id)}
-              className={`flex items-center gap-2 px-4 py-2 rounded-lg text-[13px] font-semibold cursor-pointer border transition-all duration-200 active:scale-[0.97] ${
-                btn.primary
-                  ? 'bg-[var(--color-primary)] text-[#09090b] border-transparent hover:brightness-110 shadow-[0_2px_8px_rgba(129,140,248,0.25)]'
-                  : 'bg-transparent border-[var(--color-outline-variant)] text-[var(--color-on-surface)] hover:bg-[var(--color-surface-high)] hover:border-[var(--color-outline)]'
-              }`}
+              className={btn.signal ? 'btn-signal' : 'btn-ghost'}
             >
-              <Icon size={14} strokeWidth={2.5} />
+              <Icon size={14} strokeWidth={2.5} aria-hidden />
               {btn.label}
             </button>
           )
         })}
-      </motion.div>
+      </div>
 
-      {/* Client list — the main content area */}
-      <motion.div
-        initial={{ opacity: 0, y: 12 }}
-        animate={{ opacity: 1, y: 0 }}
-        transition={{ delay: 0.1, duration: 0.4, ease: [0.22, 1, 0.36, 1] }}
-      >
-        <ClientListPanel />
-      </motion.div>
+      <PendingReviewsPanel />
 
-      {/* Modals and drawers */}
+      <ClientListPanel />
+
       <DocumentRequestCreator
         isOpen={drawerOpen}
         onClose={() => setDrawerOpen(false)}
@@ -101,23 +79,22 @@ export default function EmployeeDashboard() {
       />
 
       {permissionsOpen && (
-        <motion.div
-          initial={{ opacity: 0 }}
-          animate={{ opacity: 1 }}
-          exit={{ opacity: 0 }}
-          className="fixed inset-0 z-[100] flex items-center justify-center p-6 bg-black/60 backdrop-blur-sm"
+        <div
+          className="fixed inset-0 z-[100] flex items-center justify-center p-[var(--space-4)] sm:p-[var(--space-6)]"
+          style={{ background: 'color-mix(in srgb, var(--color-archive) 72%, transparent)' }}
           onClick={() => setPermissionsOpen(false)}
+          role="presentation"
         >
-          <motion.div
-            initial={{ scale: 0.96, opacity: 0 }}
-            animate={{ scale: 1, opacity: 1 }}
-            transition={{ duration: 0.2, ease: [0.22, 1, 0.36, 1] }}
-            className="w-full max-w-[700px] max-h-[80vh] overflow-y-auto"
+          <div
+            className="max-h-[80vh] w-full max-w-[700px] overflow-y-auto"
             onClick={(e) => e.stopPropagation()}
+            role="dialog"
+            aria-modal="true"
+            aria-label="Manage access"
           >
             <PermissionManagerPanel onClose={() => setPermissionsOpen(false)} />
-          </motion.div>
-        </motion.div>
+          </div>
+        </div>
       )}
 
       <ShareFileModal

@@ -1,4 +1,5 @@
 import { BaseRepository } from './BaseRepository.js';
+import { hashBearerToken } from '../../utils/authUtils.js';
 
 export class ResetTokenRepository extends BaseRepository {
   constructor(db) {
@@ -7,7 +8,7 @@ export class ResetTokenRepository extends BaseRepository {
 
   async create({ token, email, expiresAt }, trx) {
     const record = {
-      token,
+      token: hashBearerToken(token),
       email,
       expires_at: expiresAt,
       created_at: new Date().toISOString(),
@@ -17,7 +18,18 @@ export class ResetTokenRepository extends BaseRepository {
   }
 
   async findByToken(token, trx) {
-    const row = await this.query(trx).where('token', token).first();
+    const hashed = hashBearerToken(token);
+    let row = await this.query(trx).where('token', hashed).first();
+
+    // Legacy plaintext migration
+    if (!row) {
+      row = await this.query(trx).where('token', token).first();
+      if (row) {
+        await this.query(trx).where('token', token).update({ token: hashed });
+        row.token = hashed;
+      }
+    }
+
     if (!row) return null;
 
     if (new Date(row.expires_at) < new Date()) {
@@ -28,6 +40,8 @@ export class ResetTokenRepository extends BaseRepository {
   }
 
   async deleteByToken(token, trx) {
+    const hashed = hashBearerToken(token);
+    await this.query(trx).where('token', hashed).del();
     await this.query(trx).where('token', token).del();
   }
 

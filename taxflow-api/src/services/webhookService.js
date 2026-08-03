@@ -12,6 +12,7 @@ import crypto from 'crypto';
 import boxService from './boxService.js';
 import { config } from '../config.js';
 import rateLimiter from './rateLimiter.js';
+import { logger } from '../utils/logger.js';
 
 const DEFAULT_TRIGGERS = ['FILE.UPLOADED', 'FILE.DELETED', 'FILE.MOVED'];
 
@@ -88,7 +89,7 @@ export class WebhookService {
           primaryKey: registration.primaryKey,
           secondaryKey: registration.secondaryKey,
         }).catch((err) => {
-          console.error(`Failed to persist webhook keys for folder ${folderId}:`, err.message);
+          logger.error(`Failed to persist webhook keys for folder ${folderId}:`, err.message);
         });
       }
 
@@ -102,7 +103,7 @@ export class WebhookService {
       }
 
       const statusCode = error.statusCode || error.status;
-      console.error(`Webhook registration failed for folder ${folderId}: ${statusCode || 'unknown'} — ${error.message}`);
+      logger.error(`Webhook registration failed for folder ${folderId}: ${statusCode || 'unknown'} — ${error.message}`);
 
       if (statusCode >= 500 || statusCode === 429) {
         try {
@@ -111,7 +112,7 @@ export class WebhookService {
             'normal'
           );
         } catch (retryErr) {
-          console.error('Webhook retry also failed:', retryErr.message);
+          logger.error('Webhook retry also failed:', retryErr.message);
         }
       }
 
@@ -147,7 +148,7 @@ export class WebhookService {
         primaryKey: registration.primaryKey,
         secondaryKey: registration.secondaryKey,
       }).catch((err) => {
-        console.error(`Failed to persist webhook keys for folder ${folderId}:`, err.message);
+        logger.error(`Failed to persist webhook keys for folder ${folderId}:`, err.message);
       });
     }
 
@@ -186,14 +187,14 @@ export class WebhookService {
             primaryKey: registration.primaryKey,
             secondaryKey: registration.secondaryKey,
           }).catch((err) => {
-            console.error(`Failed to persist webhook keys for folder ${folderId}:`, err.message);
+            logger.error(`Failed to persist webhook keys for folder ${folderId}:`, err.message);
           });
         }
 
         return registration;
       }
     } catch (err) {
-      console.error('Failed to retrieve existing webhook:', err.message);
+      logger.error('Failed to retrieve existing webhook:', err.message);
     }
     return null;
   }
@@ -290,7 +291,7 @@ export class WebhookService {
     const eventType = event.trigger || event.type;
 
     if (!eventType) {
-      console.warn('Webhook event missing trigger/type field:', JSON.stringify(event));
+      logger.warn('Webhook event missing trigger/type field:', JSON.stringify(event));
       return;
     }
 
@@ -310,7 +311,7 @@ export class WebhookService {
       }
     }
 
-    console.log(`No handler registered for event type: ${eventType}`);
+    logger.info(`No handler registered for event type: ${eventType}`);
   }
 
   /**
@@ -343,7 +344,7 @@ export class WebhookService {
         primaryKey: keys.primaryKey,
         secondaryKey: keys.secondaryKey,
       }).catch((err) => {
-        console.error(`Failed to persist webhook keys for folder ${folderId}:`, err.message);
+        logger.error(`Failed to persist webhook keys for folder ${folderId}:`, err.message);
       });
     }
   }
@@ -374,7 +375,7 @@ export class WebhookService {
       const response = await client.webhooks.getWebhooks();
       boxWebhooks = response.entries || [];
     } catch (err) {
-      console.error('[WebhookHealth] Failed to list webhooks from Box:', err.message);
+      logger.error('[WebhookHealth] Failed to list webhooks from Box:', err.message);
       result.errors.push({ folderId: '*', error: `List webhooks failed: ${err.message}` });
       return result;
     }
@@ -392,7 +393,7 @@ export class WebhookService {
         result.healthy++;
       } else {
         result.missing++;
-        console.warn(`[WebhookHealth] Webhook missing for folder ${folderId}`);
+        logger.warn(`[WebhookHealth] Webhook missing for folder ${folderId}`);
 
         if (reregister) {
           try {
@@ -401,7 +402,7 @@ export class WebhookService {
             console.info(`[WebhookHealth] Re-registered webhook for folder ${folderId}`);
           } catch (err) {
             result.errors.push({ folderId, error: err.message });
-            console.error(`[WebhookHealth] Re-registration failed for folder ${folderId}:`, err.message);
+            logger.error(`[WebhookHealth] Re-registration failed for folder ${folderId}:`, err.message);
           }
         }
       }

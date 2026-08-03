@@ -12,7 +12,6 @@
 import boxService from './boxService.js';
 import rateLimiter from './rateLimiter.js';
 import aiExtractionService from './aiExtractionService.js';
-import notificationService from './notificationService.js';
 import { logger } from '../utils/logger.js';
 
 const METADATA_SCOPE = 'enterprise';
@@ -119,19 +118,8 @@ export class PostUploadPipeline {
       logger.error('Task creation failed', { fileId, error: err.message });
     }
 
-    // Dispatch upload notification to assigned employee (Req 12.1)
-    let notificationSent = false;
-    try {
-      const clientName = event.source?.parent?.name || 'Client';
-      const documentName = event.source?.name || 'Document';
-      const employeeId = event.created_by?.login || '';
-      if (employeeId) {
-        await notificationService.dispatchUploadNotification(employeeId, clientName, documentName);
-        notificationSent = true;
-      }
-    } catch (err) {
-      logger.error('Upload notification failed', { fileId, error: err.message });
-    }
+    // Staff upload notify lives in routes/documents/uploadRoutes.js (TaxFlow API uploads).
+    // Skip here so FILE.UPLOADED after an API upload does not double-notify.
 
     return {
       fileId,
@@ -139,7 +127,7 @@ export class PostUploadPipeline {
       taskId,
       taskAssignmentId,
       isRevision: false,
-      notificationSent,
+      notificationSent: false,
     };
   }
 

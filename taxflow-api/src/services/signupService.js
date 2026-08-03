@@ -8,7 +8,9 @@ import authService from './authService.js';
 import projectService from './projectService.js';
 import { createHttpError } from '../utils/httpError.js';
 import { getRepositories } from '../db/repositories/index.js';
-import { buildExternalId } from '../utils/authUtils.js';
+import vaultDiscoveryService from './vaultDiscoveryService.js';
+import { hashPassword, assertPasswordPolicy } from '../utils/authUtils.js';
+import { logger } from '../utils/logger.js';
 
 class SignupService {
   constructor() {
@@ -61,8 +63,10 @@ class SignupService {
    * Complete signup: verify token, run Box onboarding, create user, create session.
    */
   async completeSignup(token, password, clientName, externalId, email) {
-    if (!password || password.length < 6) {
-      throw createHttpError('Password must be at least 6 characters', 400);
+    try {
+      assertPasswordPolicy(password);
+    } catch (err) {
+      throw createHttpError(err.message, 400, 'VALIDATION_ERROR');
     }
 
     // Verify token
@@ -81,11 +85,33 @@ class SignupService {
     if (record.status === 'accepted') {
       throw createHttpError('This invitation has already been used.', 409);
     }
+    if (record.status === 'expired') {
+      throw createHttpError('This invitation has expired.', 410);
+    }
+    if (record.token_expires_at && new Date(record.token_expires_at) < new Date()) {
+      throw createHttpError('This invitation has expired.', 410);
+    }
 
-    // Use clientName/externalId/email from signup form, fall back to invite record values
-    const finalClientName = (clientName || '').trim() || record.client_name || record.email.split('@')[0];
-    const finalExternalId = (externalId || '').trim() || record.external_id || `CL-${Date.now()}`;
-    const finalEmail = (email || '').trim() || record.email;
+    // Atomic claim — prevents parallel signup on the same invite
+    const claimed = await this.inviteRepo.claimPending(payload.inviteId);
+    if (!claimed) {
+      const latest = await this.inviteRepo.findById(payload.inviteId);
+      if (latest?.status === 'accepted' || latest?.status === 'accepting') {
+        throw createHttpError('This invitation has already been used.', 409);
+      }
+      throw createHttpError('This invitation is no longer available.', 409);
+    }
+
+
+    // Prefer invite-record values for identity fields; client may only set display name if invite has none
+    const finalClientName = (record.client_name || '').trim() || (clientName || '').trim() || record.email.split('@')[0];
+    const finalExternalId = (record.external_id || '').trim() || `CL-${Date.now()}`;
+    const finalEmail = record.email;
+    const submittedEmail = (email || '').trim();
+    if (submittedEmail && submittedEmail.toLowerCase() !== record.email.toLowerCase()) {
+      await this.inviteRepo.releaseClaim(payload.inviteId);
+      throw createHttpError('Email must match the invited address', 400);
+    }
 
     // Run existing onboarding pipeline (same as before — creates Box App User, folders, etc.)
     let onboardingResult;
@@ -99,7 +125,8 @@ class SignupService {
         password
       );
     } catch (err) {
-      console.error('[SignupService] Box onboarding failed:', err.message);
+      await this.inviteRepo.releaseClaim(payload.inviteId);
+      logger.error('[SignupService] Box onboarding failed:', err.message);
       if (err.message && err.message.includes('already registered')) {
         throw createHttpError('An account with this email already exists. Please log in instead.', 409);
       }
@@ -149,10 +176,19 @@ class SignupService {
           await repos.clientRepo.update(registeredClient.id, {
             box_folder_id: onboardingResult.folders.root,
           });
+        } else if (repos.userRepo && onboardingResult.folders?.root) {
+          await repos.userRepo.updateProfile(registeredClient.id, {
+            box_folder_id: onboardingResult.folders.root,
+          });
         }
+      } else if (repos.userRepo && onboardingResult.folders?.root && registeredClient?.id) {
+        await repos.userRepo.updateProfile(registeredClient.id, {
+          box_folder_id: onboardingResult.folders.root,
+        });
       }
     } catch (err) {
-      console.error('[SignupService] Client registration failed:', err.message);
+      await this.inviteRepo.releaseClaim(payload.inviteId);
+      logger.error('[SignupService] Client registration failed:', err.message);
       if (err.message && (err.message.includes('already') || err.message.includes('UNIQUE constraint'))) {
         throw createHttpError('An account with this email already exists. Please log in instead.', 409);
       }
@@ -167,12 +203,13 @@ class SignupService {
     let userRecord = await repos.userRepo.findByEmail(finalEmail);
     if (!userRecord) {
       try {
+        const passwordHash = await hashPassword(password);
         userRecord = await repos.userRepo.create({
           box_user_id: onboardingResult.appUser?.userId || '',
           email: finalEmail,
           name: finalClientName,
           role: 'client',
-          password_hash: buildExternalId(password, finalEmail, 'client'),
+          password_hash: passwordHash,
         });
       } catch (createErr) {
         // If UNIQUE constraint, the user was created by a race — try finding again
@@ -212,7 +249,13 @@ class SignupService {
           };
         }
       } catch { /* vault lookup non-fatal */ }
+    } else if (registeredClient?.id) {
+      try {
+        vault = await vaultDiscoveryService.getVaultForClient(registeredClient.id);
+      } catch { /* vault lookup non-fatal */ }
     }
+
+    vault = vaultDiscoveryService.sanitizeVaultForClient(vault);
 
     return {
       sessionToken: session.sessionToken,

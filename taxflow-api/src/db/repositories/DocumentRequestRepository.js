@@ -108,4 +108,17 @@ export class DocumentRequestRepository extends BaseRepository {
       .first();
     return Number(result.count);
   }
+
+  /**
+   * Documents awaiting staff review (Uploaded or Under_Review), newest first.
+   * @param {{ limit?: number }} [opts]
+   */
+  async findPendingReview({ limit = 50 } = {}, trx) {
+    const q = this.query(trx)
+      .whereIn('status', ['Uploaded', 'Under_Review'])
+      .whereNull('deleted_at')
+      .orderBy('updated_at', 'desc');
+    if (limit) q.limit(limit);
+    return q;
+  }
 }

@@ -1,27 +1,25 @@
 /**
  * Notification routes — In-app notifications and deep-link verification.
- *
- * Exports:
- * - default: notifications router (mount at /api/notifications)
- * - deepLinkRouter: deep-link router (mount at /api)
- *
- * Requirements: 27.4, 27.5, 28.6
  */
 
 import express from 'express';
 import notificationService from '../services/notificationService.js';
 import deepLinkTokenService from '../services/deepLinkTokenService.js';
+import { requireAuth } from '../middleware/authMiddleware.js';
+import { config } from '../config.js';
 
-// Notifications router — mount at /api/notifications
 const router = express.Router();
 
 /**
  * GET /api/notifications/:recipientId
- * Retrieve in-app notifications for a recipient.
  */
-router.get('/:recipientId', async (req, res, next) => {
+router.get('/:recipientId', requireAuth, async (req, res, next) => {
   try {
     const { recipientId } = req.params;
+    if (recipientId !== req.user.userId) {
+      return res.status(403).json({ error: 'Access denied' });
+    }
+
     const { limit, offset } = req.query;
     const options = {};
     if (limit) options.limit = parseInt(limit, 10);
@@ -36,24 +34,24 @@ router.get('/:recipientId', async (req, res, next) => {
 
 /**
  * PATCH /api/notifications/:notificationId/read
- * Mark a notification as read.
  */
-router.patch('/:notificationId/read', async (req, res, next) => {
+router.patch('/:notificationId/read', requireAuth, async (req, res, next) => {
   try {
     const { notificationId } = req.params;
-    await notificationService.markAsRead(notificationId);
+    const owned = await notificationService.markAsReadForRecipient(notificationId, req.user.userId);
+    if (!owned) {
+      return res.status(404).json({ error: 'Notification not found' });
+    }
     res.json({ success: true });
   } catch (error) {
     next(error);
   }
 });
 
-// Deep-link router — mount at /api
 const deepLinkRouter = express.Router();
 
 /**
  * GET /api/deep-link
- * Verify deep-link token query param and redirect or return 401.
  */
 deepLinkRouter.get('/deep-link', (req, res) => {
   const { token } = req.query;
@@ -65,9 +63,8 @@ deepLinkRouter.get('/deep-link', (req, res) => {
   try {
     const payload = deepLinkTokenService.verifyDeepLinkToken(token);
 
-    // Build redirect URL with context parameters
     const { fileId, clientId, action } = payload;
-    const baseUrl = req.app?.locals?.frontendUrl || 'http://localhost:5173';
+    const baseUrl = config.frontendUrl || req.app?.locals?.frontendUrl || 'http://localhost:5173';
     const redirectUrl = new URL(baseUrl);
     redirectUrl.pathname = `/${action || 'view'}`;
     if (fileId) redirectUrl.searchParams.set('fileId', fileId);

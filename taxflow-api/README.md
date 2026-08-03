@@ -1,26 +1,33 @@
-# TaxFlow API
+# taxflow-api
 
-Express backend for TaxFlow Pro with Box.com integration.
+Express backend for TaxFlow with Box vault integration.
 
 ## Setup
 
 ```bash
 npm install
-cp .env.example .env  # configure your settings
+cp .env.example .env
 npm run dev
 ```
 
-## Environment Variables
+Requires `box_config.json` (see `BOX_CONFIG_PATH`). Defaults: port `3001`, SQLite `DB_SCHEMA=full`.
 
-| Variable | Default | Description |
-|----------|---------|-------------|
-| PORT | 3001 | Server port |
-| NODE_ENV | development | Environment |
-| BOX_CONFIG_PATH | ../box_config.json | Path to Box JWT config |
-| BOX_ROOT_FOLDER_ID | 0 | Box root folder for vaults |
-| FRONTEND_URL | http://localhost:5173 | CORS origin |
-| BOX_ADMIN_EMAIL | | Your Box email for collaboration |
+## Schema modes
 
-## Endpoints
+| `DB_SCHEMA` | Use |
+|-------------|-----|
+| `full` | Local SQLite, all tables (default) |
+| `production` | Postgres + Box as system of record (AWS) |
+| `minimal` | Deprecated legacy 4-table mode — use `production` |
 
-See root [README.md](../README.md) for full API reference.
+See [../docs/DATABASE_SCHEMA.md](../docs/DATABASE_SCHEMA.md) and [src/services/README.md](src/services/README.md).
+
+## Scripts
+
+```bash
+npm run dev
+npm test
+npm run sync-seed-box
+```
+
+Env reference: [`.env.example`](.env.example). Deploy: [../docs/DEPLOYMENT_AWS.md](../docs/DEPLOYMENT_AWS.md).

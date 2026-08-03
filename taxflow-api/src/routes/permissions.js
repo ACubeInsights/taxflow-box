@@ -4,10 +4,11 @@
  */
 
 import express from 'express';
-import { requireAuth, requireRole } from '../middleware/authMiddleware.js';
+import { requireAuth, requireRole, resolveClientForUser } from '../middleware/authMiddleware.js';
 import permissionService from '../services/permissionService.js';
 import notificationService from '../services/notificationService.js';
 import projectService from '../services/projectService.js';
+import { logger } from '../utils/logger.js';
 
 const router = express.Router();
 
@@ -43,13 +44,15 @@ router.post('/', requireAuth, requireRole('employee', 'superadmin'), async (req,
           resourceType,
           accessLevel,
           grantedBy: req.user.name || req.user.email || grantedBy,
+          clientId,
+          fileName: displayName,
         }).catch((err) => {
-          console.error(`Permission notification failed for client ${clientId}:`, err.message);
+          logger.error(`Permission notification failed for client ${clientId}:`, err.message);
         });
       }
     } catch (notifErr) {
       // Non-fatal — don't block the permission change if notification fails
-      console.error('Permission notification error:', notifErr.message);
+      logger.error('Permission notification error:', notifErr.message);
     }
 
     res.json(result);
@@ -86,8 +89,11 @@ router.get('/:clientId/:resourceId', requireAuth, async (req, res, next) => {
     const { clientId, resourceId } = req.params;
 
     // Clients can only query their own permissions
-    if (req.user.role === 'client' && req.user.userId !== clientId) {
-      return res.status(404).json({ error: 'Resource not found' });
+    if (req.user.role === 'client') {
+      const client = await resolveClientForUser(req.user);
+      if (!client || client.id !== clientId) {
+        return res.status(404).json({ error: 'Resource not found' });
+      }
     }
 
     const permission = await permissionService.getPermission(clientId, resourceId);

@@ -1,44 +1,35 @@
 /**
- * Single source of truth for role metadata.
- * Used by TopNav, Breadcrumb, and any role-aware component.
+ * Role and engagement metadata — Folio Desk tokens only.
  */
 
 export const ROLE_META = {
-  superadmin: { label: 'Admin',    badgeLabel: 'Admin',    color: 'var(--color-primary)' },
-  employee:   { label: 'Preparer', badgeLabel: 'Preparer', color: 'var(--color-secondary)' },
-  client:     { label: 'Client',   badgeLabel: 'Client',   color: 'var(--color-tertiary)' },
+  superadmin: { label: 'Admin',    badgeLabel: 'Admin',    color: 'var(--color-signal)' },
+  employee:   { label: 'Preparer', badgeLabel: 'Preparer', color: 'var(--color-trace)' },
+  client:     { label: 'Client',   badgeLabel: 'Client',   color: 'var(--color-commit)' },
 }
 
-/**
- * Status colors for client engagement status.
- * Separate from document workflow statuses in statusColors.js.
- */
+/** Engagement status → Folio Rail spine */
 export const ENGAGEMENT_STATUS_COLORS = {
-  Active:    'var(--color-success)',
-  On_Hold:   'var(--color-warning)',
-  Complete:  'var(--color-on-surface-variant)',
+  Active:   'var(--color-trace)',
+  On_Hold:  'var(--color-hold)',
+  Complete: 'var(--color-commit)',
 }
 
-/**
- * Entity type color palette for client badges.
- */
+/** Entity types — Trace / Hold / Whisper only (no rainbow) */
 export const ENTITY_COLORS = {
-  Individual:  '#06b6d4',
-  Business:    '#a78bfa',
-  Trust:       '#f59e0b',
-  'S-Corp':    '#ec4899',
-  Partnership: '#3b82f6',
-  LLC:         '#10b981',
-  'C-Corp':    '#f43f5e',
-  'Non-Profit':'#8b5cf6',
+  Individual:  'var(--color-trace)',
+  Business:    'var(--color-hold)',
+  Trust:       'var(--color-whisper)',
+  'S-Corp':    'var(--color-trace)',
+  Partnership: 'var(--color-hold)',
+  LLC:         'var(--color-trace)',
+  'C-Corp':    'var(--color-hold)',
+  'Non-Profit':'var(--color-whisper)',
 }
 
-/**
- * Priority colors used across document views.
- */
 export const PRIORITY_COLORS = {
-  Urgent: 'var(--color-error)',
-  High:   '#f97316',
-  Medium: 'var(--color-warning)',
-  Low:    'var(--color-on-surface-variant)',
+  Urgent: 'var(--color-flag)',
+  High:   'var(--color-hold)',
+  Medium: 'var(--color-trace)',
+  Low:    'var(--color-whisper)',
 }

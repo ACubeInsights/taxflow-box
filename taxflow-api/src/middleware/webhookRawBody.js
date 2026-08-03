@@ -26,8 +26,8 @@ const webhookRawBody = [
         return res.status(400).json({ error: 'Invalid JSON payload' });
       }
     } else {
-      // If body was already parsed (e.g. by a global json parser), rawBody won't be available
-      req.rawBody = Buffer.from(JSON.stringify(req.body), 'utf8');
+      // Should not happen when webhooks are mounted before express.json()
+      req.rawBody = Buffer.from(JSON.stringify(req.body ?? {}), 'utf8');
     }
     next();
   },

@@ -15,11 +15,12 @@
 
 import boxService from './boxService.js';
 import emailService from './emailService.js';
+import vaultDiscoveryService, { mapVaultManifest } from './vaultDiscoveryService.js';
 import crypto from 'crypto';
 import { config } from '../config.js';
 import { createHttpError } from '../utils/httpError.js';
 import { logger } from '../utils/logger.js';
-import { buildExternalId, buildExternalIdLegacy, hashPassword, verifyPassword, extractOriginalEmail, extractRole } from '../utils/authUtils.js';
+import { buildExternalId, buildExternalIdLegacy, hashPassword, verifyPassword, extractOriginalEmail, extractRole, assertPasswordPolicy, sanitizeRole } from '../utils/authUtils.js';
 
 // Re-export auth utilities for backward compatibility
 export { buildExternalId, buildExternalIdLegacy, hashPassword, verifyPassword, extractOriginalEmail };
@@ -50,23 +51,10 @@ function getExtId(user) {
 
 /**
  * Maps a client_vaults DB row to the API response shape.
- * @param {object} row - Database row from client_vaults table
- * @returns {object|null}
+ * @deprecated Use mapVaultManifest from vaultDiscoveryService
  */
 function mapVaultFromDb(row) {
-  if (!row) return null;
-  return {
-    clientId: row.client_id,
-    financialYear: row.financial_year,
-    root: row.root_folder_id,
-    year: row.year_folder_id,
-    projects: row.projects_folder_id,
-    tax: row.tax_folder_id,
-    uploads: row.uploads_folder_id,
-    supportingDocs: row.supporting_docs_folder_id,
-    signedDocuments: row.signed_documents_folder_id,
-    internalNotes: row.internal_notes_folder_id,
-  };
+  return mapVaultManifest(row);
 }
 
 // ─── AuthService Class ──────────────────────────────────────────────────
@@ -141,11 +129,28 @@ export class AuthService {
     if (this._sessionRepo) {
       const session = await this._sessionRepo.findByToken(token);
       if (!session) return null;
+
+      // Always bind identity/role from DB so demotion/disable takes effect immediately
+      if (this._userRepo) {
+        const user = await this._userRepo.findById(session.user_id);
+        if (!user) {
+          await this._sessionRepo.deleteByToken(token);
+          return null;
+        }
+        return {
+          userId: user.id,
+          email: user.email,
+          name: user.name,
+          role: sanitizeRole(user.role),
+          expiresAt: session.expires_at,
+        };
+      }
+
       return {
         userId: session.user_id,
         email: session.email,
         name: session.name,
-        role: session.role,
+        role: sanitizeRole(session.role),
         expiresAt: session.expires_at,
       };
     }
@@ -157,7 +162,7 @@ export class AuthService {
       this._sessions.delete(token);
       return null;
     }
-    return session;
+    return { ...session, role: sanitizeRole(session.role) };
   }
 
   /**
@@ -174,6 +179,24 @@ export class AuthService {
   }
 
   /**
+   * Invalidates all sessions for a user (password change/reset, disable, demotion).
+   * @param {{ userId?: string, email?: string }} opts
+   */
+  async invalidateAllSessions({ userId, email } = {}) {
+    if (this._sessionRepo) {
+      if (userId) await this._sessionRepo.deleteByUserId(userId);
+      if (email) await this._sessionRepo.deleteByEmail(email);
+      return;
+    }
+
+    for (const [tok, sess] of this._sessions) {
+      if ((userId && sess.userId === userId) || (email && sess.email?.toLowerCase() === email.toLowerCase())) {
+        this._sessions.delete(tok);
+      }
+    }
+  }
+
+  /**
    * Refreshes a session by extending its expiry.
    * @param {string} token
    * @returns {Promise<{ expiresAt: string }|null>}
@@ -182,14 +205,26 @@ export class AuthService {
     if (this._sessionRepo) {
       const session = await this._sessionRepo.findByToken(token);
       if (!session) return null;
+      // Re-validate user still exists / role still valid
+      if (this._userRepo) {
+        const user = await this._userRepo.findById(session.user_id);
+        if (!user) {
+          await this._sessionRepo.deleteByToken(token);
+          return null;
+        }
+      }
       const newExpiresAt = new Date(Date.now() + SESSION_TTL_MS).toISOString();
       await this._sessionRepo.refreshExpiry(token, newExpiresAt);
       return { expiresAt: newExpiresAt };
     }
 
-    // In-memory fallback
+    // In-memory fallback — do not resurrect expired sessions
     const session = this._sessions.get(token);
     if (!session) return null;
+    if (new Date(session.expiresAt) < new Date()) {
+      this._sessions.delete(token);
+      return null;
+    }
     session.expiresAt = new Date(Date.now() + SESSION_TTL_MS).toISOString();
     return { expiresAt: session.expiresAt };
   }
@@ -202,17 +237,35 @@ export class AuthService {
    * @returns {Promise<object>} The enriched session response
    */
   async _enrichSessionWithVault(session, email) {
-    if (session.user.role !== 'client' || !this._clientVaultRepo || !this._clientRepo) {
+    if (session.user.role !== 'client') {
       return session;
     }
 
     try {
-      const clientRecord = await this._clientRepo.findByEmail(email);
-      if (clientRecord) {
-        session.user.externalId = clientRecord.external_id;
-        const vaultRow = await this._clientVaultRepo.findByClientId(clientRecord.id);
-        if (vaultRow) {
-          session.vault = mapVaultFromDb(vaultRow);
+      let clientId = null;
+      let externalId = null;
+
+      if (this._clientRepo) {
+        const clientRecord = await this._clientRepo.findByEmail(email);
+        if (clientRecord) {
+          clientId = clientRecord.id;
+          externalId = clientRecord.external_id;
+        }
+      } else if (this._userRepo) {
+        const userRecord = await this._userRepo.findByEmail(email);
+        if (userRecord?.role === 'client') {
+          clientId = userRecord.id;
+          externalId = userRecord.external_id;
+        }
+      } else {
+        return session;
+      }
+
+      if (clientId) {
+        session.user.externalId = externalId;
+        const vault = await vaultDiscoveryService.getVaultForClient(clientId);
+        if (vault) {
+          session.vault = vaultDiscoveryService.sanitizeVaultForClient(vault);
         }
       }
     } catch (err) {
@@ -278,8 +331,8 @@ export class AuthService {
       throw createHttpError('Invalid credentials', 401, 'UNAUTHORIZED');
     }
 
-    // Role is stored in externalAppUserId during creation
-    const role = extractRole(extId);
+    // Role from Box metadata is untrusted — allowlist only; prefer DB role after sync
+    let role = sanitizeRole(extractRole(extId));
 
     // Auto-sync: if DB repos are available, ensure this Box user exists in the local users table
     // Store with bcrypt hash (migrate away from legacy format in Box)
@@ -289,21 +342,39 @@ export class AuthService {
         // Use bcrypt hash for the local DB record (not the legacy format)
         const bcryptHash = boxVerifyResult.newHash || await hashPassword(password);
         try {
-          await this._userRepo.create({
+          const created = await this._userRepo.create({
             box_user_id: found.id,
             email: email.toLowerCase(),
             name: found.name,
             role,
             password_hash: bcryptHash,
           });
+          if (created?.id) {
+            await client.users.updateUserById(found.id, {
+              requestBody: { externalAppUserId: buildExternalId(created.id) },
+            }).catch((err) => {
+              logger.warn('Failed to migrate Box externalAppUserId off password material', { error: err.message });
+            });
+          }
         } catch (err) {
           if (!err.message?.includes('UNIQUE constraint')) {
             logger.error('Failed to auto-sync Box user to local DB', { error: err.message });
           }
         }
-      } else if (boxVerifyResult.needsRehash && boxVerifyResult.newHash) {
-        // Existing DB user with legacy hash — upgrade
-        await this._userRepo.updatePasswordHash(existingDbUser.id, boxVerifyResult.newHash);
+      } else {
+        role = sanitizeRole(existingDbUser.role);
+        if (boxVerifyResult.needsRehash && boxVerifyResult.newHash) {
+          // Existing DB user with legacy hash — upgrade
+          await this._userRepo.updatePasswordHash(existingDbUser.id, boxVerifyResult.newHash);
+        }
+        // Clear password material from Box if still present
+        if (String(extId).startsWith('pw:')) {
+          await client.users.updateUserById(found.id, {
+            requestBody: { externalAppUserId: buildExternalId(existingDbUser.id) },
+          }).catch((err) => {
+            logger.warn('Failed to clear legacy password from Box externalAppUserId', { error: err.message });
+          });
+        }
       }
 
       // Look up by email first, then by Box user ID as fallback
@@ -313,13 +384,13 @@ export class AuthService {
           userId: dbUser.id,
           email: dbUser.email,
           name: dbUser.name,
-          role: dbUser.role,
+          role: sanitizeRole(dbUser.role),
         });
         return this._enrichSessionWithVault(session, email);
       }
     }
 
-    // No DB available — use in-memory session (no FK constraint)
+    // No DB available — use in-memory session (no FK constraint); role still allowlisted
     const session = await this.createSession({
       userId: found.id,
       email: email,
@@ -342,6 +413,8 @@ export class AuthService {
    * @returns {Promise<{ success: boolean }>}
    */
   async changePassword(userId, currentPassword, newPassword) {
+    assertPasswordPolicy(newPassword);
+
     // If DB is available, try DB-backed password change
     if (this._userRepo) {
       const user = await this._userRepo.findById(userId);
@@ -352,11 +425,23 @@ export class AuthService {
         }
         const newHash = await hashPassword(newPassword);
         await this._userRepo.updatePasswordHash(userId, newHash);
+        await this.invalidateAllSessions({ userId, email: user.email });
+        // Ensure Box metadata does not store password material
+        if (user.box_user_id) {
+          try {
+            const client = boxService.getBoxClient();
+            await client.users.updateUserById(user.box_user_id, {
+              requestBody: { externalAppUserId: buildExternalId(user.id) },
+            });
+          } catch (err) {
+            logger.warn('Failed to clear password material from Box on changePassword', { error: err.message });
+          }
+        }
         return { success: true };
       }
     }
 
-    // Fallback to Box API
+    // Box-only users: migrate into DB with bcrypt; never write password into Box metadata
     const client = boxService.getBoxClient();
     const user = await client.users.getUserById(userId, { queryParams: { fields: ['id', 'login', 'name', 'role', 'external_app_user_id'] } });
     const extId = getExtId(user);
@@ -365,11 +450,30 @@ export class AuthService {
       throw createHttpError('Current password is incorrect', 401, 'UNAUTHORIZED');
     }
     const email = extractOriginalEmail(extId) || user.login;
-    // Update Box with legacy format (until Task 1.3 migrates externalAppUserId)
-    await client.users.updateUserById(userId, {
-      requestBody: { externalAppUserId: buildExternalIdLegacy(newPassword, email) },
-    });
-    return { success: true };
+    const role = sanitizeRole(extractRole(extId));
+    const newHash = await hashPassword(newPassword);
+
+    if (this._userRepo) {
+      let dbUser = await this._userRepo.findByBoxUserId(userId);
+      if (!dbUser) {
+        dbUser = await this._userRepo.create({
+          box_user_id: userId,
+          email: String(email).toLowerCase(),
+          name: user.name,
+          role,
+          password_hash: newHash,
+        });
+      } else {
+        await this._userRepo.updatePasswordHash(dbUser.id, newHash);
+      }
+      await client.users.updateUserById(userId, {
+        requestBody: { externalAppUserId: buildExternalId(dbUser.id) },
+      });
+      await this.invalidateAllSessions({ userId: dbUser.id, email });
+      return { success: true };
+    }
+
+    throw createHttpError('Password change requires database-backed users', 500, 'CONFIG_ERROR');
   }
 
   /**
@@ -378,27 +482,43 @@ export class AuthService {
    * @returns {Promise<{ message: string }>}
    */
   async requestPasswordReset(email) {
+    const normalized = String(email || '').trim().toLowerCase();
+    const genericResponse = {
+      message: 'If an account exists with that email, a reset link has been sent.',
+    };
+
+    // Anti-enumeration: always return the same message. Only issue a token + email
+    // when a TaxFlow user actually exists (avoids dead reset links → "User not found").
+    let accountExists = false;
+    if (normalized && this._userRepo) {
+      const user = await this._userRepo.findByEmail(normalized);
+      accountExists = !!user;
+    }
+
+    if (!accountExists) {
+      return genericResponse;
+    }
+
     const resetToken = crypto.randomBytes(32).toString('hex');
     const expiresAt = new Date(Date.now() + 30 * 60 * 1000).toISOString(); // 30 min
 
     if (this._resetTokenRepo) {
-      await this._resetTokenRepo.create({ token: resetToken, email: email.toLowerCase(), expiresAt });
+      await this._resetTokenRepo.create({ token: resetToken, email: normalized, expiresAt });
     } else {
-      this._resetTokens.set(resetToken, { email: email.toLowerCase(), expiresAt });
+      this._resetTokens.set(resetToken, { email: normalized, expiresAt });
       setTimeout(() => this._resetTokens.delete(resetToken), 30 * 60 * 1000);
     }
 
-    // Send the reset email (fire-and-forget, don't reveal if email exists)
     const resetUrl = `${config.frontendUrl || 'http://localhost:5173'}/reset-password?token=${resetToken}`;
-    emailService.sendEmail(email, 'password_reset', {
-      message: `Hi ${email.split('@')[0]}, We received a request to reset your TaxFlow Pro password. Click the link below to set a new password. This link expires in 30 minutes.`,
+    emailService.sendEmail(normalized, 'password_reset', {
+      message: `Hi ${normalized.split('@')[0]}, We received a request to reset your TaxFlow Pro password. Click the link below to set a new password. This link expires in 30 minutes.`,
       deepLinkUrl: resetUrl,
       fileName: '',
     }).catch((err) => {
-      logger.error('Failed to send password reset email', { email, error: err.message });
+      logger.error('Failed to send password reset email', { email: normalized, error: err.message });
     });
 
-    return { message: 'If an account exists with that email, a reset link has been sent.' };
+    return genericResponse;
   }
 
   /**
@@ -408,6 +528,8 @@ export class AuthService {
    * @returns {Promise<{ success: boolean }>}
    */
   async resetPassword(token, newPassword) {
+    assertPasswordPolicy(newPassword);
+
     let entry;
 
     if (this._resetTokenRepo) {
@@ -433,11 +555,22 @@ export class AuthService {
       const user = await this._userRepo.findByEmail(entry.email);
       if (user) {
         await this._userRepo.updatePasswordHash(user.id, newHash);
+        await this.invalidateAllSessions({ userId: user.id, email: user.email });
+        if (user.box_user_id) {
+          try {
+            const client = boxService.getBoxClient();
+            await client.users.updateUserById(user.box_user_id, {
+              requestBody: { externalAppUserId: buildExternalId(user.id) },
+            });
+          } catch (err) {
+            logger.warn('Failed to clear password material from Box on resetPassword', { error: err.message });
+          }
+        }
         return { success: true };
       }
     }
 
-    // Fallback to Box API (legacy — store in externalAppUserId until migration completes)
+    // Fallback: locate Box user by email in externalAppUserId, migrate to DB — never write password to Box
     const client = boxService.getBoxClient();
     const allUsers = await client.users.getUsers({
       userType: 'all',
@@ -446,13 +579,39 @@ export class AuthService {
     const found = (allUsers.entries || []).find((u) => {
       const extId = getExtId(u);
       if (!extId) return false;
-      const match = extId.match(/\|em:(.+)$/);
-      return match && match[1].toLowerCase() === entry.email;
+      const emailFromExt = extractOriginalEmail(extId);
+      return emailFromExt && emailFromExt.toLowerCase() === entry.email.toLowerCase();
     });
-    if (!found) throw createHttpError('User not found', 404, 'NOT_FOUND');
+    if (!found) {
+      throw createHttpError(
+        'No TaxFlow account found for this reset link. Request a new reset from an account that can sign in.',
+        404,
+        'NOT_FOUND',
+      );
+    }
+
+    if (!this._userRepo) {
+      throw createHttpError('Password reset requires database-backed users', 500, 'CONFIG_ERROR');
+    }
+
+    const extId = getExtId(found);
+    const role = sanitizeRole(extractRole(extId));
+    let dbUser = await this._userRepo.findByBoxUserId(found.id);
+    if (!dbUser) {
+      dbUser = await this._userRepo.create({
+        box_user_id: found.id,
+        email: entry.email.toLowerCase(),
+        name: found.name,
+        role,
+        password_hash: newHash,
+      });
+    } else {
+      await this._userRepo.updatePasswordHash(dbUser.id, newHash);
+    }
     await client.users.updateUserById(found.id, {
-      requestBody: { externalAppUserId: buildExternalIdLegacy(newPassword, entry.email) },
+      requestBody: { externalAppUserId: buildExternalId(dbUser.id) },
     });
+    await this.invalidateAllSessions({ userId: dbUser.id, email: entry.email });
     return { success: true };
   }
 }

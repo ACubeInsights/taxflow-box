@@ -131,6 +131,24 @@ export class InAppNotificationStore {
   }
 
   /**
+   * Marks a notification read only when owned by recipientId.
+   * @returns {Promise<boolean>}
+   */
+  async markAsReadForRecipient(notificationId, recipientId) {
+    if (this._notificationRepo) {
+      return this._notificationRepo.markAsReadForRecipient(notificationId, recipientId);
+    }
+
+    const notifications = this._notifications.get(recipientId) || [];
+    const found = notifications.find((n) => n.id === notificationId);
+    if (found) {
+      found.read = true;
+      return true;
+    }
+    return false;
+  }
+
+  /**
    * Returns unread count for a recipient.
    * @param {string} recipientId
    * @returns {Promise<number>}

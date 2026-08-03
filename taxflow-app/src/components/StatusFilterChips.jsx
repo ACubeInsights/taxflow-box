@@ -12,7 +12,7 @@ export default function StatusFilterChips({ selected = [], onChange }) {
   }
 
   return (
-    <div className="flex flex-wrap gap-2">
+    <div className="flex flex-wrap gap-[var(--space-2)]" role="group" aria-label="Filter by status">
       {ALL_STATUSES.map((status) => {
         const isSelected = selected.includes(status)
         const color = STATUS_COLORS[status]
@@ -20,20 +20,21 @@ export default function StatusFilterChips({ selected = [], onChange }) {
         return (
           <button
             key={status}
+            type="button"
             onClick={() => toggle(status)}
-            className="rounded-full px-3 py-1.5 text-[11px] font-bold tracking-wide transition-all duration-200 cursor-pointer border"
+            aria-pressed={isSelected}
+            className="cursor-pointer rounded-[var(--radius-chip)] border px-[var(--space-3)] py-[var(--space-2)] text-xs font-medium tracking-[0.04em]"
             style={
               isSelected
                 ? {
                     background: color,
                     borderColor: color,
-                    color: 'var(--color-surface-lowest)',
-                    boxShadow: `0 0 12px ${color}40`,
+                    color: 'var(--color-archive)',
                   }
                 : {
                     background: 'transparent',
-                    borderColor: `${color}50`,
-                    color: color,
+                    borderColor: 'var(--color-rule)',
+                    color: 'var(--color-whisper)',
                   }
             }
           >

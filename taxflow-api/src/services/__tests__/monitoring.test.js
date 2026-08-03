@@ -42,7 +42,7 @@ let mockBoxClient;
 beforeEach(() => {
   mockBoxClient = {
     users: {
-      getCurrentUser: vi.fn().mockResolvedValue({ id: 'svc-123', name: 'TaxFlow Service', login: 'AutomationUser_123@boxdevedition.com' }),
+      getUserMe: vi.fn().mockResolvedValue({ id: 'svc-123', name: 'TaxFlow Service', login: 'AutomationUser_123@boxdevedition.com' }),
     },
     webhooks: {
       getWebhooks: vi.fn().mockResolvedValue({ entries: [] }),
@@ -68,7 +68,7 @@ describe('BoxService.healthCheck', () => {
   });
 
   it('returns connected=false when Box API fails', async () => {
-    mockBoxClient.users.getCurrentUser.mockRejectedValue(new Error('Network timeout'));
+    mockBoxClient.users.getUserMe.mockRejectedValue(new Error('Network timeout'));
 
     const service = new BoxService();
     service.initialized = true;
@@ -92,7 +92,7 @@ describe('BoxService.healthCheck', () => {
     await service.healthCheck();
     await service.healthCheck();
 
-    expect(mockBoxClient.users.getCurrentUser).toHaveBeenCalledTimes(1);
+    expect(mockBoxClient.users.getUserMe).toHaveBeenCalledTimes(1);
   });
 
   it('returns connected=false when service not initialized', async () => {
