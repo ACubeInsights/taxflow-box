@@ -71,16 +71,25 @@ describe('boxCollaborationAccessService access checks', () => {
 
   it('hasAccess returns true when Box role meets required level', async () => {
     mockGetResourceCollaborations.mockResolvedValue([
-      { id: 'collab-1', role: 'viewer uploader', accessible_by: { id: 'box-user-1' } },
+      { id: 'collab-1', role: 'viewer uploader', accessibleBy: { id: 'box-user-1' } },
     ]);
 
     const allowed = await service.hasAccess('box-user-1', 'folder-1', 'folder', 'writer');
     expect(allowed).toBe(true);
   });
 
+  it('hasAccess matches camelCase accessibleBy and string/number ids', async () => {
+    mockGetResourceCollaborations.mockResolvedValue([
+      { id: 'collab-1', role: 'viewer', accessibleBy: { id: 52204089092 } },
+    ]);
+
+    const allowed = await service.hasAccess('52204089092', 'folder-1', 'folder', 'viewer');
+    expect(allowed).toBe(true);
+  });
+
   it('hasAccess returns false when Box role is insufficient', async () => {
     mockGetResourceCollaborations.mockResolvedValue([
-      { id: 'collab-1', role: 'viewer', accessible_by: { id: 'box-user-1' } },
+      { id: 'collab-1', role: 'viewer', accessibleBy: { id: 'box-user-1' } },
     ]);
     mockGetFileById.mockResolvedValue({ parent: { id: 'folder-parent' } });
     mockGetFolderById.mockResolvedValue({ parent: { id: '0' } });
@@ -93,7 +102,7 @@ describe('boxCollaborationAccessService access checks', () => {
     mockGetResourceCollaborations.mockImplementation(async (resourceId, resourceType) => {
       if (resourceType === 'file' && resourceId === 'file-inherit') return [];
       if (resourceType === 'folder' && resourceId === 'folder-inherit-parent') {
-        return [{ id: 'collab-2', role: 'previewer', accessible_by: { id: 'box-user-1' } }];
+        return [{ id: 'collab-2', role: 'previewer', accessibleBy: { id: 'box-user-1' } }];
       }
       return [];
     });

@@ -1,6 +1,18 @@
 import { BoxWrapperService } from '../../../box-wrapper-service/dist/index.js';
 import { config } from '../config.js';
 import { logger } from '../utils/logger.js';
+import {
+  findCollaborationForUser,
+  isAlreadyCollaboratorError,
+  isBoxNotFoundError,
+} from '../utils/boxCollabUtils.js';
+
+export {
+  getCollaborationUserId,
+  findCollaborationForUser,
+  isBoxNotFoundError,
+  isAlreadyCollaboratorError,
+} from '../utils/boxCollabUtils.js';
 
 export class BoxService {
   constructor() {
@@ -313,7 +325,7 @@ export class BoxService {
         : await client.listCollaborations.getFolderCollaborations(resourceId);
       return result.entries || [];
     } catch (error) {
-      if (error.statusCode === 404 || error.status === 404) return [];
+      if (isBoxNotFoundError(error)) return [];
       throw error;
     }
   }
@@ -325,11 +337,13 @@ export class BoxService {
     this.ensureInitialized();
     const client = this.getBoxClient();
     const collabs = await this.getResourceCollaborations(resourceId, resourceType);
-    const existing = collabs.find((c) => c.accessible_by?.id === boxUserId);
+    let existing = findCollaborationForUser(collabs, boxUserId);
 
     if (existing) {
       if (existing.role !== role) {
-        await client.userCollaborations.updateCollaborationById(existing.id, { role });
+        await client.userCollaborations.updateCollaborationById(existing.id, {
+          requestBody: { role },
+        });
       }
       return existing.id;
     }
@@ -337,13 +351,24 @@ export class BoxService {
     try {
       const result = await client.userCollaborations.createCollaboration({
         item: { type: resourceType, id: resourceId },
-        accessibleBy: { type: 'user', id: boxUserId },
+        accessibleBy: { type: 'user', id: String(boxUserId) },
         role,
       });
       return result.id || null;
     } catch (error) {
-      if (error.statusCode === 409 || error.status === 409) return null;
-      throw error;
+      // Box Gen SDK returns 400 user_already_collaborator when list miss (e.g. camelCase id mismatch historically)
+      if (!isAlreadyCollaboratorError(error)) throw error;
+
+      const refreshed = await this.getResourceCollaborations(resourceId, resourceType);
+      existing = findCollaborationForUser(refreshed, boxUserId);
+      if (!existing) throw error;
+
+      if (existing.role !== role) {
+        await client.userCollaborations.updateCollaborationById(existing.id, {
+          requestBody: { role },
+        });
+      }
+      return existing.id;
     }
   }
 
@@ -354,14 +379,14 @@ export class BoxService {
     this.ensureInitialized();
     const client = this.getBoxClient();
     const collabs = await this.getResourceCollaborations(resourceId, resourceType);
-    const existing = collabs.find((c) => c.accessible_by?.id === boxUserId);
+    const existing = findCollaborationForUser(collabs, boxUserId);
     if (!existing) return false;
 
     try {
       await client.userCollaborations.deleteCollaborationById(existing.id);
       return true;
     } catch (error) {
-      if (error.statusCode === 404 || error.status === 404) return false;
+      if (isBoxNotFoundError(error)) return false;
       throw error;
     }
   }
@@ -379,7 +404,7 @@ export class BoxService {
     try {
       this.ensureInitialized();
       const client = this.getBoxClient();
-      const me = await client.users.getCurrentUser();
+      const me = await client.users.getUserMe();
       const result = {
         connected: true,
         tier: this.tier,

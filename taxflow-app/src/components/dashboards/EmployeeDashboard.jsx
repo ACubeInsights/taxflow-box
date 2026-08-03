@@ -4,6 +4,7 @@ import { Plus, UserPlus, Shield, Upload } from 'lucide-react'
 import { useAuth } from '../../context/AuthContext'
 import { SectionHeader } from '../ui'
 import ClientListPanel from '../ClientListPanel'
+import PendingReviewsPanel from '../PendingReviewsPanel'
 import DocumentRequestCreator from '../DocumentRequestCreator'
 import OnboardClientModal from '../OnboardClientModal'
 import PermissionManagerPanel from '../PermissionManagerPanel'
@@ -58,6 +59,8 @@ export default function EmployeeDashboard() {
           )
         })}
       </div>
+
+      <PendingReviewsPanel />
 
       <ClientListPanel />
 

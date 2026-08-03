@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react'
+import { createPortal } from 'react-dom'
 import { motion, AnimatePresence } from 'framer-motion'
 import { X, Plus, Loader2, AlertTriangle } from 'lucide-react'
 import { projectApi, documentTypeApi } from '../services/api'
@@ -237,7 +238,7 @@ export default function DocumentRequestCreator({
   const inputClass = (hasError) =>
     `w-full rounded-xl border ${hasError ? 'border-[var(--color-error)]/50' : 'border-[var(--color-outline-variant)]'} bg-[var(--color-surface-container)]/50 px-4 py-3.5 text-[14px] font-medium text-[var(--color-on-surface)] placeholder:text-[var(--color-on-surface-variant)]/50 outline-none transition-all duration-200 focus:bg-[var(--color-surface-container)] focus:border-[var(--color-primary)]`
 
-  return (
+  return createPortal(
     <AnimatePresence>
       {isOpen && (
         <>
@@ -247,7 +248,7 @@ export default function DocumentRequestCreator({
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
             transition={{ duration: 0.3 }}
-            className="fixed inset-0 z-[100]"
+            className="fixed inset-0 z-[200]"
             style={{ background: 'color-mix(in srgb, var(--color-archive) 72%, transparent)' }}
             onClick={handleClose}
           />
@@ -258,7 +259,7 @@ export default function DocumentRequestCreator({
             animate={{ x: 0, opacity: 1, filter: 'blur(0px)' }}
             exit={{ x: '100%', opacity: 0, filter: 'blur(10px)' }}
             transition={{ type: 'spring', damping: 30, stiffness: 300, mass: 0.8 }}
-            className="fixed top-0 right-0 z-[101] flex h-full w-full max-w-lg flex-col border-l border-[var(--color-rule)] bg-[var(--color-folio)] shadow-[0_8px_32px_rgba(0,0,0,0.45)]"
+            className="fixed top-0 right-0 z-[201] flex h-full w-full max-w-lg flex-col border-l border-[var(--color-rule)] bg-[var(--color-folio)] shadow-[0_8px_32px_rgba(0,0,0,0.45)]"
           >
             {/* Header */}
             <div className="sticky top-0 z-10 flex items-center justify-between border-b border-[var(--color-rule)] bg-[var(--color-folio)] px-[var(--space-6)] py-[var(--space-4)] sm:px-[var(--space-8)] sm:py-[var(--space-6)]">
@@ -483,6 +484,7 @@ export default function DocumentRequestCreator({
           </motion.div>
         </>
       )}
-    </AnimatePresence>
+    </AnimatePresence>,
+    document.body,
   )
 }

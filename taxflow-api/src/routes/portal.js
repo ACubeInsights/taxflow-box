@@ -112,6 +112,13 @@ router.post('/zip-download', requireRole('employee', 'superadmin'), async (req, 
     if (error.statusCode === 400) {
       return res.status(400).json({ error: error.message });
     }
+    if (error.statusCode === 404 || error.code === 'NOT_FOUND') {
+      return res.status(404).json({ error: 'Resource not found' });
+    }
+    const msg = String(error.message || '');
+    if (msg.includes('not_found') || (msg.includes('404') && msg.includes('Not Found'))) {
+      return res.status(404).json({ error: 'Resource not found' });
+    }
     next(error);
   }
 });

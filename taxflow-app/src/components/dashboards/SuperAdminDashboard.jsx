@@ -5,6 +5,7 @@ import { SectionHeader } from '../ui'
 import OnboardClientModal from '../OnboardClientModal'
 import AddEmployeeModal from '../AddEmployeeModal'
 import ClientListPanel from '../ClientListPanel'
+import PendingReviewsPanel from '../PendingReviewsPanel'
 
 export default function SuperAdminDashboard() {
   const navigate = useNavigate()
@@ -28,6 +29,8 @@ export default function SuperAdminDashboard() {
           Invite a client
         </button>
       </div>
+
+      <PendingReviewsPanel />
 
       <ClientListPanel />
 

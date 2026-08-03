@@ -60,6 +60,23 @@ function isBoxNotFoundError(err) {
   );
 }
 
+function isBoxMetadataPathError(err) {
+  const message = String(err?.message || '');
+  return message.includes('patch operation') || message.includes('no such path');
+}
+
+const BOX_PRIORITY_VALUES = new Set(['low', 'normal', 'high', 'urgent']);
+
+/** Map app/DB priority labels onto taxflow_document enum keys. */
+export function normalizeBoxPriority(priority) {
+  const raw = String(priority || 'normal').trim().toLowerCase();
+  if (BOX_PRIORITY_VALUES.has(raw)) return raw;
+  if (raw === 'medium' || raw === 'med') return 'normal';
+  if (raw === 'critical') return 'urgent';
+  return 'normal';
+}
+
+
 export class BoxDocumentStatusService {
   _canUseBoxMetadata() {
     return boxService.getTier() === 'enterprise';
@@ -104,7 +121,7 @@ export class BoxDocumentStatusService {
         METADATA_TEMPLATE
       );
     } catch (err) {
-      if (err.statusCode === 404 || err.status === 404) return null;
+      if (err.statusCode === 404 || err.status === 404 || isBoxNotFoundError(err)) return null;
       throw err;
     }
   }
@@ -127,7 +144,7 @@ export class BoxDocumentStatusService {
     if (fields.clientId) payload.client_id = fields.clientId;
     if (fields.documentType) payload.document_type = fields.documentType;
     if (fields.financialYear) payload.financial_year = fields.financialYear;
-    if (fields.priority) payload.priority = fields.priority;
+    if (fields.priority) payload.priority = normalizeBoxPriority(fields.priority);
     if (fields.engagementId) payload.engagement_id = fields.engagementId;
     if (fields.requestName) payload.request_name = fields.requestName;
     if (fields.dueDate) payload.due_date = fields.dueDate;
@@ -136,21 +153,8 @@ export class BoxDocumentStatusService {
     if (fields.reviewComments !== undefined) payload.review_comments = fields.reviewComments;
     if (fields.reviewedAt !== undefined) payload.reviewed_at = fields.reviewedAt;
 
-    try {
-      await client.fileMetadata.updateFileMetadataById(
-        boxFileId,
-        METADATA_SCOPE,
-        METADATA_TEMPLATE,
-        Object.entries(payload).map(([key, value]) => ({
-          op: 'replace',
-          path: `/${key}`,
-          value,
-        }))
-      );
-      return true;
-    } catch (err) {
-      if (!isBoxNotFoundError(err)) throw err;
-
+    const existing = await this.getFileMetadata(boxFileId);
+    if (!existing) {
       await client.fileMetadata.createFileMetadataById(
         boxFileId,
         METADATA_SCOPE,
@@ -158,6 +162,63 @@ export class BoxDocumentStatusService {
         payload
       );
       return true;
+    }
+
+    // Replace only keys already present; add missing ones (Box rejects replace on absent paths).
+    const ops = Object.entries(payload).map(([key, value]) => ({
+      op: existing[key] !== undefined && existing[key] !== null ? 'replace' : 'add',
+      path: `/${key}`,
+      value,
+    }));
+
+    try {
+      await client.fileMetadata.updateFileMetadataById(
+        boxFileId,
+        METADATA_SCOPE,
+        METADATA_TEMPLATE,
+        ops
+      );
+      return true;
+    } catch (err) {
+      if (isBoxNotFoundError(err)) {
+        await client.fileMetadata.createFileMetadataById(
+          boxFileId,
+          METADATA_SCOPE,
+          METADATA_TEMPLATE,
+          payload
+        );
+        return true;
+      }
+      // Race / partial template: retry with all-add, then create
+      if (isBoxMetadataPathError(err)) {
+        try {
+          await client.fileMetadata.updateFileMetadataById(
+            boxFileId,
+            METADATA_SCOPE,
+            METADATA_TEMPLATE,
+            Object.entries(payload).map(([key, value]) => ({
+              op: 'add',
+              path: `/${key}`,
+              value,
+            }))
+          );
+          return true;
+        } catch (addErr) {
+          if (!isBoxNotFoundError(addErr) && !isBoxMetadataPathError(addErr)) throw addErr;
+          logger.warn('Box metadata update fell back to create', {
+            boxFileId,
+            error: addErr.message,
+          });
+          await client.fileMetadata.createFileMetadataById(
+            boxFileId,
+            METADATA_SCOPE,
+            METADATA_TEMPLATE,
+            payload
+          );
+          return true;
+        }
+      }
+      throw err;
     }
   }
 
@@ -176,7 +237,7 @@ export class BoxDocumentStatusService {
       clientId,
       documentType,
       financialYear,
-      priority: priority?.toLowerCase?.() || 'normal',
+      priority: normalizeBoxPriority(priority),
     });
   }
 

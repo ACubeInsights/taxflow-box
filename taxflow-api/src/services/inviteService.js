@@ -60,13 +60,19 @@ class InviteService {
       { expiryHours: INVITE_EXPIRY_HOURS }
     );
 
-    // Send email (fire-and-forget — don't block response)
     const frontendUrl = config.frontendUrl || 'http://localhost:5173';
     const signupUrl = `${frontendUrl}/signup?token=${encodeURIComponent(token)}`;
 
-    this._sendInviteEmail(record.id, email, clientName, signupUrl).catch(() => {});
+    const emailResult = await this._sendInviteEmail(record.id, email, clientName, signupUrl);
 
-    return { id: record.id, status: 'pending_invite', email };
+    return {
+      id: record.id,
+      status: 'pending_invite',
+      email,
+      signupUrl,
+      emailSent: !!emailResult?.sent,
+      tokenExpiresAt,
+    };
   }
 
   /**
@@ -105,9 +111,16 @@ class InviteService {
     const frontendUrl = config.frontendUrl || 'http://localhost:5173';
     const signupUrl = `${frontendUrl}/signup?token=${encodeURIComponent(token)}`;
 
-    this._sendInviteEmail(record.id, record.email, record.client_name, signupUrl).catch(() => {});
+    const emailResult = await this._sendInviteEmail(record.id, record.email, record.client_name, signupUrl);
 
-    return { id: record.id, status: 'pending_invite', email: record.email, tokenExpiresAt };
+    return {
+      id: record.id,
+      status: 'pending_invite',
+      email: record.email,
+      signupUrl,
+      emailSent: !!emailResult?.sent,
+      tokenExpiresAt,
+    };
   }
 
   /**
@@ -133,16 +146,18 @@ class InviteService {
   /** @private */
   async _sendInviteEmail(inviteId, email, clientName, signupUrl) {
     try {
-      await emailService.sendEmail(email, 'client_invite', {
+      const result = await emailService.sendEmail(email, 'client_invite', {
         clientName,
         message: `Hi ${clientName},\n\nYou've been invited to TaxFlow Pro — your secure tax document portal. Click the button below to set up your account and get started.`,
         deepLinkUrl: signupUrl,
       });
+      return result || { sent: false };
     } catch (err) {
       console.error(`[InviteService] Email dispatch failed for invite ${inviteId}:`, err.message);
       try {
         await this.inviteRepo.setDeliveryFailure(inviteId, true);
       } catch { /* ignore */ }
+      return { sent: false, reason: err.message };
     }
   }
 }

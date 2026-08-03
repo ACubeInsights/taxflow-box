@@ -43,6 +43,8 @@ router.post('/', requireAuth, requireRole('employee', 'superadmin'), async (req,
           resourceType,
           accessLevel,
           grantedBy: req.user.name || req.user.email || grantedBy,
+          clientId,
+          fileName: displayName,
         }).catch((err) => {
           console.error(`Permission notification failed for client ${clientId}:`, err.message);
         });

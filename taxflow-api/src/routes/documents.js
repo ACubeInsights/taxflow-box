@@ -11,6 +11,9 @@ import boxDocumentStatusService from '../services/boxDocumentStatusService.js';
 import boxDocumentRequestService from '../services/boxDocumentRequestService.js';
 import { isBoxFirstSchema } from '../db/schemaMode.js';
 import vaultResourceGuard from '../services/vaultResourceGuard.js';
+import notificationService from '../services/notificationService.js';
+import { getRepositories } from '../db/repositories/index.js';
+import { logger } from '../utils/logger.js';
 import fs from 'fs';
 import path from 'path';
 import os from 'os';
@@ -19,6 +22,57 @@ import { Readable } from 'stream';
 
 const router = express.Router();
 
+/**
+ * Resolve staff user IDs who should be notified of a client upload.
+ */
+async function resolveStaffUploadRecipients(clientId, createdBy) {
+  const ids = new Set();
+  let repos;
+  try {
+    repos = getRepositories();
+  } catch {
+    if (createdBy) ids.add(createdBy);
+    return [...ids];
+  }
+
+  if (createdBy) {
+    if (String(createdBy).includes('@') && repos.userRepo?.findByEmail) {
+      const user = await repos.userRepo.findByEmail(createdBy);
+      if (user?.id) ids.add(user.id);
+    } else {
+      ids.add(createdBy);
+    }
+  }
+
+  if (clientId && repos.clientRepo && repos.inviteRepo && repos.userRepo) {
+    try {
+      const client = await repos.clientRepo.findById(clientId);
+      if (client?.email) {
+        const invite = await repos.inviteRepo.findByEmail(client.email);
+        const empEmail = invite?.employee_email;
+        if (empEmail) {
+          const emp = await repos.userRepo.findByEmail(empEmail);
+          if (emp?.id) ids.add(emp.id);
+        }
+      }
+    } catch (err) {
+      logger.warn('Could not resolve invite employee for upload notify', { error: err.message });
+    }
+  }
+
+  if (ids.size === 0 && repos.userRepo?.findByRole) {
+    try {
+      const employees = await repos.userRepo.findByRole('employee');
+      for (const u of employees || []) {
+        if (u.id) ids.add(u.id);
+      }
+    } catch {
+      /* ignore */
+    }
+  }
+
+  return [...ids];
+}
 /** Staff must only touch files inside known client vaults */
 async function assertStaffVaultFile(req, res, next) {
   try {
@@ -111,42 +165,72 @@ router.post('/upload', requireAuth, upload.single('file'), validateUploadFolder,
     try { fs.unlinkSync(tempFilePath); } catch { /* best effort */ }
     tempFilePath = null;
 
-    // Link upload to document request: Box metadata is source of truth for status
+    // Link upload to document request: Box metadata is source of truth for status,
+    // but DB index must update even if metadata write fails (invalid enum, etc.).
     if (docRequest) {
       try {
-          await boxDocumentStatusService.applyUploadMetadata(file.id, {
-            requestId: docRequest.id,
-            clientId: docRequest.clientId,
-            documentType: docRequest.documentType,
-            financialYear: new Date().getFullYear().toString(),
-            priority: docRequest.priority,
-          });
+        await boxDocumentStatusService.applyUploadMetadata(file.id, {
+          requestId: docRequest.id,
+          clientId: docRequest.clientId,
+          documentType: docRequest.documentType,
+          financialYear: new Date().getFullYear().toString(),
+          priority: docRequest.priority,
+        });
+      } catch (metaErr) {
+        console.error('Failed to write Box upload metadata:', metaErr.message);
+      }
 
-          if (isBoxFirstSchema()) {
-            await boxDocumentRequestService.updateStatus(
-              requestId,
-              'Uploaded',
-              docRequest.version || 1,
-              {
-                clientId: docRequest.clientId,
-                uploadedFileName: file.name,
-                fileId: String(file.id),
-              }
-            );
-          } else {
-            const db = getDb();
-            await db('document_requests')
-              .where('id', requestId)
-              .update({
-                status: 'Uploaded',
-                box_file_id: file.id,
-                uploaded_file_name: file.name,
-                version: db.raw('version + 1'),
-                updated_at: new Date().toISOString(),
-              });
-          }
+      try {
+        if (isBoxFirstSchema()) {
+          await boxDocumentRequestService.updateStatus(
+            requestId,
+            'Uploaded',
+            docRequest.version || 1,
+            {
+              clientId: docRequest.clientId,
+              uploadedFileName: file.name,
+              fileId: String(file.id),
+            }
+          );
+        } else {
+          const db = getDb();
+          await db('document_requests')
+            .where('id', requestId)
+            .update({
+              status: 'Uploaded',
+              box_file_id: file.id,
+              uploaded_file_name: file.name,
+              version: db.raw('version + 1'),
+              updated_at: new Date().toISOString(),
+            });
+        }
       } catch (dbErr) {
         console.error('Failed to update document request after upload:', dbErr.message);
+      }
+    }
+
+    // In-app staff alert for client uploads (does not depend on Box webhooks)
+    if (req.user?.role === 'client') {
+      try {
+        const clientId = docRequest?.clientId || req.clientId;
+        let clientName = 'Client';
+        try {
+          const repos = getRepositories();
+          if (clientId && repos.clientRepo) {
+            const client = await repos.clientRepo.findById(clientId);
+            if (client?.name) clientName = client.name;
+          }
+        } catch { /* ignore */ }
+
+        const recipients = await resolveStaffUploadRecipients(clientId, docRequest?.createdBy);
+        const documentName = file.name || 'Document';
+        await Promise.all(
+          recipients.map((employeeId) =>
+            notificationService.dispatchUploadNotification(employeeId, clientName, documentName)
+          )
+        );
+      } catch (notifyErr) {
+        logger.warn('Staff upload notification failed', { error: notifyErr.message });
       }
     }
 

@@ -4,6 +4,7 @@
  */
 
 import boxService from './boxService.js';
+import { isBoxNotFoundError } from '../utils/boxCollabUtils.js';
 import { getRepositories } from '../db/repositories/index.js';
 import { createHttpError } from '../utils/httpError.js';
 import { logger } from '../utils/logger.js';
@@ -65,7 +66,7 @@ class VaultResourceGuard {
         chain.push(String(resourceId));
       }
     } catch (err) {
-      if (err.statusCode === 404 || err.status === 404) {
+      if (err.statusCode === 404 || err.status === 404 || isBoxNotFoundError(err)) {
         throw createHttpError('Resource not found', 404, 'NOT_FOUND');
       }
       throw err;
@@ -161,7 +162,7 @@ class VaultResourceGuard {
         await this.assertKnownVaultFile(id);
         allowed.push(id);
       } catch (err) {
-        if (err.statusCode === 404) continue;
+        if (err.statusCode === 404 || err.code === 'NOT_FOUND' || isBoxNotFoundError(err)) continue;
         throw err;
       }
     }

@@ -21,7 +21,7 @@ export class EmailService {
         to: recipientEmail,
         template: templateId,
       });
-      return;
+      return { sent: false, reason: 'BREVO_API_KEY not configured' };
     }
 
     const subject = this._getEmailSubject(templateId, context);
@@ -56,6 +56,8 @@ export class EmailService {
       },
       { maxRetries: 3, baseDelayMs: 2000 }
     );
+
+    return { sent: true };
   }
 
   _getEmailSubject(templateId, context) {

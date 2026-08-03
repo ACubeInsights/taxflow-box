@@ -7,6 +7,9 @@ import {
   BoxDocumentStatusService,
 } from '../boxDocumentStatusService.js';
 
+const mockGetFileMetadataById = vi.fn();
+const mockUpdateFileMetadataById = vi.fn();
+const mockCreateFileMetadataById = vi.fn();
 const mockExecuteRead = vi.fn();
 
 vi.mock('../boxService.js', () => ({
@@ -15,6 +18,11 @@ vi.mock('../boxService.js', () => ({
     getBoxClient: () => ({
       metadataQueries: {
         executeRead: (...args) => mockExecuteRead(...args),
+      },
+      fileMetadata: {
+        getFileMetadataById: (...args) => mockGetFileMetadataById(...args),
+        updateFileMetadataById: (...args) => mockUpdateFileMetadataById(...args),
+        createFileMetadataById: (...args) => mockCreateFileMetadataById(...args),
       },
     }),
   },
@@ -156,5 +164,55 @@ describe('boxDocumentStatusService mergeWithBoxMetadata', () => {
     expect(list).toHaveLength(1);
     expect(list[0].id).toBe('req-a');
     expect(list[0].status).toBe('Not_Requested');
+  });
+});
+
+describe('boxDocumentStatusService setFileStatus', () => {
+  /** @type {BoxDocumentStatusService} */
+  let service;
+
+  beforeEach(() => {
+    mockGetFileMetadataById.mockReset();
+    mockUpdateFileMetadataById.mockReset();
+    mockCreateFileMetadataById.mockReset();
+    service = new BoxDocumentStatusService();
+  });
+
+  it('creates metadata when none exists', async () => {
+    mockGetFileMetadataById.mockRejectedValue({ statusCode: 404 });
+    mockCreateFileMetadataById.mockResolvedValue({});
+
+    await service.setFileStatus('file-1', 'Under_Review', { reviewer: 'emp-1' });
+
+    expect(mockCreateFileMetadataById).toHaveBeenCalled();
+    expect(mockUpdateFileMetadataById).not.toHaveBeenCalled();
+    const payload = mockCreateFileMetadataById.mock.calls[0][3];
+    expect(payload.status).toBe('under_review');
+    expect(payload.reviewer).toBe('emp-1');
+  });
+
+  it('adds missing reviewer path instead of replace-only', async () => {
+    mockGetFileMetadataById.mockResolvedValue({ status: 'uploaded' });
+    mockUpdateFileMetadataById.mockResolvedValue({});
+
+    await service.setFileStatus('file-1', 'Under_Review', { reviewer: 'emp-1' });
+
+    const ops = mockUpdateFileMetadataById.mock.calls[0][3];
+    expect(ops).toEqual(
+      expect.arrayContaining([
+        { op: 'replace', path: '/status', value: 'under_review' },
+        { op: 'add', path: '/reviewer', value: 'emp-1' },
+      ])
+    );
+  });
+
+  it('normalizes Medium priority to normal enum', async () => {
+    mockGetFileMetadataById.mockRejectedValue({ statusCode: 404 });
+    mockCreateFileMetadataById.mockResolvedValue({});
+
+    await service.setFileStatus('file-1', 'Uploaded', { priority: 'Medium' });
+
+    const payload = mockCreateFileMetadataById.mock.calls[0][3];
+    expect(payload.priority).toBe('normal');
   });
 });

@@ -87,12 +87,43 @@ export default function OnboardClientModal({ open, onClose, onSuccess }) {
               <CheckCircle2 size={28} className="text-[var(--color-commit)]" aria-hidden />
               <div>
                 <h3 className="m-0 mb-[var(--space-1)] font-display text-md font-semibold text-[var(--color-ink)]">
-                  Invite sent
+                  {result.emailSent ? 'Invite sent' : 'Invite created'}
                 </h3>
                 <p className="m-0 text-sm leading-relaxed text-[var(--color-whisper)]">
-                  A signup link was sent to{' '}
-                  <strong className="font-medium text-[var(--color-ink)]">{result.email}</strong>.
+                  {result.emailSent ? (
+                    <>
+                      A signup link was sent to{' '}
+                      <strong className="font-medium text-[var(--color-ink)]">{result.email}</strong>.
+                    </>
+                  ) : (
+                    <>
+                      Email delivery is not configured. Share this signup link with{' '}
+                      <strong className="font-medium text-[var(--color-ink)]">{result.email}</strong>:
+                    </>
+                  )}
                 </p>
+                {result.signupUrl && !result.emailSent && (
+                  <div className="mt-[var(--space-3)] w-full text-left">
+                    <label className="mb-[var(--space-1)] block text-xs font-medium text-[var(--color-whisper)]" htmlFor="invite-signup-url">
+                      Signup link
+                    </label>
+                    <textarea
+                      id="invite-signup-url"
+                      readOnly
+                      rows={3}
+                      className="w-full resize-none rounded-[var(--radius-control)] border border-[var(--color-rule)] bg-[var(--color-ledger)] p-[var(--space-2)] text-xs text-[var(--color-ink)]"
+                      value={result.signupUrl}
+                      onFocus={(e) => e.target.select()}
+                    />
+                    <button
+                      type="button"
+                      className="btn-ghost mt-[var(--space-2)]"
+                      onClick={() => navigator.clipboard?.writeText(result.signupUrl)}
+                    >
+                      Copy link
+                    </button>
+                  </div>
+                )}
               </div>
               <button type="button" onClick={handleClose} className="btn-ghost">
                 Done

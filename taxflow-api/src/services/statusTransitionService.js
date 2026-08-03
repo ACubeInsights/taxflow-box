@@ -145,6 +145,33 @@ export class StatusTransitionService {
           console.error(`Revision email dispatch failed for document ${documentId}:`, err.message);
         });
       }
+      this._notificationService.notifyClient(
+        { clientId: doc.clientId, email: client?.email },
+        'revision_requested',
+        {
+          fileId: doc.fileId || documentId,
+          fileName: doc.name,
+          clientId: doc.clientId,
+          message: comment,
+        }
+      ).catch((err) => {
+        console.error(`Revision in-app notify failed for document ${documentId}:`, err.message);
+      });
+    }
+
+    if (toStatus === 'Approved' || toStatus === 'Waived') {
+      const eventType = toStatus === 'Approved' ? 'document_approved' : 'document_waived';
+      this._notificationService.notifyClient(
+        { clientId: doc.clientId, email: client?.email },
+        eventType,
+        {
+          fileId: doc.fileId || documentId,
+          fileName: doc.name,
+          clientId: doc.clientId,
+        }
+      ).catch((err) => {
+        console.error(`${eventType} notify failed for document ${documentId}:`, err.message);
+      });
     }
 
     // Invalidate portal caches so dashboards show fresh data

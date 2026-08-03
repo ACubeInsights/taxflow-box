@@ -6,10 +6,11 @@ import {
 } from 'lucide-react'
 import { SectionHeader, FolioPanel, FolioSpine } from '../ui'
 import { useAuth } from '../../context/AuthContext'
-import { vaultApi, getAuthToken } from '../../services/api'
+import { vaultApi, portalApi, getAuthToken } from '../../services/api'
 import { formatFileSize, getFileIcon, sortFilesByDate } from '../../utils/fileUtils'
 import UploadDropzone from '../UploadDropzone'
 import BoxPreviewModal from '../BoxPreviewModal'
+import DocumentRequestList from '../DocumentRequestList'
 
 const ICON_MAP = { FileText, FileSpreadsheet, Image, File }
 
@@ -256,13 +257,35 @@ function FolderSection({ folder, onAction, downloading, uploading }) {
 export default function ClientDashboard() {
   const { user } = useAuth() || {}
   const vault = user?.vault || null
+  const clientId = vault?.clientId || user?.clientId || null
   const [downloading, setDownloading] = useState(null)
   const [previewFile, setPreviewFile] = useState(null)
   const [uploading, setUploading] = useState(null)
   const [updateError, setUpdateError] = useState(null)
+  const [requests, setRequests] = useState([])
+  const [requestsLoading, setRequestsLoading] = useState(false)
+  const [requestsError, setRequestsError] = useState(null)
 
   const folders = getVaultFolders(vault)
   const year = vault?.financialYear || new Date().getFullYear()
+
+  const fetchRequests = useCallback(async () => {
+    if (!clientId) return
+    setRequestsLoading(true)
+    setRequestsError(null)
+    try {
+      const data = await portalApi.getClientProgress(clientId)
+      setRequests(data.documents || [])
+    } catch (err) {
+      setRequestsError(err.message || 'Could not load document requests')
+    } finally {
+      setRequestsLoading(false)
+    }
+  }, [clientId])
+
+  useEffect(() => {
+    fetchRequests()
+  }, [fetchRequests])
 
   const handleDownload = async (fileId) => {
     setDownloading(fileId)
@@ -354,6 +377,35 @@ export default function ClientDashboard() {
             <X size={14} />
           </button>
         </div>
+      )}
+
+      {clientId && (
+        <>
+          {requestsLoading && (
+            <FolioPanel className="mb-[var(--space-8)]">
+              <div className="flex items-center justify-center gap-[var(--space-2)] py-[var(--space-8)]">
+                <Loader2 size={18} className="animate-spin text-[var(--color-signal)]" aria-hidden />
+                <span className="text-sm text-[var(--color-whisper)]">Loading requests…</span>
+              </div>
+            </FolioPanel>
+          )}
+          {!requestsLoading && requestsError && (
+            <div className="mb-[var(--space-8)] flex items-center gap-[var(--space-3)] rounded-[var(--radius-panel)] border border-[var(--color-flag)] bg-[var(--color-flag-muted)] px-[var(--space-4)] py-[var(--space-3)]">
+              <AlertCircle size={14} className="shrink-0 text-[var(--color-flag)]" aria-hidden />
+              <span className="flex-1 text-sm text-[var(--color-flag)]">{requestsError}</span>
+              <button type="button" onClick={fetchRequests} className="btn-ghost h-8 text-xs">
+                <RefreshCw size={12} aria-hidden /> Retry
+              </button>
+            </div>
+          )}
+          {!requestsLoading && !requestsError && (
+            <DocumentRequestList
+              requests={requests}
+              uploadsFolderId={vault?.uploads}
+              onUploaded={fetchRequests}
+            />
+          )}
+        </>
       )}
 
       <div className="flex flex-col gap-[var(--space-3)]">

@@ -17,7 +17,7 @@ export default function ResetPasswordPage() {
   const [error, setError] = useState(null)
 
   const passwordsMatch = newPassword === confirmPassword
-  const isValid = newPassword.length >= 6 && passwordsMatch
+  const isValid = newPassword.length >= 12 && passwordsMatch
 
   const handleSubmit = async (e) => {
     e.preventDefault()

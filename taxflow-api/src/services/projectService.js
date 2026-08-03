@@ -17,6 +17,7 @@ import boxEntityService from './boxEntityService.js';
 import boxDocumentRequestService from './boxDocumentRequestService.js';
 import { isBoxFirstSchema } from '../db/schemaMode.js';
 import { createHttpError } from '../utils/httpError.js';
+import cacheLayer from './cacheLayer.js';
 import {
   clients as seedClients,
   projects as seedProjects,
@@ -431,15 +432,22 @@ export class ProjectService {
       // Send email notification to client when publishing (not draft)
       if (!doc.is_draft) {
         if (client && client.email) {
-          notificationService.dispatch('request_published', client.email, {
-            fileId: doc.id,
-            fileName: doc.name,
-            clientId: project.client_id,
-          }).catch((err) => {
+          notificationService.notifyClient(
+            { clientId: project.client_id, email: client.email },
+            'request_published',
+            {
+              fileId: doc.id,
+              fileName: doc.name,
+              clientId: project.client_id,
+            }
+          ).catch((err) => {
             console.error(`Publish notification failed for document ${doc.id}:`, err.message);
           });
         }
       }
+
+      cacheLayer.invalidate(`portal:client:${project.client_id}`).catch(() => {});
+      cacheLayer.invalidate('portal:employee:').catch(() => {});
 
       return this._mapDocFromDb(doc);
     }
@@ -489,15 +497,22 @@ export class ProjectService {
     if (!doc.isDraft) {
       const client = this._clients.get(project.clientId);
       if (client && client.email) {
-        notificationService.dispatch('request_published', client.email, {
-          fileId: id,
-          fileName: doc.name,
-          clientId: project.clientId,
-        }).catch((err) => {
+        notificationService.notifyClient(
+          { clientId: project.clientId, email: client.email },
+          'request_published',
+          {
+            fileId: id,
+            fileName: doc.name,
+            clientId: project.clientId,
+          }
+        ).catch((err) => {
           console.error(`Publish notification failed for document ${id}:`, err.message);
         });
       }
     }
+
+    cacheLayer.invalidate(`portal:client:${project.clientId}`).catch(() => {});
+    cacheLayer.invalidate('portal:employee:').catch(() => {});
 
     return { ...doc };
   }

@@ -482,27 +482,43 @@ export class AuthService {
    * @returns {Promise<{ message: string }>}
    */
   async requestPasswordReset(email) {
+    const normalized = String(email || '').trim().toLowerCase();
+    const genericResponse = {
+      message: 'If an account exists with that email, a reset link has been sent.',
+    };
+
+    // Anti-enumeration: always return the same message. Only issue a token + email
+    // when a TaxFlow user actually exists (avoids dead reset links → "User not found").
+    let accountExists = false;
+    if (normalized && this._userRepo) {
+      const user = await this._userRepo.findByEmail(normalized);
+      accountExists = !!user;
+    }
+
+    if (!accountExists) {
+      return genericResponse;
+    }
+
     const resetToken = crypto.randomBytes(32).toString('hex');
     const expiresAt = new Date(Date.now() + 30 * 60 * 1000).toISOString(); // 30 min
 
     if (this._resetTokenRepo) {
-      await this._resetTokenRepo.create({ token: resetToken, email: email.toLowerCase(), expiresAt });
+      await this._resetTokenRepo.create({ token: resetToken, email: normalized, expiresAt });
     } else {
-      this._resetTokens.set(resetToken, { email: email.toLowerCase(), expiresAt });
+      this._resetTokens.set(resetToken, { email: normalized, expiresAt });
       setTimeout(() => this._resetTokens.delete(resetToken), 30 * 60 * 1000);
     }
 
-    // Send the reset email (fire-and-forget, don't reveal if email exists)
     const resetUrl = `${config.frontendUrl || 'http://localhost:5173'}/reset-password?token=${resetToken}`;
-    emailService.sendEmail(email, 'password_reset', {
-      message: `Hi ${email.split('@')[0]}, We received a request to reset your TaxFlow Pro password. Click the link below to set a new password. This link expires in 30 minutes.`,
+    emailService.sendEmail(normalized, 'password_reset', {
+      message: `Hi ${normalized.split('@')[0]}, We received a request to reset your TaxFlow Pro password. Click the link below to set a new password. This link expires in 30 minutes.`,
       deepLinkUrl: resetUrl,
       fileName: '',
     }).catch((err) => {
-      logger.error('Failed to send password reset email', { email, error: err.message });
+      logger.error('Failed to send password reset email', { email: normalized, error: err.message });
     });
 
-    return { message: 'If an account exists with that email, a reset link has been sent.' };
+    return genericResponse;
   }
 
   /**
@@ -566,7 +582,13 @@ export class AuthService {
       const emailFromExt = extractOriginalEmail(extId);
       return emailFromExt && emailFromExt.toLowerCase() === entry.email.toLowerCase();
     });
-    if (!found) throw createHttpError('User not found', 404, 'NOT_FOUND');
+    if (!found) {
+      throw createHttpError(
+        'No TaxFlow account found for this reset link. Request a new reset from an account that can sign in.',
+        404,
+        'NOT_FOUND',
+      );
+    }
 
     if (!this._userRepo) {
       throw createHttpError('Password reset requires database-backed users', 500, 'CONFIG_ERROR');

@@ -98,7 +98,8 @@ export class PortalService {
         );
 
         documents = merged.map((doc) => ({
-          fileId: doc.fileId || doc.id,
+          id: doc.id,
+          fileId: doc.fileId || null,
           fileName: doc.uploadedFileName || doc.fileName || doc.name,
           name: doc.name,
           description: doc.description,
@@ -110,11 +111,14 @@ export class PortalService {
           reviewComments: doc.status === 'Revision_Requested'
             ? (doc.revisionComments || undefined)
             : undefined,
+          revisionComments: doc.revisionComments || undefined,
+          uploadedFileName: doc.uploadedFileName || undefined,
           statusSource: doc.statusSource || 'db',
         }));
       } else {
         const boxEntries = await boxDocumentStatusService.queryDocumentsByClientId(resolvedClientId);
         documents = boxEntries.map((entry) => ({
+          id: entry.requestId || entry.fileId,
           fileId: entry.fileId,
           fileName: entry.fileName,
           name: entry.fileName,
@@ -149,69 +153,162 @@ export class PortalService {
     const cacheKey = `portal:employee:${employeeId}`;
 
     return cacheLayer.getOrFetch(cacheKey, 30, async () => {
-      const client = boxService.getBoxClient();
+      let pendingReviews = [];
+      let clientChecklists = [];
 
-      // Metadata query by reviewer + status (Req 20.1)
-      const queryResult = await client.metadataQueries?.executeRead?.({
-        from: `${METADATA_SCOPE}_${METADATA_TEMPLATE}`,
-        query: 'reviewer = :reviewer AND status = :status',
-        queryParams: { reviewer: employeeId, status: 'uploaded' },
-        ancestorFolderId: config.boxRootFolderId,
-        fields: [
-          'id', 'name', 'created_at',
-          'metadata.enterprise.taxflow_document.client_id',
-          'metadata.enterprise.taxflow_document.priority',
-          'metadata.enterprise.taxflow_document.status',
-        ],
-      }) || { entries: [] };
+      try {
+        const client = boxService.getBoxClient();
 
-      const entries = queryResult.entries || [];
-      const now = new Date();
+        // Metadata query by reviewer + status (Req 20.1)
+        const queryResult = await client.metadataQueries?.executeRead?.({
+          from: `${METADATA_SCOPE}_${METADATA_TEMPLATE}`,
+          query: 'reviewer = :reviewer AND status = :status',
+          queryParams: { reviewer: employeeId, status: 'uploaded' },
+          ancestorFolderId: config.boxRootFolderId,
+          fields: [
+            'id', 'name', 'created_at',
+            'metadata.enterprise.taxflow_document.client_id',
+            'metadata.enterprise.taxflow_document.priority',
+            'metadata.enterprise.taxflow_document.status',
+            'metadata.enterprise.taxflow_document.request_id',
+          ],
+        }) || { entries: [] };
 
-      // Sort by priority then upload date (Req 20.2)
-      const priorityOrder = { urgent: 0, high: 1, normal: 2, low: 3 };
+        const entries = queryResult.entries || [];
+        const now = new Date();
+        const priorityOrder = { urgent: 0, high: 1, normal: 2, low: 3 };
 
-      const pendingReviews = entries
-        .map((entry) => {
+        pendingReviews = entries
+          .map((entry) => {
+            const meta = entry.metadata?.enterprise?.taxflow_document || {};
+            const uploadedAt = entry.created_at || '';
+            return {
+              fileId: entry.id,
+              documentId: meta.request_id || null,
+              fileName: entry.name,
+              clientId: meta.client_id || '',
+              clientName: meta.client_id || '',
+              priority: meta.priority || 'normal',
+              status: 'Uploaded',
+              uploadedAt,
+              isOverdue: uploadedAt ? (now - new Date(uploadedAt)) > 7 * 24 * 60 * 60 * 1000 : false,
+              source: 'box',
+            };
+          })
+          .sort((a, b) => {
+            const pa = priorityOrder[a.priority] ?? 2;
+            const pb = priorityOrder[b.priority] ?? 2;
+            if (pa !== pb) return pa - pb;
+            return new Date(a.uploadedAt) - new Date(b.uploadedAt);
+          });
+
+        const clientMap = new Map();
+        for (const entry of entries) {
           const meta = entry.metadata?.enterprise?.taxflow_document || {};
-          const uploadedAt = entry.created_at || '';
-          return {
-            fileId: entry.id,
-            fileName: entry.name,
-            clientName: meta.client_id || '',
-            priority: meta.priority || 'normal',
-            uploadedAt,
-            isOverdue: uploadedAt ? (now - new Date(uploadedAt)) > 7 * 24 * 60 * 60 * 1000 : false,
-          };
-        })
-        .sort((a, b) => {
+          const cid = meta.client_id || 'unknown';
+          if (!clientMap.has(cid)) {
+            clientMap.set(cid, { clientId: cid, clientName: cid, totalRequired: 0, submitted: 0, approved: 0, pending: 0 });
+          }
+          const cl = clientMap.get(cid);
+          cl.totalRequired++;
+          cl.submitted++;
+          const status = meta.status || '';
+          if (status === 'approved') cl.approved++;
+          else cl.pending++;
+        }
+        clientChecklists = Array.from(clientMap.values());
+      } catch {
+        // Box metadata query unavailable — fall through to DB
+      }
+
+      // DB fallback / merge so API uploads without webhook metadata still surface
+      const dbPending = await this._getDbPendingReviews();
+      if (dbPending.length) {
+        const seen = new Set(
+          pendingReviews.map((r) => r.documentId || r.fileId).filter(Boolean)
+        );
+        for (const row of dbPending) {
+          const key = row.documentId || row.fileId;
+          if (key && seen.has(key)) continue;
+          if (key) seen.add(key);
+          pendingReviews.push(row);
+        }
+        pendingReviews.sort((a, b) => {
+          const priorityOrder = { urgent: 0, high: 1, normal: 2, low: 3 };
           const pa = priorityOrder[a.priority] ?? 2;
           const pb = priorityOrder[b.priority] ?? 2;
           if (pa !== pb) return pa - pb;
-          return new Date(a.uploadedAt) - new Date(b.uploadedAt);
+          return new Date(b.uploadedAt || 0) - new Date(a.uploadedAt || 0);
         });
-
-      // Build client checklists (Req 20.4)
-      const clientMap = new Map();
-      for (const entry of entries) {
-        const meta = entry.metadata?.enterprise?.taxflow_document || {};
-        const cid = meta.client_id || 'unknown';
-        if (!clientMap.has(cid)) {
-          clientMap.set(cid, { clientId: cid, clientName: cid, totalRequired: 0, submitted: 0, approved: 0, pending: 0 });
-        }
-        const cl = clientMap.get(cid);
-        cl.totalRequired++;
-        cl.submitted++;
-        const status = meta.status || '';
-        if (status === 'approved') cl.approved++;
-        else cl.pending++;
       }
 
-      return {
-        pendingReviews,
-        clientChecklists: Array.from(clientMap.values()),
-      };
+      if (!clientChecklists.length && dbPending.length) {
+        const clientMap = new Map();
+        for (const row of dbPending) {
+          const cid = row.clientId || 'unknown';
+          if (!clientMap.has(cid)) {
+            clientMap.set(cid, {
+              clientId: cid,
+              clientName: row.clientName || cid,
+              totalRequired: 0,
+              submitted: 0,
+              approved: 0,
+              pending: 0,
+            });
+          }
+          const cl = clientMap.get(cid);
+          cl.totalRequired++;
+          cl.submitted++;
+          cl.pending++;
+        }
+        clientChecklists = Array.from(clientMap.values());
+      }
+
+      return { pendingReviews, clientChecklists };
     });
+  }
+
+  /**
+   * Pending Uploaded/Under_Review document requests from DB (local/source-of-truth index).
+   * @returns {Promise<Array<object>>}
+   */
+  async _getDbPendingReviews() {
+    if (!this._docRepo?.findPendingReview) return [];
+
+    try {
+      const rows = await this._docRepo.findPendingReview({ limit: 50 });
+      const now = Date.now();
+      const results = [];
+
+      for (const row of rows) {
+        let clientName = row.client_id || '';
+        if (this._clientRepo && row.client_id) {
+          const client = await this._clientRepo.findById(row.client_id);
+          if (client?.name) clientName = client.name;
+        }
+
+        const uploadedAt = row.updated_at || row.created_at || '';
+        results.push({
+          fileId: row.box_file_id || null,
+          documentId: row.id,
+          fileName: row.uploaded_file_name || row.name,
+          clientId: row.client_id,
+          clientName,
+          projectId: row.project_id,
+          priority: String(row.priority || 'normal').toLowerCase() === 'medium'
+            ? 'normal'
+            : String(row.priority || 'normal').toLowerCase(),
+          status: row.status,
+          uploadedAt,
+          isOverdue: uploadedAt ? (now - new Date(uploadedAt).getTime()) > 7 * 24 * 60 * 60 * 1000 : false,
+          source: 'db',
+        });
+      }
+
+      return results;
+    } catch {
+      return [];
+    }
   }
 
   /**

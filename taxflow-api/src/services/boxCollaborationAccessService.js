@@ -6,6 +6,7 @@
  */
 
 import boxService from './boxService.js';
+import { findCollaborationForUser } from '../utils/boxCollabUtils.js';
 import cacheLayer from './cacheLayer.js';
 import vaultDiscoveryService from './vaultDiscoveryService.js';
 import { logger } from '../utils/logger.js';
@@ -197,7 +198,7 @@ export class BoxCollaborationAccessService {
 
   async _getCollaborationRole(boxUserId, resourceId, resourceType) {
     const collabs = await boxService.getResourceCollaborations(resourceId, resourceType);
-    const match = collabs.find((c) => c.accessible_by?.id === boxUserId);
+    const match = findCollaborationForUser(collabs, boxUserId);
     return match?.role || null;
   }
 

@@ -13,6 +13,9 @@ const EVENT_TYPE_ICONS = {
   mention:            AtSign,
   revision_requested: RotateCcw,
   request_published:  FileText,
+  document_approved:  FileText,
+  document_waived:    FileText,
+  permission_updated: KeyRound,
   email_failed:       AlertCircle,
 }
 
@@ -30,6 +33,7 @@ export default function TopNav() {
 
   const unreadCount = notifications.filter(n => !n.read).length
   const isStaff = user?.role === 'employee' || user?.role === 'superadmin'
+  const showNotifBell = isStaff || user?.role === 'client'
 
   useEffect(() => {
     const handler = (e) => {
@@ -41,7 +45,7 @@ export default function TopNav() {
   }, [])
 
   useEffect(() => {
-    if (!user || !isStaff) {
+    if (!user || !showNotifBell) {
       setNotifications([])
       return
     }
@@ -58,7 +62,7 @@ export default function TopNav() {
     return () => {
       if (pollRef.current) clearInterval(pollRef.current)
     }
-  }, [user, isStaff])
+  }, [user, showNotifBell])
 
   const handleLogout = () => {
     if (pollRef.current) clearInterval(pollRef.current)
@@ -102,7 +106,7 @@ export default function TopNav() {
         </div>
 
         <div className="flex items-center gap-[var(--space-1)]">
-          {isStaff && (
+          {showNotifBell && (
             <div ref={notifRef} className="relative">
               <button
                 type="button"
