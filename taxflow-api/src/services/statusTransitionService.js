@@ -15,6 +15,7 @@ import notificationService from './notificationService.js';
 import boxDocumentStatusService from './boxDocumentStatusService.js';
 import cacheLayer from './cacheLayer.js';
 import { createHttpError } from '../utils/httpError.js';
+import { logger } from '../utils/logger.js';
 
 /** 10-minute undo window in milliseconds */
 const UNDO_WINDOW_MS = 10 * 60 * 1000;
@@ -142,7 +143,7 @@ export class StatusTransitionService {
     if (toStatus === 'Revision_Requested') {
       if (client && client.email) {
         this._notificationService.dispatchRevisionEmail(client.email, documentId, comment).catch((err) => {
-          console.error(`Revision email dispatch failed for document ${documentId}:`, err.message);
+          logger.error(`Revision email dispatch failed for document ${documentId}:`, err.message);
         });
       }
       this._notificationService.notifyClient(
@@ -155,7 +156,7 @@ export class StatusTransitionService {
           message: comment,
         }
       ).catch((err) => {
-        console.error(`Revision in-app notify failed for document ${documentId}:`, err.message);
+        logger.error(`Revision in-app notify failed for document ${documentId}:`, err.message);
       });
     }
 
@@ -170,7 +171,7 @@ export class StatusTransitionService {
           clientId: doc.clientId,
         }
       ).catch((err) => {
-        console.error(`${eventType} notify failed for document ${documentId}:`, err.message);
+        logger.error(`${eventType} notify failed for document ${documentId}:`, err.message);
       });
     }
 

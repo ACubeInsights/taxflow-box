@@ -1,10 +1,11 @@
 /**
- * Schema mode helpers — full (legacy SQLite) vs production/minimal (Box-first Postgres).
+ * Schema mode helpers — full (local SQLite) vs production (Box-first Postgres).
+ * `minimal` remains supported for legacy deployments but is deprecated; prefer `production`.
  */
 
 import { config } from '../config.js';
 
-/** Legacy 4-table minimal schema (superseded by production). */
+/** @deprecated Prefer `production`. Legacy 4-table Box-first schema. */
 export function isMinimalSchema() {
   return config.dbSchema === 'minimal';
 }

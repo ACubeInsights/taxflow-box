@@ -9,6 +9,7 @@
 
 import boxService from './boxService.js';
 import { config } from '../config.js';
+import { logger } from '../utils/logger.js';
 
 const METADATA_SCOPE = 'enterprise';
 const METADATA_TEMPLATE = 'taxflow_document';
@@ -48,7 +49,7 @@ export class SignService {
     } catch (error) {
       // Req 25.6 — descriptive error
       const msg = `Sign request failed for file ${fileId}, signer ${signerEmail}: ${error.message}`;
-      console.error(msg);
+      logger.error(msg);
       const err = new Error(msg);
       err.statusCode = error.statusCode || 500;
       throw err;
@@ -63,7 +64,7 @@ export class SignService {
         [{ op: 'replace', path: '/status', value: 'pending_signature' }]
       );
     } catch (err) {
-      console.error(`Metadata update to pending_signature failed for file ${fileId}:`, err.message);
+      logger.error(`Metadata update to pending_signature failed for file ${fileId}:`, err.message);
     }
 
     const result = {
@@ -99,7 +100,7 @@ export class SignService {
       || '';
 
     if (!fileId) {
-      console.warn('Sign event missing file ID:', JSON.stringify(event));
+      logger.warn('Sign event missing file ID:', JSON.stringify(event));
       return;
     }
 
@@ -110,7 +111,7 @@ export class SignService {
     } else if (eventType === 'SIGN_REQUEST.EXPIRED') {
       await this._handleExpired(client, fileId);
     } else {
-      console.log(`Unhandled sign event type: ${eventType}`);
+      logger.info(`Unhandled sign event type: ${eventType}`);
     }
   }
 
@@ -131,7 +132,7 @@ export class SignService {
         ]
       );
     } catch (err) {
-      console.error(`Metadata update to signed failed for file ${fileId}:`, err.message);
+      logger.error(`Metadata update to signed failed for file ${fileId}:`, err.message);
     }
 
     // Copy signed document to SignedDocuments folder if parent_folder is available (Req 26.2)
@@ -144,7 +145,7 @@ export class SignService {
       } catch (err) {
         // 409 means file already exists in destination — acceptable
         if (err.statusCode !== 409 && err.status !== 409) {
-          console.error(`Copy to SignedDocuments failed for file ${fileId}:`, err.message);
+          logger.error(`Copy to SignedDocuments failed for file ${fileId}:`, err.message);
         }
       }
     }
@@ -165,7 +166,7 @@ export class SignService {
         ]
       );
     } catch (err) {
-      console.error(`Metadata update to revision_requested failed for file ${fileId}:`, err.message);
+      logger.error(`Metadata update to revision_requested failed for file ${fileId}:`, err.message);
     }
   }
 
@@ -181,7 +182,7 @@ export class SignService {
         [{ op: 'replace', path: '/status', value: 'pending_upload' }]
       );
     } catch (err) {
-      console.error(`Metadata update to pending_upload failed for file ${fileId}:`, err.message);
+      logger.error(`Metadata update to pending_upload failed for file ${fileId}:`, err.message);
     }
   }
 }

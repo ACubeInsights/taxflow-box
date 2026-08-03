@@ -11,6 +11,7 @@ import { initDatabase } from '../db/db.js';
 import boxService from '../services/boxService.js';
 import vaultDiscoveryService from '../services/vaultDiscoveryService.js';
 import { randomUUID } from 'crypto';
+import { logger } from '../utils/logger.js';
 
 const router = express.Router();
 
@@ -205,7 +206,7 @@ router.delete('/clients/:clientId/collaborators/:employeeId', requireAuth, requi
       } catch (err) {
         // If Box says 404 (already gone), proceed with local cleanup
         if (err.statusCode !== 404) {
-          console.error('Box collaboration delete failed:', err.message);
+          logger.error('Box collaboration delete failed:', err.message);
         }
       }
     }
@@ -309,7 +310,7 @@ router.post('/employees/:id/sync-collaborations', requireAuth, requireRole('supe
 
         results.succeeded++;
       } catch (err) {
-        console.error(`Collaboration sync failed for client ${clientId}:`, err.message);
+        logger.error(`Collaboration sync failed for client ${clientId}:`, err.message);
         results.failed++;
       }
     }

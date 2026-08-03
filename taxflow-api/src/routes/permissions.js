@@ -8,6 +8,7 @@ import { requireAuth, requireRole, resolveClientForUser } from '../middleware/au
 import permissionService from '../services/permissionService.js';
 import notificationService from '../services/notificationService.js';
 import projectService from '../services/projectService.js';
+import { logger } from '../utils/logger.js';
 
 const router = express.Router();
 
@@ -46,12 +47,12 @@ router.post('/', requireAuth, requireRole('employee', 'superadmin'), async (req,
           clientId,
           fileName: displayName,
         }).catch((err) => {
-          console.error(`Permission notification failed for client ${clientId}:`, err.message);
+          logger.error(`Permission notification failed for client ${clientId}:`, err.message);
         });
       }
     } catch (notifErr) {
       // Non-fatal — don't block the permission change if notification fails
-      console.error('Permission notification error:', notifErr.message);
+      logger.error('Permission notification error:', notifErr.message);
     }
 
     res.json(result);

@@ -90,7 +90,7 @@ class PermissionService {
         grantedBy,
         0
       ).catch((err) => {
-        console.error('[PermissionService] Email notification failed:', err.message);
+        logger.error('[PermissionService] Email notification failed:', err.message);
       });
     }
 
@@ -284,7 +284,7 @@ class PermissionService {
         deepLinkUrl,
       });
     } catch (err) {
-      console.error('[PermissionService] Notification dispatch failed:', err.message);
+      logger.error('[PermissionService] Notification dispatch failed:', err.message);
     }
   }
 }

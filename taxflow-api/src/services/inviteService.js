@@ -6,6 +6,7 @@ import deepLinkTokenService from './deepLinkTokenService.js';
 import emailService from './emailService.js';
 import { config } from '../config.js';
 import { createHttpError } from '../utils/httpError.js';
+import { logger } from '../utils/logger.js';
 
 const INVITE_EXPIRY_HOURS = 72;
 const MAX_RESENDS_PER_DAY = 5;
@@ -153,7 +154,7 @@ class InviteService {
       });
       return result || { sent: false };
     } catch (err) {
-      console.error(`[InviteService] Email dispatch failed for invite ${inviteId}:`, err.message);
+      logger.error(`[InviteService] Email dispatch failed for invite ${inviteId}:`, err.message);
       try {
         await this.inviteRepo.setDeliveryFailure(inviteId, true);
       } catch { /* ignore */ }

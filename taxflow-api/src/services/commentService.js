@@ -10,6 +10,7 @@
 
 import notificationService from './notificationService.js';
 import { createHttpError } from '../utils/httpError.js';
+import { logger } from '../utils/logger.js';
 
 const EDIT_WINDOW_MS = 5 * 60 * 1000; // 5 minutes
 
@@ -103,7 +104,7 @@ export class CommentService {
             message: `${authorName} mentioned you in a comment`,
           });
         } catch (err) {
-          console.error(`Failed to dispatch mention notification for ${mentionedId}:`, err.message);
+          logger.error(`Failed to dispatch mention notification for ${mentionedId}:`, err.message);
         }
       }
 
@@ -143,7 +144,7 @@ export class CommentService {
           message: `${authorName} mentioned you in a comment`,
         });
       } catch (err) {
-        console.error(`Failed to dispatch mention notification for ${mentionedId}:`, err.message);
+        logger.error(`Failed to dispatch mention notification for ${mentionedId}:`, err.message);
       }
     }
 

@@ -50,8 +50,7 @@ export const config = {
   // Dev-only mock auth tokens (never enable in production)
   allowMockAuth: process.env.ALLOW_MOCK_AUTH === 'true',
 
-  // Notifications
-  sendgridApiKey: process.env.SENDGRID_API_KEY || '',
+  // Notifications / email
   emailFrom: process.env.EMAIL_FROM || 'noreply@taxflowpro.com',
 
   // Rate Limiting

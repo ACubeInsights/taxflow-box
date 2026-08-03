@@ -18,9 +18,9 @@ services:
       - key: BOX_ROOT_FOLDER_ID
         value: "0"
       - key: BOX_ENTERPRISE_ID
-        value: "1497277803"
+        sync: false
       - key: BOX_ADMIN_EMAIL
-        value: agarwalayush1412@gmail.com
+        sync: false
       - key: FRONTEND_URL
         sync: false
       # AWS production: DB_DIALECT=postgres, DB_SCHEMA=production, DATABASE_URL from Secrets Manager

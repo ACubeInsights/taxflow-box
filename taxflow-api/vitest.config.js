@@ -4,7 +4,6 @@ export default defineConfig({
   test: {
     include: [
       'src/**/__tests__/**/*.test.js',
-      'src/**/__tests__/**/*.property.test.js',
     ],
     globals: true,
     testTimeout: 10000,

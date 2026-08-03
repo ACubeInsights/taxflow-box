@@ -9,6 +9,7 @@
 import express from 'express';
 import webhookRawBody from '../middleware/webhookRawBody.js';
 import webhookService from '../services/webhookService.js';
+import { logger } from '../utils/logger.js';
 
 const router = express.Router();
 
@@ -58,7 +59,7 @@ router.post('/box', webhookRawBody, async (req, res) => {
 
   // Reject if no signature matches (Req 8.5)
   if (!verified) {
-    console.warn('Webhook signature verification failed', {
+    logger.warn('Webhook signature verification failed', {
       ip: req.ip,
       headers: {
         'box-signature-primary': primarySignature ? '[present]' : '[missing]',
@@ -74,7 +75,7 @@ router.post('/box', webhookRawBody, async (req, res) => {
     await webhookService.processEvent(req.body);
   } catch (err) {
     // Log but still return 200 to prevent Box from retrying
-    console.error('Webhook event processing error:', err.message);
+    logger.error('Webhook event processing error:', err.message);
   }
 
   res.status(200).json({ received: true });

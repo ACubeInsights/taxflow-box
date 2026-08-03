@@ -125,44 +125,6 @@ export function FolioSpine({ color = 'var(--color-trace)', className = '' }) {
   )
 }
 
-/**
- * Vertical procedural rail for interior pages.
- * steps: [{ label, path?, current? }]
- * Only use when the content is a genuine Client → Project → Document sequence.
- */
-export function FolioRail({ steps = [], spineColor = 'var(--color-trace)', className = '' }) {
-  if (!steps.length) return null
-
-  return (
-    <aside
-      className={`hidden md:flex flex-col shrink-0 w-[var(--layout-rail)] border-r border-[var(--color-rule)] ${className}`}
-      aria-label="Location in workflow"
-    >
-      <div className="flex flex-1 flex-col items-center py-[var(--space-6)] gap-[var(--space-4)]">
-        <div
-          className="folio-spine w-[4px] flex-1 min-h-[48px] rounded-[2px]"
-          style={{ background: spineColor }}
-          aria-hidden
-        />
-        <ol className="m-0 p-0 list-none flex flex-col gap-[var(--space-6)] w-full px-[var(--space-2)]">
-          {steps.map((step) => (
-            <li key={step.label} className="text-center">
-              <span
-                className={`block text-xs font-medium leading-tight ${
-                  step.current ? 'text-[var(--color-ink)]' : 'text-[var(--color-whisper)]'
-                }`}
-                style={{ writingMode: 'vertical-rl', transform: 'rotate(180deg)' }}
-              >
-                {step.label}
-              </span>
-            </li>
-          ))}
-        </ol>
-      </div>
-    </aside>
-  )
-}
-
 /** Row with leading FolioSpine — for client/document lists */
 export function FolioRow({
   spineColor = 'var(--color-trace)',
@@ -195,35 +157,5 @@ export function FolioRow({
   )
 }
 
-/** Empty state — quiet, no decorative icons required */
-export function EmptyState({ icon: Icon, title, subtitle, action }) {
-  return (
-    <div className="flex flex-col items-center justify-center py-[var(--space-12)] px-[var(--space-4)] text-center">
-      {Icon && (
-        <div
-          className="mb-[var(--space-4)] flex h-12 w-12 items-center justify-center rounded-[var(--radius-panel)] border border-[var(--color-rule)] bg-[var(--color-ledger)]"
-          aria-hidden
-        >
-          <Icon size={22} className="text-[var(--color-whisper)]" strokeWidth={1.5} />
-        </div>
-      )}
-      <p className="m-0 text-sm font-medium text-[var(--color-ink)] mb-[var(--space-1)]">{title}</p>
-      {subtitle && (
-        <p className="m-0 text-sm text-[var(--color-whisper)] max-w-[260px] leading-relaxed">
-          {subtitle}
-        </p>
-      )}
-      {action && (
-        <button type="button" onClick={action.onClick} className="btn-ghost mt-[var(--space-4)]">
-          {action.label}
-        </button>
-      )}
-    </div>
-  )
-}
-
-/* ── Back-compat aliases (migrate callers gradually) ── */
+/* ── Back-compat aliases ── */
 export const GlassPanel = FolioPanel
-export const StatCard = function StatCardRemoved() {
-  return null
-}

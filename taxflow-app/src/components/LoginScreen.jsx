@@ -234,7 +234,9 @@ export default function LoginScreen() {
             </p>
           </form>
 
-          <DemoLoginSection demoLogin={demoLogin} />
+          {import.meta.env.DEV && (
+            <DemoLoginSection demoLogin={demoLogin} />
+          )}
         </>
       )}
     </AuthSplit>

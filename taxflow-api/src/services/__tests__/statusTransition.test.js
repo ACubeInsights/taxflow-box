@@ -78,6 +78,7 @@ describe('StatusTransitionService', () => {
 
     mockNotificationService = {
       dispatchRevisionEmail: vi.fn().mockResolvedValue(undefined),
+      notifyClient: vi.fn().mockResolvedValue(undefined),
     };
 
     mockApprovalUndoRepo = {

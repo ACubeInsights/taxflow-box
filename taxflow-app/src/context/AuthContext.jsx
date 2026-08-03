@@ -200,6 +200,11 @@ export function AuthProvider({ children }) {
    * @param {string} role
    */
   const demoLogin = (role) => {
+    if (!import.meta.env.DEV) {
+      setTokenError('Demo login is only available in development')
+      return
+    }
+
     setTransitioning(true)
     setTokenError(null)
 

@@ -3,6 +3,7 @@ import boxService from '../services/boxService.js';
 import vaultDiscoveryService, { mapVaultManifest } from '../services/vaultDiscoveryService.js';
 import { config } from '../config.js';
 import { requireAuth, requireRole, requireClientAccess } from '../middleware/authMiddleware.js';
+import { logger } from '../utils/logger.js';
 
 const router = express.Router();
 const vaultCache = new Map();
@@ -12,7 +13,7 @@ async function ensureAdminCollaborator(folderId) {
   try {
     await boxService.addCollaborator(folderId, config.boxAdminEmail, 'co-owner');
   } catch (err) {
-    console.warn('Collaborator add skipped:', err.message);
+    logger.warn('Collaborator add skipped:', err.message);
   }
 }
 

@@ -10,6 +10,7 @@ import { createHttpError } from '../utils/httpError.js';
 import { getRepositories } from '../db/repositories/index.js';
 import vaultDiscoveryService from './vaultDiscoveryService.js';
 import { hashPassword, assertPasswordPolicy } from '../utils/authUtils.js';
+import { logger } from '../utils/logger.js';
 
 class SignupService {
   constructor() {
@@ -125,7 +126,7 @@ class SignupService {
       );
     } catch (err) {
       await this.inviteRepo.releaseClaim(payload.inviteId);
-      console.error('[SignupService] Box onboarding failed:', err.message);
+      logger.error('[SignupService] Box onboarding failed:', err.message);
       if (err.message && err.message.includes('already registered')) {
         throw createHttpError('An account with this email already exists. Please log in instead.', 409);
       }
@@ -187,7 +188,7 @@ class SignupService {
       }
     } catch (err) {
       await this.inviteRepo.releaseClaim(payload.inviteId);
-      console.error('[SignupService] Client registration failed:', err.message);
+      logger.error('[SignupService] Client registration failed:', err.message);
       if (err.message && (err.message.includes('already') || err.message.includes('UNIQUE constraint'))) {
         throw createHttpError('An account with this email already exists. Please log in instead.', 409);
       }

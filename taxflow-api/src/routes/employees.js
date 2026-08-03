@@ -2,6 +2,7 @@ import express from 'express';
 import employeeService from '../services/employeeService.js';
 import { requireAuth, requireRole } from '../middleware/authMiddleware.js';
 import { assertPasswordPolicy } from '../utils/authUtils.js';
+import { logger } from '../utils/logger.js';
 
 const router = express.Router();
 
@@ -36,7 +37,7 @@ router.post('/', requireAuth, requireRole('superadmin'), async (req, res, next) 
     ]);
     res.status(201).json(result);
   } catch (error) {
-    console.error('Employee creation error:', error.message);
+    logger.error('Employee creation error:', error.message);
     next(error);
   }
 });

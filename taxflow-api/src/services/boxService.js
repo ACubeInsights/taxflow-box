@@ -7,13 +7,6 @@ import {
   isBoxNotFoundError,
 } from '../utils/boxCollabUtils.js';
 
-export {
-  getCollaborationUserId,
-  findCollaborationForUser,
-  isBoxNotFoundError,
-  isAlreadyCollaboratorError,
-} from '../utils/boxCollabUtils.js';
-
 export class BoxService {
   constructor() {
     this.service = new BoxWrapperService({
