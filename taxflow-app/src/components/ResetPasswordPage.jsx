@@ -83,7 +83,7 @@ export default function ResetPasswordPage() {
               Reset password
             </h2>
             <p className="m-0 mt-[var(--space-2)] text-sm text-[var(--color-whisper)]">
-              Use at least 6 characters.
+              Use at least 12 characters with a letter and a number.
             </p>
           </div>
 

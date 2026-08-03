@@ -12,6 +12,7 @@ import {
   requireClientAccess,
   requireEmployeeSelfOrAdmin,
 } from '../middleware/authMiddleware.js';
+import vaultResourceGuard from '../services/vaultResourceGuard.js';
 
 const router = express.Router();
 
@@ -68,9 +69,13 @@ router.get('/inactive-clients', requireRole('employee', 'superadmin'), async (re
 router.get('/files/:fileId/versions', requireRole('employee', 'superadmin'), async (req, res, next) => {
   try {
     const { fileId } = req.params;
+    await vaultResourceGuard.assertKnownVaultFile(fileId);
     const result = await portalService.getFileVersions(fileId);
     res.json(result);
   } catch (error) {
+    if (error.statusCode === 404) {
+      return res.status(404).json({ error: 'Resource not found' });
+    }
     next(error);
   }
 });
@@ -90,7 +95,18 @@ router.post('/zip-download', requireRole('employee', 'superadmin'), async (req, 
       return res.status(400).json({ error: 'Maximum 100 files per zip download' });
     }
 
-    const result = await portalService.createZipDownload(fileIds);
+    const allowedIds = await vaultResourceGuard.filterKnownVaultFiles(fileIds.map(String));
+    if (allowedIds.length === 0) {
+      return res.status(404).json({ error: 'Resource not found' });
+    }
+    if (allowedIds.length !== fileIds.length) {
+      return res.status(403).json({
+        error: 'One or more files are outside known client vaults',
+        code: 'VAULT_SCOPE_VIOLATION',
+      });
+    }
+
+    const result = await portalService.createZipDownload(allowedIds);
     res.json(result);
   } catch (error) {
     if (error.statusCode === 400) {

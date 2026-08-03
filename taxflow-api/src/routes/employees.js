@@ -1,6 +1,7 @@
 import express from 'express';
 import employeeService from '../services/employeeService.js';
 import { requireAuth, requireRole } from '../middleware/authMiddleware.js';
+import { assertPasswordPolicy } from '../utils/authUtils.js';
 
 const router = express.Router();
 
@@ -23,8 +24,10 @@ router.post('/', requireAuth, requireRole('superadmin'), async (req, res, next) 
     if (!name || !email || !password) {
       return res.status(400).json({ error: 'name, email, and password are required' });
     }
-    if (password.length < 6) {
-      return res.status(400).json({ error: 'Password must be at least 6 characters' });
+    try {
+      assertPasswordPolicy(password);
+    } catch (policyErr) {
+      return res.status(400).json({ error: policyErr.message });
     }
     const boxRole = 'user';
     const result = await Promise.race([

@@ -29,28 +29,37 @@ export class PortalService {
     this._docRepo = null;
     this._clientRepo = null;
     this._projectRepo = null;
+    this._userRepo = null;
   }
 
   /**
    * Injects DB repositories for fallback when Box metadata queries are unavailable.
    */
-  setRepositories({ docRepo, clientRepo, projectRepo } = {}) {
+  setRepositories({ docRepo, clientRepo, projectRepo, userRepo } = {}) {
     if (docRepo) this._docRepo = docRepo;
     if (clientRepo) this._clientRepo = clientRepo;
     if (projectRepo) this._projectRepo = projectRepo;
+    if (userRepo) this._userRepo = userRepo;
   }
 
   /**
-   * Resolves clientId (UUID or external_id) to the canonical DB client UUID.
+   * Resolves clientId (UUID or external_id) to the canonical client UUID.
    * @param {string} clientId
    * @returns {Promise<string>}
    */
   async _resolveClientId(clientId) {
-    if (!this._clientRepo) return clientId;
-    const clientRecord = await this._clientRepo.findById(clientId);
-    if (clientRecord) return clientRecord.id;
-    const byExternal = await this._clientRepo.findByExternalId(clientId);
-    return byExternal?.id || clientId;
+    if (this._clientRepo) {
+      const clientRecord = await this._clientRepo.findById(clientId);
+      if (clientRecord) return clientRecord.id;
+      const byExternal = await this._clientRepo.findByExternalId(clientId);
+      return byExternal?.id || clientId;
+    }
+    if (this._userRepo) {
+      let user = await this._userRepo.findById(clientId);
+      if (!user) user = await this._userRepo.findByExternalId(clientId);
+      if (user?.role === 'client') return user.id;
+    }
+    return clientId;
   }
 
   /**

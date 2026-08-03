@@ -12,6 +12,7 @@ import { requireAuth, requireRole } from '../middleware/authMiddleware.js';
 import { getRepositories } from '../db/repositories/index.js';
 import boxService from '../services/boxService.js';
 import vaultDiscoveryService from '../services/vaultDiscoveryService.js';
+import { isBoxFirstSchema } from '../db/schemaMode.js';
 import { extractOriginalEmail, extractRole, hashPassword } from '../utils/authUtils.js';
 import { logger } from '../utils/logger.js';
 
@@ -209,12 +210,25 @@ router.post('/', requireAuth, requireRole('employee', 'superadmin'), async (req,
             await repos.clientRepo.update(registeredClient.id, {
               box_folder_id: result.folders.root,
             });
+          } else if (repos.userRepo && isBoxFirstSchema()) {
+            await repos.userRepo.updateProfile(registeredClient.id, {
+              box_folder_id: result.folders.root,
+            });
           }
 
           await vaultDiscoveryService.invalidate(registeredClient.id);
         } catch (vaultErr) {
           logger.error('Vault persistence failed during onboarding', { error: vaultErr.message });
           throw vaultErr;
+        }
+      } else if (repos?.userRepo && isBoxFirstSchema() && registeredClient && result.folders) {
+        try {
+          await repos.userRepo.updateProfile(registeredClient.id, {
+            box_folder_id: result.folders.root,
+          });
+          await vaultDiscoveryService.invalidate(registeredClient.id);
+        } catch (vaultErr) {
+          logger.error('Client profile update failed during onboarding', { error: vaultErr.message });
         }
       }
     }

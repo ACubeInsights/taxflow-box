@@ -8,6 +8,7 @@
     "dev": "node --watch src/server.js",
     "start": "node src/server.js",
     "test": "vitest --run",
+    "test:postgres": "vitest --run src/db/__tests__/postgres-production.test.js",
     "sync-seed-box": "node scripts/sync-seed-files-to-box.js"
   },
   "dependencies": {

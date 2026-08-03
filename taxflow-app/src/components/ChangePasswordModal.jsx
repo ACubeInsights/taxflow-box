@@ -82,7 +82,7 @@ export default function ChangePasswordModal({ open, onClose }) {
                 autoComplete="current-password"
               />
               <FloatingLabel
-                label="New password (min 6 characters)"
+                label="New password (min 12 characters, letter + number)"
                 type="password"
                 value={newPassword}
                 onChange={(e) => setNewPassword(e.target.value)}

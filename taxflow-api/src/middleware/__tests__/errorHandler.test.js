@@ -111,16 +111,23 @@ describe('errorHandler', () => {
       path: '/api/docs',
       statusCode: 403,
       message: 'Forbidden',
+      code: undefined,
     });
   });
 
-  it('defaults error message to "Internal server error" when err.message is empty', () => {
-    const err = new Error();
+  it('hides 500 error messages in production', async () => {
+    vi.resetModules();
+    vi.doMock('../../config.js', () => ({
+      config: { nodeEnv: 'production' },
+    }));
+    vi.doMock('../../utils/logger.js', () => ({
+      logger: { error: vi.fn(), warn: vi.fn(), info: vi.fn() },
+    }));
+    const { errorHandler: prodHandler } = await import('../errorHandler.js');
+    const err = new Error('Box SDK internal stack dump');
     const req = createMockReq();
     const res = createMockRes();
-
-    errorHandler(err, req, res, () => {});
-
+    prodHandler(err, req, res, () => {});
     expect(res._json.error).toBe('Internal server error');
   });
 });

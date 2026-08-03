@@ -10,6 +10,7 @@
  */
 
 import { logger } from '../utils/logger.js';
+import { config } from '../config.js';
 
 /**
  * Express error handler middleware.
@@ -22,18 +23,26 @@ import { logger } from '../utils/logger.js';
  */
 export function errorHandler(err, req, res, next) {
   const statusCode = err.statusCode || 500;
+  const isClientError = statusCode >= 400 && statusCode < 500;
+
+  // Never leak internal/Box/SQL messages on 5xx to API clients
+  const publicMessage = isClientError
+    ? (err.message || 'Request failed')
+    : (config.nodeEnv === 'production' ? 'Internal server error' : (err.message || 'Internal server error'));
+
   const response = {
-    error: err.message || 'Internal server error',
-    code: err.code || 'INTERNAL_ERROR',
+    error: publicMessage,
+    code: err.code || (isClientError ? 'REQUEST_ERROR' : 'INTERNAL_ERROR'),
     statusCode,
   };
-  if (err.details) response.details = err.details;
+  if (isClientError && err.details) response.details = err.details;
 
   logger.error('Request error', {
     method: req.method,
     path: req.path,
     statusCode,
     message: err.message,
+    code: err.code,
   });
 
   res.status(statusCode).json(response);

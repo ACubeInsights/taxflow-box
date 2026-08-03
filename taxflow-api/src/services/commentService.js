@@ -45,20 +45,27 @@ export class CommentService {
 
   /**
    * Returns comments for a document sorted by createdAt ascending.
+   * @param {string} documentId
+   * @param {{ includeInternal?: boolean }} [options]
    */
-  async getComments(documentId) {
+  async getComments(documentId, { includeInternal = true } = {}) {
+    let comments;
     if (this._commentRepo) {
-      const comments = await this._commentRepo.findByDocumentId(documentId);
-      return comments.map((c) => ({
+      const rows = await this._commentRepo.findByDocumentId(documentId);
+      comments = rows.map((c) => ({
         ...this._mapCommentFromDb(c),
         isEditable: this._isEditableDb(c),
       }));
+    } else {
+      comments = (this._comments.get(documentId) || [])
+        .map((c) => ({ ...c, isEditable: this._isEditable(c) }))
+        .sort((a, b) => new Date(a.createdAt) - new Date(b.createdAt));
     }
 
-    const comments = this._comments.get(documentId) || [];
-    return comments
-      .map((c) => ({ ...c, isEditable: this._isEditable(c) }))
-      .sort((a, b) => new Date(a.createdAt) - new Date(b.createdAt));
+    if (!includeInternal) {
+      return comments.filter((c) => c.type !== 'internal');
+    }
+    return comments;
   }
 
   /**

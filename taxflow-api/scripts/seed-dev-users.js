@@ -36,6 +36,11 @@ const DEV_USERS = [
 ];
 
 async function main() {
+  if (process.env.NODE_ENV === 'production') {
+    console.error('Refusing to seed dev users while NODE_ENV=production');
+    process.exit(1);
+  }
+
   const db = new Database(dbPath);
   const now = new Date().toISOString();
 

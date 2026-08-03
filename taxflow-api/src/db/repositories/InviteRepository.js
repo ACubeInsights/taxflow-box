@@ -13,7 +13,7 @@ export class InviteRepository extends BaseRepository {
       employee_email: employeeEmail.toLowerCase(),
       financial_year: financialYear,
       status: 'pending_invite',
-      delivery_failure_flag: 0,
+      delivery_failure_flag: false,
       resend_count: 0,
       token_expires_at: tokenExpiresAt,
       created_at: new Date().toISOString(),
@@ -41,10 +41,40 @@ export class InviteRepository extends BaseRepository {
       .update({ status, updated_at: new Date().toISOString() });
   }
 
+  /**
+   * Atomically claim a pending invite for signup.
+   * Returns true only if this caller won the race (status was pending_invite).
+   * @param {string} id
+   * @returns {Promise<boolean>}
+   */
+  async claimPending(id) {
+    const now = new Date().toISOString();
+    const updated = await this.query()
+      .where('id', id)
+      .where('status', 'pending_invite')
+      .andWhere((qb) => {
+        qb.whereNull('token_expires_at').orWhere('token_expires_at', '>=', now);
+      })
+      .update({ status: 'accepting', updated_at: now });
+    return Number(updated) > 0;
+  }
+
+  /**
+   * Revert a failed signup claim back to pending so the invite can be retried.
+   * @param {string} id
+   */
+  async releaseClaim(id) {
+    const now = new Date().toISOString();
+    await this.query()
+      .where('id', id)
+      .where('status', 'accepting')
+      .update({ status: 'pending_invite', updated_at: now });
+  }
+
   async setDeliveryFailure(id, flag = true) {
     await this.query()
       .where('id', id)
-      .update({ delivery_failure_flag: flag ? 1 : 0, updated_at: new Date().toISOString() });
+      .update({ delivery_failure_flag: !!flag, updated_at: new Date().toISOString() });
   }
 
   async incrementResendCount(id) {

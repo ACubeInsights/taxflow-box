@@ -60,7 +60,7 @@ export default function SignupPage() {
       })
   }, [token])
 
-  const passwordValid = password.length >= 6
+  const passwordValid = password.length >= 12 && /[A-Za-z]/.test(password) && /[0-9]/.test(password)
   const passwordsMatch = password === confirmPassword
   const nameValid = fullName.trim().length > 0
   const emailValid = clientEmail.trim().length > 0 && clientEmail.includes('@')
@@ -198,7 +198,7 @@ export default function SignupPage() {
       />
 
       {password.length > 0 && !passwordValid && (
-        <p className="m-0 text-sm text-[var(--color-hold)]">Password must be at least 6 characters</p>
+        <p className="m-0 text-sm text-[var(--color-hold)]">Password must be at least 12 characters and include a letter and a number</p>
       )}
       {confirmPassword.length > 0 && !passwordsMatch && (
         <p className="m-0 text-sm text-[var(--color-flag)]" role="alert">Passwords do not match</p>

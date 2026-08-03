@@ -7,7 +7,7 @@ import authService from '../services/authService.js';
 import { getRepositories } from '../db/repositories/index.js';
 import permissionService from '../services/permissionService.js';
 import vaultDiscoveryService from '../services/vaultDiscoveryService.js';
-import { isMinimalSchema } from '../db/schemaMode.js';
+import { isBoxFirstSchema } from '../db/schemaMode.js';
 import { config } from '../config.js';
 
 /**
@@ -97,7 +97,8 @@ export async function validateFolderOwnership(req, res, next) {
       return next();
     }
 
-    // Fallback: discover vault folders from Box (legacy clients without explicit collabs)
+    // Fallback: discover vault folders from Box (legacy clients without explicit collabs).
+    // Internal Notes is staff-only — never grant via ownership allowlist.
     const vault = await vaultDiscoveryService.getVaultForClient(client.id);
     if (vault) {
       const vaultFolderIds = [
@@ -108,8 +109,8 @@ export async function validateFolderOwnership(req, res, next) {
         vault.uploads,
         vault.supportingDocs,
         vault.signedDocuments,
-        vault.internalNotes,
       ].filter(Boolean);
+
 
       if (vaultFolderIds.includes(folderId)) {
         req.clientId = client.id;
@@ -131,8 +132,6 @@ export async function validateFolderOwnership(req, res, next) {
  * @param {string} requiredLevel - Minimum access level required ('viewer','commenter','writer','delete')
  */
 export function permissionCheck(requiredLevel) {
-  const LEVEL_HIERARCHY = { no_access: 0, viewer: 1, commenter: 2, writer: 3, delete: 4 };
-
   return async (req, res, next) => {
     if (['employee', 'superadmin'].includes(req.user?.role)) {
       return next();
@@ -142,7 +141,9 @@ export function permissionCheck(requiredLevel) {
       const resourceId = req.params.folderId || req.params.fileId;
       const resourceType = req.params.fileId ? 'file' : 'folder';
 
-      if (!resourceId) return next();
+      if (!resourceId) {
+        return res.status(400).json({ error: 'Missing resource id' });
+      }
 
       const client = await resolveClientForUser(req.user);
 
@@ -156,27 +157,35 @@ export function permissionCheck(requiredLevel) {
         requiredLevel,
         resourceType
       );
+
+
       if (hasAccess) {
         req.clientId = client.id;
         return next();
       }
 
-      // DB fallback: any folder permission at or above required level
-      const allPerms = await permissionService.getClientPermissions(client.id);
-      const requiredNum = LEVEL_HIERARCHY[requiredLevel] || 1;
-      const hasFolderAccess = allPerms.some(
-        (p) => p.resourceType === 'folder' && (LEVEL_HIERARCHY[p.accessLevel] || 0) >= requiredNum
-      );
-
-      if (hasFolderAccess) {
-        req.clientId = client.id;
-        return next();
-      }
-
+      // Deny by default — do not grant based on unrelated folder permissions.
       return res.status(404).json({ error: 'Resource not found' });
     } catch (err) {
       next(err);
     }
+  };
+}
+
+/**
+ * Copies a body field into req.params so permissionCheck can authorize body-driven routes
+ * (e.g. POST /tokens/preview with { fileId }).
+ * @param {string} field
+ * @param {'fileId'|'folderId'} paramName
+ */
+export function bindBodyResourceParam(field = 'fileId', paramName = 'fileId') {
+  return (req, res, next) => {
+    const value = req.body?.[field] ?? req.params?.[paramName];
+    if (!value) {
+      return res.status(400).json({ error: `${field} is required` });
+    }
+    req.params[paramName] = String(value);
+    next();
   };
 }
 
@@ -190,7 +199,7 @@ export const requireStaff = [requireAuth, requireRole('employee', 'superadmin')]
  */
 export async function resolveClientForUser(user) {
   const repos = getRepositories();
-  if (isMinimalSchema()) {
+  if (isBoxFirstSchema()) {
     let clientUser = await repos.userRepo.findByEmail(user.email);
     if (!clientUser) clientUser = await repos.userRepo.findByBoxUserId(user.userId);
     if (clientUser?.role === 'client') {
@@ -248,7 +257,7 @@ export function requireEmployeeSelfOrAdmin(paramName = 'employeeId') {
 
 /**
  * Validates upload target folderId in req.body for client users.
- * Must run after requireAuth.
+ * Must run after requireAuth and after multer (so multipart body fields are parsed).
  */
 export async function validateUploadFolder(req, res, next) {
   if (['employee', 'superadmin'].includes(req.user.role)) {
@@ -257,6 +266,18 @@ export async function validateUploadFolder(req, res, next) {
   const folderId = req.body?.folderId;
   if (!folderId) {
     return res.status(400).json({ error: 'Missing folderId' });
+  }
+  // Clients may not upload into Internal Notes even if they somehow know the ID
+  try {
+    const client = await resolveClientForUser(req.user);
+    if (client) {
+      const vault = await vaultDiscoveryService.getVaultForClient(client.id);
+      if (vault?.internalNotes && String(folderId) === String(vault.internalNotes)) {
+        return res.status(404).json({ error: 'Resource not found' });
+      }
+    }
+  } catch (err) {
+    return next(err);
   }
   req.params.folderId = folderId;
   return validateFolderOwnership(req, res, next);

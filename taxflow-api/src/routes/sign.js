@@ -7,6 +7,7 @@
 import express from 'express';
 import signService from '../services/signService.js';
 import { requireStaff } from '../middleware/authMiddleware.js';
+import vaultResourceGuard from '../services/vaultResourceGuard.js';
 
 const router = express.Router();
 
@@ -29,6 +30,9 @@ router.post('/request', async (req, res, next) => {
     if (missing.length > 0) {
       return res.status(400).json({ error: `Missing required fields: ${missing.join(', ')}` });
     }
+
+    await vaultResourceGuard.assertKnownVaultFile(String(fileId));
+    await vaultResourceGuard.assertKnownVaultFolder(String(signedDocsFolderId));
 
     const result = await signService.createSignRequest(fileId, signerEmail, signedDocsFolderId, {
       isEmbedded: !!isEmbedded,

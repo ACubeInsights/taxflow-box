@@ -38,21 +38,53 @@ import { errorHandler } from './middleware/errorHandler.js';
 const app = express();
 
 app.use(cors({ origin: config.frontendUrl, credentials: true }));
-app.use(express.json());
-app.use(express.urlencoded({ extended: true }));
+
+// Baseline security headers (Helmet-equivalent subset; no new dependency)
+app.use((req, res, next) => {
+  res.setHeader('X-Content-Type-Options', 'nosniff');
+  res.setHeader('X-Frame-Options', 'DENY');
+  res.setHeader('Referrer-Policy', 'no-referrer');
+  res.setHeader('X-XSS-Protection', '0');
+  res.setHeader('Permissions-Policy', 'camera=(), microphone=(), geolocation=()');
+  if (config.nodeEnv === 'production') {
+    res.setHeader('Strict-Transport-Security', 'max-age=31536000; includeSubDomains');
+  }
+  next();
+});
+
+// Webhooks MUST receive the raw body for HMAC verification.
+// Mount before express.json() so express.raw() in webhookRawBody can capture bytes.
+app.use('/api/webhooks', webhookRoutes);
+
+app.use(express.json({ limit: '1mb' }));
+app.use(express.urlencoded({ extended: true, limit: '1mb' }));
 
 app.get('/health', async (req, res) => {
-  let boxHealth;
+  let boxConnected = false;
+  let dbConnected = false;
+
   try {
-    boxHealth = await boxService.healthCheck();
+    const { getDb } = await import('./db/db.js');
+    await getDb().raw('SELECT 1');
+    dbConnected = true;
   } catch (err) {
-    boxHealth = { connected: false, tier: 'unknown', error: err.message };
+    logger.warn('Health check DB failed', { error: err.message });
   }
 
-  res.json({
-    status: boxHealth.connected ? 'ok' : 'degraded',
+  try {
+    const boxHealth = await boxService.healthCheck();
+    boxConnected = Boolean(boxHealth?.connected);
+  } catch (err) {
+    logger.warn('Health check Box failed', { error: err.message });
+  }
+
+  const ok = dbConnected && boxConnected;
+  // Public health: connectivity only — no dialect/schema/error strings for recon
+  res.status(ok ? 200 : 503).json({
+    status: ok ? 'ok' : 'degraded',
     timestamp: new Date().toISOString(),
-    box: boxHealth,
+    db: { connected: dbConnected },
+    box: { connected: boxConnected },
   });
 });
 
@@ -65,7 +97,6 @@ app.use('/api/clients', clientRoutes);
 app.use('/api/documents', documentRoutes);
 app.use('/api/vaults', vaultRoutes);
 app.use('/api/onboarding', onboardingRoutes);
-app.use('/api/webhooks', webhookRoutes);
 app.use('/api/reviews', reviewRoutes);
 app.use('/api/portal', portalRoutes);
 app.use('/api/sign', signRoutes);
@@ -145,6 +176,8 @@ async function startServer() {
     } catch (err) {
       logger.warn('Webhook health check skipped', { error: err.message });
     }
+
+    app.locals.frontendUrl = config.frontendUrl;
 
     app.listen(config.port, () => {
       logger.info('TaxFlow API running', { port: config.port });

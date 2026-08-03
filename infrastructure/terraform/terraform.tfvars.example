@@ -1,0 +1,9 @@
+aws_region   = "us-east-1"
+project_name = "taxflow"
+environment  = "staging"
+
+# Your Vercel / frontend URL
+frontend_url = "https://your-app.vercel.app"
+
+db_instance_class = "db.t4g.micro"
+skip_final_snapshot = true

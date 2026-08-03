@@ -12,7 +12,11 @@ import { WebhookKeyRepository } from './WebhookKeyRepository.js';
 import { ApprovalUndoRepository } from './ApprovalUndoRepository.js';
 import { ClientVaultRepository } from './ClientVaultRepository.js';
 import { PermissionRepository } from './PermissionRepository.js';
-import { isMinimalSchema } from '../schemaMode.js';
+import {
+  isBoxFirstSchema,
+  isFullSchema,
+  isProductionSchema,
+} from '../schemaMode.js';
 
 import authService from '../../services/authService.js';
 import projectService from '../../services/projectService.js';
@@ -33,7 +37,7 @@ import employeeService from '../../services/employeeService.js';
 let repos = null;
 
 /**
- * Creates repository instances. Minimal schema: auth + invites only.
+ * Creates repository instances based on DB_SCHEMA mode.
  * @param {import('knex').Knex} db
  * @returns {object}
  */
@@ -45,16 +49,21 @@ export function initRepositories(db) {
     inviteRepo: new InviteRepository(db),
   };
 
-  if (!isMinimalSchema()) {
+  if (isProductionSchema() || isFullSchema()) {
     Object.assign(repos, {
-      clientRepo: new ClientRepository(db),
-      projectRepo: new ProjectRepository(db),
-      docRequestRepo: new DocumentRequestRepository(db),
       commentRepo: new CommentRepository(db),
       notificationRepo: new NotificationRepository(db),
       activityRepo: new ActivityLogRepository(db),
       webhookKeyRepo: new WebhookKeyRepository(db),
       approvalUndoRepo: new ApprovalUndoRepository(db),
+    });
+  }
+
+  if (isFullSchema()) {
+    Object.assign(repos, {
+      clientRepo: new ClientRepository(db),
+      projectRepo: new ProjectRepository(db),
+      docRequestRepo: new DocumentRequestRepository(db),
       clientVaultRepo: new ClientVaultRepository(db),
       permissionRepo: new PermissionRepository(db),
     });
@@ -68,14 +77,15 @@ export function initRepositories(db) {
  * @param {object} repos
  */
 export function injectRepositories(repos) {
-  const minimal = isMinimalSchema();
+  const boxFirst = isBoxFirstSchema();
+  const hasOperational = isProductionSchema() || isFullSchema();
 
   authService.setRepositories({
     userRepo: repos.userRepo,
     sessionRepo: repos.sessionRepo,
     resetTokenRepo: repos.resetTokenRepo,
-    clientVaultRepo: minimal ? null : repos.clientVaultRepo,
-    clientRepo: minimal ? null : repos.clientRepo,
+    clientVaultRepo: boxFirst ? null : repos.clientVaultRepo,
+    clientRepo: boxFirst ? null : repos.clientRepo,
   });
 
   boxEntityService.setRepositories({ userRepo: repos.userRepo });
@@ -83,31 +93,34 @@ export function injectRepositories(repos) {
 
   projectService.setRepositories({
     userRepo: repos.userRepo,
-    minimalMode: minimal,
-    ...(minimal ? {} : {
-      clientRepo: repos.clientRepo,
-      projectRepo: repos.projectRepo,
-      docRequestRepo: repos.docRequestRepo,
-      activityRepo: repos.activityRepo,
-    }),
+    minimalMode: boxFirst,
+    ...(boxFirst
+      ? { activityRepo: hasOperational ? repos.activityRepo : null }
+      : {
+          clientRepo: repos.clientRepo,
+          projectRepo: repos.projectRepo,
+          docRequestRepo: repos.docRequestRepo,
+          activityRepo: repos.activityRepo,
+        }),
   });
 
   vaultDiscoveryService.setRepositories({
     userRepo: repos.userRepo,
-    clientRepo: minimal ? null : repos.clientRepo,
-    clientVaultRepo: minimal ? null : repos.clientVaultRepo,
+    clientRepo: boxFirst ? null : repos.clientRepo,
+    clientVaultRepo: boxFirst ? null : repos.clientVaultRepo,
   });
 
   boxCollaborationAccessService.setRepositories({
     userRepo: repos.userRepo,
-    clientRepo: minimal ? null : repos.clientRepo,
-    clientVaultRepo: minimal ? null : repos.clientVaultRepo,
+    clientRepo: boxFirst ? null : repos.clientRepo,
+    clientVaultRepo: boxFirst ? null : repos.clientVaultRepo,
   });
 
   permissionService.setRepositories({
-    permissionRepo: minimal ? null : repos.permissionRepo,
-    clientRepo: minimal ? null : repos.clientRepo,
-    clientVaultRepo: minimal ? null : repos.clientVaultRepo,
+    permissionRepo: boxFirst ? null : repos.permissionRepo,
+    clientRepo: boxFirst ? null : repos.clientRepo,
+    clientVaultRepo: boxFirst ? null : repos.clientVaultRepo,
+    userRepo: repos.userRepo,
   });
 
   inviteService.setRepositories({ inviteRepo: repos.inviteRepo });
@@ -117,7 +130,7 @@ export function injectRepositories(repos) {
     employeeService.setRepositories({ userRepo: repos.userRepo });
   }
 
-  if (!minimal) {
+  if (hasOperational) {
     commentService.setRepositories({ commentRepo: repos.commentRepo });
 
     if (inAppNotificationStore.setRepositories) {
@@ -129,13 +142,16 @@ export function injectRepositories(repos) {
     if (statusTransitionService.setRepositories) {
       statusTransitionService.setRepositories({ approvalUndoRepo: repos.approvalUndoRepo });
     }
-    if (portalService.setRepositories) {
-      portalService.setRepositories({
-        docRepo: repos.docRequestRepo,
-        clientRepo: repos.clientRepo,
-        projectRepo: repos.projectRepo,
-      });
-    }
+  }
+
+  if (isFullSchema()) {
+    portalService.setRepositories({
+      docRepo: repos.docRequestRepo,
+      clientRepo: repos.clientRepo,
+      projectRepo: repos.projectRepo,
+    });
+  } else if (isProductionSchema()) {
+    portalService.setRepositories({ userRepo: repos.userRepo });
   }
 }
 

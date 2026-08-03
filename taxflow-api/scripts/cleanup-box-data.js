@@ -26,6 +26,15 @@ const boxConfigPath = resolve(__dirname, '../', process.env.BOX_CONFIG_PATH || '
 const rootFolderId = process.env.BOX_ROOT_FOLDER_ID || '0';
 
 async function main() {
+  if (process.env.NODE_ENV === 'production' && process.env.ALLOW_DESTRUCTIVE_SCRIPTS !== 'true') {
+    console.error('Refusing to run destructive cleanup in production without ALLOW_DESTRUCTIVE_SCRIPTS=true');
+    process.exit(1);
+  }
+  if (process.env.CONFIRM_BOX_CLEANUP !== 'DELETE_ALL_TAXFLOW_BOX_DATA') {
+    console.error('Refusing to run. Set CONFIRM_BOX_CLEANUP=DELETE_ALL_TAXFLOW_BOX_DATA to proceed.');
+    process.exit(1);
+  }
+
   console.log('=== TaxFlow Box Data Cleanup ===\n');
 
   // 1. Initialize Box client

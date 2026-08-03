@@ -5,10 +5,33 @@
 import express from 'express';
 import authService from '../services/authService.js';
 import { requireAuth } from '../middleware/authMiddleware.js';
+import { rateLimit } from '../middleware/httpRateLimit.js';
+import { assertPasswordPolicy } from '../utils/authUtils.js';
 
 const router = express.Router();
 
-router.post('/login', async (req, res, next) => {
+const authAttemptLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  max: 20,
+  message: 'Too many authentication attempts. Please try again later.',
+  keyFn: (req) => {
+    const ip = req.ip || req.socket?.remoteAddress || 'unknown';
+    const email = String(req.body?.email || '').toLowerCase();
+    return `auth:${ip}:${email}`;
+  },
+});
+
+const resetLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  max: 5,
+  message: 'Too many password reset requests. Please try again later.',
+  keyFn: (req) => {
+    const ip = req.ip || req.socket?.remoteAddress || 'unknown';
+    return `reset:${ip}`;
+  },
+});
+
+router.post('/login', authAttemptLimiter, async (req, res, next) => {
   try {
     const { email, password } = req.body;
 
@@ -79,6 +102,11 @@ router.post('/change-password', requireAuth, async (req, res, next) => {
     if (!currentPassword || !newPassword) {
       return res.status(400).json({ error: 'currentPassword and newPassword are required' });
     }
+    try {
+      assertPasswordPolicy(newPassword);
+    } catch (policyErr) {
+      return res.status(400).json({ error: policyErr.message });
+    }
     const result = await authService.changePassword(req.user.userId, currentPassword, newPassword);
     res.json(result);
   } catch (error) {
@@ -89,7 +117,7 @@ router.post('/change-password', requireAuth, async (req, res, next) => {
   }
 });
 
-router.post('/forgot-password', async (req, res, next) => {
+router.post('/forgot-password', resetLimiter, async (req, res, next) => {
   try {
     const { email } = req.body;
     if (!email) {
@@ -102,17 +130,22 @@ router.post('/forgot-password', async (req, res, next) => {
   }
 });
 
-router.post('/reset-password', async (req, res, next) => {
+router.post('/reset-password', resetLimiter, async (req, res, next) => {
   try {
     const { token, newPassword } = req.body;
     if (!token || !newPassword) {
       return res.status(400).json({ error: 'token and newPassword are required' });
     }
+    try {
+      assertPasswordPolicy(newPassword);
+    } catch (policyErr) {
+      return res.status(400).json({ error: policyErr.message });
+    }
     const result = await authService.resetPassword(token, newPassword);
     res.json(result);
   } catch (error) {
-    if (error.statusCode === 400) {
-      return res.status(400).json({ error: error.message });
+    if (error.statusCode === 400 || error.statusCode === 404) {
+      return res.status(error.statusCode).json({ error: error.message });
     }
     next(error);
   }

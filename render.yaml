@@ -6,6 +6,8 @@ services:
     rootDir: .
     buildCommand: cd box-wrapper-service && npm install && npm run build && cd ../taxflow-api && npm install
     startCommand: cd taxflow-api && node src/server.js
+    # Legacy SQLite deployment — for AWS production use App Runner + RDS.
+    # See docs/DEPLOYMENT_AWS.md and infrastructure/terraform/
     envVars:
       - key: NODE_ENV
         value: production
@@ -21,6 +23,11 @@ services:
         value: agarwalayush1412@gmail.com
       - key: FRONTEND_URL
         sync: false
+      # AWS production: DB_DIALECT=postgres, DB_SCHEMA=production, DATABASE_URL from Secrets Manager
+      - key: DB_DIALECT
+        value: sqlite
+      - key: DB_SCHEMA
+        value: full
       - key: DATABASE_URL
         value: ./data/taxflow.db
       - key: SMTP_HOST

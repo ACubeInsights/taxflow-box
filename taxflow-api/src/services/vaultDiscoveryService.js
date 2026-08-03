@@ -86,8 +86,19 @@ export class VaultDiscoveryService {
       { id: vault.supportingDocs, name: 'Supporting Docs' },
       { id: vault.projects, name: 'Projects' },
       { id: vault.year, name: 'Year' },
-      { id: vault.internalNotes, name: 'Internal Notes' },
+      // Internal Notes intentionally omitted — staff-only; never treat as client vault ACL surface
     ].filter((f) => f.id);
+  }
+
+  /**
+   * Strip staff-only folder IDs before returning vault metadata to client users.
+   * @param {object|null} vault
+   * @returns {object|null}
+   */
+  sanitizeVaultForClient(vault) {
+    if (!vault) return null;
+    const { internalNotes: _internalNotes, ...safe } = vault;
+    return safe;
   }
 
   /**

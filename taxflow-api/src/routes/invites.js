@@ -6,8 +6,17 @@ import express from 'express';
 import inviteService from '../services/inviteService.js';
 import signupService from '../services/signupService.js';
 import { requireAuth, requireRole } from '../middleware/authMiddleware.js';
+import { rateLimit } from '../middleware/httpRateLimit.js';
+import { assertPasswordPolicy } from '../utils/authUtils.js';
 
 const router = express.Router();
+
+const signupLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  max: 10,
+  message: 'Too many signup attempts. Please try again later.',
+  keyFn: (req) => `signup:${req.ip || req.socket?.remoteAddress || 'unknown'}`,
+});
 
 /**
  * POST /api/invites
@@ -16,17 +25,18 @@ const router = express.Router();
  */
 router.post('/', requireAuth, requireRole('employee', 'superadmin'), async (req, res, next) => {
   try {
-    const { clientName, email, externalId, employeeEmail, financialYear } = req.body;
+    const { clientName, email, externalId, financialYear } = req.body;
 
     if (!email || !email.trim()) {
       return res.status(400).json({ error: 'Missing required field: email' });
     }
 
+    // Attribution always from authenticated user — never trust body.employeeEmail
     const result = await inviteService.createInvite({
       clientName: (clientName || '').trim() || null,
       email: email.trim(),
       externalId: (externalId || '').trim() || null,
-      employeeEmail: (employeeEmail || req.user?.email || '').trim(),
+      employeeEmail: req.user.email,
       financialYear: (financialYear || new Date().getFullYear().toString()).trim(),
     });
 
@@ -63,15 +73,17 @@ router.get('/validate', async (req, res, next) => {
  * POST /api/invites/signup
  * Complete client signup (public — token authenticates).
  */
-router.post('/signup', async (req, res, next) => {
+router.post('/signup', signupLimiter, async (req, res, next) => {
   try {
     const { token, password, clientName, externalId, email } = req.body;
 
     if (!token) {
       return res.status(400).json({ error: 'Token is required' });
     }
-    if (!password || password.length < 6) {
-      return res.status(400).json({ error: 'Password must be at least 6 characters' });
+    try {
+      assertPasswordPolicy(password);
+    } catch (policyErr) {
+      return res.status(400).json({ error: policyErr.message });
     }
 
     const result = await signupService.completeSignup(token, password, clientName, externalId, email);
@@ -87,11 +99,15 @@ router.post('/signup', async (req, res, next) => {
 /**
  * POST /api/invites/:id/resend
  * Resend invitation email (employee/superadmin).
+ * Employees may only resend their own invites; superadmin may resend any.
  */
 router.post('/:id/resend', requireAuth, requireRole('employee', 'superadmin'), async (req, res, next) => {
   try {
     const { id } = req.params;
-    const result = await inviteService.resendInvite(id);
+    const result = await inviteService.resendInvite(id, {
+      requesterEmail: req.user.email,
+      requesterRole: req.user.role,
+    });
     res.json({ ...result, message: `Invitation resent to ${result.email}` });
   } catch (error) {
     if (error.statusCode) {
@@ -103,11 +119,14 @@ router.post('/:id/resend', requireAuth, requireRole('employee', 'superadmin'), a
 
 /**
  * GET /api/invites
- * List invites for authenticated employee.
+ * List invites for authenticated employee (superadmin may pass ?employeeEmail= to filter).
  */
 router.get('/', requireAuth, requireRole('employee', 'superadmin'), async (req, res, next) => {
   try {
-    const employeeEmail = req.user?.email || req.query.employeeEmail;
+    let employeeEmail = req.user.email;
+    if (req.user.role === 'superadmin' && req.query.employeeEmail) {
+      employeeEmail = String(req.query.employeeEmail);
+    }
     if (!employeeEmail) {
       return res.status(400).json({ error: 'Employee email required' });
     }

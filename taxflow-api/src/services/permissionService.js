@@ -28,13 +28,15 @@ class PermissionService {
     this._permissionRepo = null;
     this._clientRepo = null;
     this._clientVaultRepo = null;
+    this._userRepo = null;
   }
 
-  setRepositories({ permissionRepo, clientRepo, clientVaultRepo }) {
+  setRepositories({ permissionRepo, clientRepo, clientVaultRepo, userRepo }) {
     if (permissionRepo) this._permissionRepo = permissionRepo;
     if (clientRepo) this._clientRepo = clientRepo;
     if (clientVaultRepo) this._clientVaultRepo = clientVaultRepo;
-    boxCollaborationAccessService.setRepositories({ clientRepo, clientVaultRepo });
+    if (userRepo) this._userRepo = userRepo;
+    boxCollaborationAccessService.setRepositories({ clientRepo, clientVaultRepo, userRepo });
   }
 
   get repo() {
@@ -253,8 +255,15 @@ class PermissionService {
     try {
       const { getRepositories } = await import('../db/repositories/index.js');
       const repos = getRepositories();
-      const clientRecord = await repos.clientRepo.findById(clientId);
-      if (!clientRecord?.email) return;
+      let clientEmail = null;
+      if (repos.clientRepo) {
+        const clientRecord = await repos.clientRepo.findById(clientId);
+        clientEmail = clientRecord?.email;
+      } else if (repos.userRepo) {
+        const userRecord = await repos.userRepo.findById(clientId);
+        clientEmail = userRecord?.email;
+      }
+      if (!clientEmail) return;
 
       let template = 'permission_changed';
       if (oldLevel === 'no_access' && newLevel !== 'no_access') template = 'permission_granted';
@@ -269,7 +278,7 @@ class PermissionService {
       const frontendUrl = config.frontendUrl || 'http://localhost:5173';
       const deepLinkUrl = newLevel !== 'no_access' ? `${frontendUrl}/dashboard` : '';
 
-      await emailService.sendEmail(clientRecord.email, template, {
+      await emailService.sendEmail(clientEmail, template, {
         message: `Your access to "${resourceName || 'a resource'}" has been updated by ${employeeName}. Previous access: ${oldLevel}. New access: ${newLevel}.`,
         fileName: resourceName || '',
         deepLinkUrl,

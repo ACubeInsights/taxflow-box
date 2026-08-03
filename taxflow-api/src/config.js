@@ -94,6 +94,6 @@ export const config = {
   dbPoolMax: parseInt(process.env.DB_POOL_MAX || '10'),
   /** Require SSL for Postgres (recommended for RDS) */
   dbSsl: process.env.DB_SSL === 'true' || process.env.NODE_ENV === 'production',
-  /** 'full' = all tables (dev/SQLite); 'minimal' = users/sessions/reset_tokens/invite_records only */
+  /** 'full' = all tables (dev/SQLite); 'production' = Box-first Postgres; 'minimal' = legacy 4-table */
   dbSchema: process.env.DB_SCHEMA || 'full',
 };

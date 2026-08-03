@@ -3,17 +3,33 @@ import multer from 'multer';
 import boxService from '../services/boxService.js';
 import { BoxService } from '../services/boxService.js';
 import { getDb } from '../db/db.js';
-import { requireAuth, permissionCheck, validateFolderOwnership, validateUploadFolder } from '../middleware/authMiddleware.js';
+import { requireAuth, requireRole, permissionCheck, validateFolderOwnership, validateUploadFolder } from '../middleware/authMiddleware.js';
 import { config } from '../config.js';
 import cacheLayer from '../services/cacheLayer.js';
 import projectService from '../services/projectService.js';
 import boxDocumentStatusService from '../services/boxDocumentStatusService.js';
+import boxDocumentRequestService from '../services/boxDocumentRequestService.js';
+import { isBoxFirstSchema } from '../db/schemaMode.js';
+import vaultResourceGuard from '../services/vaultResourceGuard.js';
 import fs from 'fs';
 import path from 'path';
 import os from 'os';
+import crypto from 'crypto';
 import { Readable } from 'stream';
 
 const router = express.Router();
+
+/** Staff must only touch files inside known client vaults */
+async function assertStaffVaultFile(req, res, next) {
+  try {
+    if (['employee', 'superadmin'].includes(req.user?.role)) {
+      await vaultResourceGuard.assertKnownVaultFile(req.params.fileId);
+    }
+    next();
+  } catch (err) {
+    next(err);
+  }
+}
 
 // Upload temp directory
 const UPLOAD_TEMP_DIR = path.join(os.tmpdir(), 'taxflow-uploads');
@@ -21,11 +37,22 @@ if (!fs.existsSync(UPLOAD_TEMP_DIR)) {
   fs.mkdirSync(UPLOAD_TEMP_DIR, { recursive: true });
 }
 
-// Configure multer: memory for small files, disk for large files
-// Use disk storage to handle files up to 5GB without memory pressure
+/**
+ * Safe disk filename: UUID + optional sanitized extension from original name.
+ * Never uses path segments from client-supplied originalname.
+ */
+function safeUploadFilename(originalname) {
+  const ext = path.extname(originalname || '').replace(/[^\w.]/g, '').slice(0, 16);
+  const base = crypto.randomUUID();
+  return ext ? `${base}${ext}` : base;
+}
+
 const storage = multer.diskStorage({
   destination: (req, file, cb) => cb(null, UPLOAD_TEMP_DIR),
-  filename: (req, file, cb) => cb(null, `${Date.now()}-${file.originalname}`),
+  filename: (req, file, cb) => {
+    const safeName = safeUploadFilename(file.originalname);
+    cb(null, safeName);
+  },
 });
 
 const upload = multer({
@@ -40,8 +67,9 @@ const upload = multer({
  * Upload a document to a client's vault.
  * Files < 20MB: direct upload. Files >= 20MB: chunked upload.
  * Body (multipart/form-data): { file, folderId, requestId? }
+ * Multer must run before validateUploadFolder so folderId is available from multipart body.
  */
-router.post('/upload', requireAuth, validateUploadFolder, upload.single('file'), async (req, res, next) => {
+router.post('/upload', requireAuth, upload.single('file'), validateUploadFolder, async (req, res, next) => {
   let tempFilePath = null;
 
   try {
@@ -55,6 +83,17 @@ router.post('/upload', requireAuth, validateUploadFolder, upload.single('file'),
       return res.status(400).json({ error: 'Missing folderId' });
     }
 
+    let docRequest = null;
+    if (requestId) {
+      docRequest = await projectService.getDocument(requestId);
+      if (!docRequest) {
+        return res.status(404).json({ error: 'Document request not found' });
+      }
+      if (req.user.role === 'client' && req.clientId && docRequest.clientId !== req.clientId) {
+        return res.status(404).json({ error: 'Resource not found' });
+      }
+    }
+
     tempFilePath = req.file.path;
     const fileSize = req.file.size;
 
@@ -64,7 +103,7 @@ router.post('/upload', requireAuth, validateUploadFolder, upload.single('file'),
     // Upload to Box (routes to direct or chunked based on size)
     const file = await boxService.uploadFile(
       folderId,
-      req.file.originalname,
+      path.basename(req.file.originalname || 'upload'),
       fileBuffer
     );
 
@@ -73,21 +112,8 @@ router.post('/upload', requireAuth, validateUploadFolder, upload.single('file'),
     tempFilePath = null;
 
     // Link upload to document request: Box metadata is source of truth for status
-    if (requestId) {
+    if (docRequest) {
       try {
-        const docRequest = await projectService.getDocument(requestId);
-        const db = getDb();
-        await db('document_requests')
-          .where('id', requestId)
-          .update({
-            status: 'Uploaded',
-            box_file_id: file.id,
-            uploaded_file_name: file.name,
-            version: db.raw('version + 1'),
-            updated_at: new Date().toISOString(),
-          });
-
-        if (docRequest) {
           await boxDocumentStatusService.applyUploadMetadata(file.id, {
             requestId: docRequest.id,
             clientId: docRequest.clientId,
@@ -95,7 +121,30 @@ router.post('/upload', requireAuth, validateUploadFolder, upload.single('file'),
             financialYear: new Date().getFullYear().toString(),
             priority: docRequest.priority,
           });
-        }
+
+          if (isBoxFirstSchema()) {
+            await boxDocumentRequestService.updateStatus(
+              requestId,
+              'Uploaded',
+              docRequest.version || 1,
+              {
+                clientId: docRequest.clientId,
+                uploadedFileName: file.name,
+                fileId: String(file.id),
+              }
+            );
+          } else {
+            const db = getDb();
+            await db('document_requests')
+              .where('id', requestId)
+              .update({
+                status: 'Uploaded',
+                box_file_id: file.id,
+                uploaded_file_name: file.name,
+                version: db.raw('version + 1'),
+                updated_at: new Date().toISOString(),
+              });
+          }
       } catch (dbErr) {
         console.error('Failed to update document request after upload:', dbErr.message);
       }
@@ -151,12 +200,13 @@ router.get('/:folderId', requireAuth, validateFolderOwnership, async (req, res, 
  * GET /api/documents/:fileId/preview-token
  * Generates a downscoped access token for Box Content Preview with annotations.
  * Scopes: base_preview, annotation_view_all, annotation_edit, item_download
- * Token is file-specific and cached for 50 minutes.
+ * Token is file-specific and cached per user for 50 minutes.
  */
-router.get('/:fileId/preview-token', requireAuth, async (req, res, next) => {
+router.get('/:fileId/preview-token', requireAuth, permissionCheck('viewer'), assertStaffVaultFile, async (req, res, next) => {
   try {
     const { fileId } = req.params;
-    const cacheKey = `doc:preview-token:${fileId}`;
+    const cacheKey = `doc:preview-token:${req.user.userId}:${fileId}`;
+
 
     // Check cache first
     const cached = await cacheLayer.get(cacheKey);
@@ -205,19 +255,19 @@ router.get('/:fileId/preview-token', requireAuth, async (req, res, next) => {
 
 /**
  * GET /api/documents/:fileId/edit-url
- * Returns an expiring embed URL for the file with edit capabilities.
- * Uses Box's expiring_embed_link which works with the Service Account token.
- * Alternative approach since shared link creation may require additional app scopes.
+ * Returns an embed URL for editing. Staff-only.
+ * Uses collaborators-scoped shared links (not company-wide) to avoid enterprise-wide edit exposure.
  */
-router.get('/:fileId/edit-url', requireAuth, async (req, res, next) => {
+router.get('/:fileId/edit-url', requireAuth, requireRole('employee', 'superadmin'), assertStaffVaultFile, async (req, res, next) => {
   try {
     const { fileId } = req.params;
     const client = boxService.getBoxClient();
 
+
     // Get auth token for raw API call
     const token = await client.auth.retrieveToken();
 
-    // Create editable shared link via raw Box API (SDK strips response for shared_link)
+    // Collaborators-only editable link — never company-wide
     const boxResp = await fetch(`https://api.box.com/2.0/files/${fileId}?fields=shared_link,name,extension`, {
       method: 'PUT',
       headers: {
@@ -226,7 +276,7 @@ router.get('/:fileId/edit-url', requireAuth, async (req, res, next) => {
       },
       body: JSON.stringify({
         shared_link: {
-          access: 'company',
+          access: 'collaborators',
           permissions: { can_edit: true, can_download: true, can_preview: true }
         }
       }),
@@ -237,10 +287,11 @@ router.get('/:fileId/edit-url', requireAuth, async (req, res, next) => {
       if (boxResp.status === 404) {
         return res.status(404).json({ error: 'File not found' });
       }
-      throw new Error(`Box API error ${boxResp.status}: ${errData.message || errData.code || 'Unknown'}`);
+      // Fall through to expiring embed if shared link creation fails
+      console.warn('Shared link creation failed, falling back to embed', errData.message || errData.code);
     }
 
-    const data = await boxResp.json();
+    const data = boxResp.ok ? await boxResp.json() : {};
     const sharedLink = data.shared_link;
 
     if (sharedLink && sharedLink.url) {
@@ -298,7 +349,7 @@ router.get('/:fileId/edit-url', requireAuth, async (req, res, next) => {
  * Upload an edited file as a new version to Box.
  * Preserves the original version in version history.
  */
-router.post('/:fileId/upload-version', requireAuth, permissionCheck('writer'), upload.single('file'), async (req, res, next) => {
+router.post('/:fileId/upload-version', requireAuth, permissionCheck('writer'), assertStaffVaultFile, upload.single('file'), async (req, res, next) => {
   let tempFilePath = null;
 
   try {

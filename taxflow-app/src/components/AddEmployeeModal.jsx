@@ -13,7 +13,7 @@ export default function AddEmployeeModal({ open, onClose }) {
   const [error, setError] = useState(null)
   const [boxWarn, setBoxWarn] = useState(null)
 
-  const isValid = name.trim() && email.trim() && password.trim().length >= 6
+  const isValid = name.trim() && email.trim() && password.trim().length >= 12 && /[A-Za-z]/.test(password) && /[0-9]/.test(password)
 
   const handleSubmit = async (e) => {
     e.preventDefault()
@@ -99,7 +99,7 @@ export default function AddEmployeeModal({ open, onClose }) {
             <form onSubmit={handleSubmit} className="flex flex-col gap-[var(--space-4)]">
               <FloatingLabel label="Full name" type="text" value={name} onChange={(e) => setName(e.target.value)} />
               <FloatingLabel label="Email" type="email" value={email} onChange={(e) => setEmail(e.target.value)} />
-              <FloatingLabel label="Initial password (min 6 characters)" type="password" value={password} onChange={(e) => setPassword(e.target.value)} />
+              <FloatingLabel label="Initial password (min 12 characters, letter + number)" type="password" value={password} onChange={(e) => setPassword(e.target.value)} />
 
               <div className="border-t border-[var(--color-rule)] pt-[var(--space-4)]">
                 <p className="label-caps m-0 mb-[var(--space-2)]">Box editing (optional)</p>

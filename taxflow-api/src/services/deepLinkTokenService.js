@@ -119,9 +119,12 @@ export class DeepLinkTokenService {
       throw createHttpError('Invalid deep-link token payload', 401);
     }
 
-    // Check expiry (Req 27.3)
+    // Check expiry (Req 27.3) — exp is required
     const now = Math.floor(Date.now() / 1000);
-    if (payload.exp && payload.exp < now) {
+    if (!payload.exp || typeof payload.exp !== 'number') {
+      throw createHttpError('Deep-link token missing expiry', 401);
+    }
+    if (payload.exp < now) {
       throw createHttpError('Deep-link token has expired', 401);
     }
 

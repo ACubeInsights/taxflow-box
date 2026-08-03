@@ -4,11 +4,30 @@
 
 import express from 'express';
 import commentService from '../services/commentService.js';
-import { requireAuth, requireRole } from '../middleware/authMiddleware.js';
+import projectService from '../services/projectService.js';
+import { requireAuth, requireRole, resolveClientForUser } from '../middleware/authMiddleware.js';
 
 const router = express.Router();
 
 router.use(requireAuth);
+
+/**
+ * Clients may only access comments on document requests that belong to them.
+ * Staff bypass. Returns false if access denied.
+ */
+async function assertDocumentCommentAccess(req, documentId) {
+  if (['employee', 'superadmin'].includes(req.user.role)) {
+    return true;
+  }
+  if (req.user.role !== 'client') {
+    return false;
+  }
+  const client = await resolveClientForUser(req.user);
+  if (!client) return false;
+  const doc = await projectService.getDocument(documentId);
+  if (!doc) return false;
+  return doc.clientId === client.id;
+}
 
 /**
  * GET /api/documents/:documentId/comments
@@ -16,7 +35,15 @@ router.use(requireAuth);
 router.get('/documents/:documentId/comments', async (req, res, next) => {
   try {
     const { documentId } = req.params;
-    const comments = await commentService.getComments(documentId);
+    const allowed = await assertDocumentCommentAccess(req, documentId);
+    if (!allowed) {
+      return res.status(404).json({ error: 'Resource not found' });
+    }
+
+    const includeInternal = ['employee', 'superadmin'].includes(req.user.role);
+    const comments = await commentService.getComments(documentId, { includeInternal });
+
+
     res.json(comments);
   } catch (error) {
     next(error);
@@ -30,6 +57,11 @@ router.post('/documents/:documentId/comments', async (req, res, next) => {
   try {
     const { documentId } = req.params;
     const { type, text, mentions } = req.body;
+
+    const allowed = await assertDocumentCommentAccess(req, documentId);
+    if (!allowed) {
+      return res.status(404).json({ error: 'Resource not found' });
+    }
 
     if (!type || (type !== 'review' && type !== 'internal')) {
       return res.status(400).json({ error: 'Comment type must be "review" or "internal"' });

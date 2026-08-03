@@ -60,7 +60,11 @@ router.get('/:clientId/vault', requireAuth, requireClientAccess, async (req, res
     }
 
     await ensureAdminCollaborator(vault.root);
-    res.json({ vault: mapVaultManifest(vault) });
+    const payload =
+      req.user.role === 'client'
+        ? vaultDiscoveryService.sanitizeVaultForClient(mapVaultManifest(vault))
+        : mapVaultManifest(vault);
+    res.json({ vault: payload });
   } catch (error) {
     next(error);
   }

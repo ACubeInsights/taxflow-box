@@ -6,6 +6,7 @@ import express from 'express';
 import notificationService from '../services/notificationService.js';
 import deepLinkTokenService from '../services/deepLinkTokenService.js';
 import { requireAuth } from '../middleware/authMiddleware.js';
+import { config } from '../config.js';
 
 const router = express.Router();
 
@@ -63,7 +64,7 @@ deepLinkRouter.get('/deep-link', (req, res) => {
     const payload = deepLinkTokenService.verifyDeepLinkToken(token);
 
     const { fileId, clientId, action } = payload;
-    const baseUrl = req.app?.locals?.frontendUrl || 'http://localhost:5173';
+    const baseUrl = config.frontendUrl || req.app?.locals?.frontendUrl || 'http://localhost:5173';
     const redirectUrl = new URL(baseUrl);
     redirectUrl.pathname = `/${action || 'view'}`;
     if (fileId) redirectUrl.searchParams.set('fileId', fileId);

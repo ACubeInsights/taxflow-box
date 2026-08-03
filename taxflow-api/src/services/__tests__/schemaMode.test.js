@@ -1,11 +1,20 @@
 import { describe, it, expect } from 'vitest';
-import { isMinimalSchema, isFullSchema } from '../../db/schemaMode.js';
+import {
+  isMinimalSchema,
+  isFullSchema,
+  isProductionSchema,
+  isBoxFirstSchema,
+  getMigrationsDirectoryName,
+} from '../../db/schemaMode.js';
 import { mapVaultManifest } from '../vaultDiscoveryService.js';
 
 describe('schemaMode', () => {
   it('defaults to full schema in tests', () => {
     expect(isFullSchema()).toBe(true);
     expect(isMinimalSchema()).toBe(false);
+    expect(isProductionSchema()).toBe(false);
+    expect(isBoxFirstSchema()).toBe(false);
+    expect(getMigrationsDirectoryName()).toBe('migrations');
   });
 });
 

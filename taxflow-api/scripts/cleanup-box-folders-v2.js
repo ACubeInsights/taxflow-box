@@ -20,6 +20,10 @@ import { BoxWrapperService } from '../../box-wrapper-service/dist/index.js';
 const boxConfigPath = resolve(__dirname, '../', process.env.BOX_CONFIG_PATH || './box_config.json');
 
 async function main() {
+  if (process.env.CONFIRM_BOX_CLEANUP !== 'DELETE_ALL_TAXFLOW_BOX_DATA') {
+    console.error('Refusing to run. Set CONFIRM_BOX_CLEANUP=DELETE_ALL_TAXFLOW_BOX_DATA to proceed.');
+    process.exit(1);
+  }
   console.log('=== Box Folder Cleanup v2 ===\n');
 
   const service = new BoxWrapperService({ configPath: boxConfigPath, rootFolderId: '0' });

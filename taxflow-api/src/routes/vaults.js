@@ -216,16 +216,23 @@ router.put('/folders/:folderId', requireAuth, requireRole('employee', 'superadmi
 
 /**
  * DELETE /api/vaults/folders/:folderId
- * Delete a folder (recursively deletes contents).
- * Auth: requireAuth → requireRole('employee', 'superadmin')
+ * Recursively delete a folder. Superadmin only + explicit confirmation header.
+ * Auth: requireAuth → requireRole('superadmin')
  */
-router.delete('/folders/:folderId', requireAuth, requireRole('employee', 'superadmin'), async (req, res, next) => {
+router.delete('/folders/:folderId', requireAuth, requireRole('superadmin'), async (req, res, next) => {
   try {
     const { folderId } = req.params;
 
-    // Safety: prevent deletion of the root folder (Box root = '0')
     if (folderId === '0') {
       return res.status(400).json({ error: 'Cannot delete root folder' });
+    }
+
+    // Require intentional confirmation to reduce accidental mass deletion
+    if (req.get('X-Confirm-Delete') !== 'true') {
+      return res.status(400).json({
+        error: 'Recursive folder delete requires header X-Confirm-Delete: true',
+        code: 'CONFIRMATION_REQUIRED',
+      });
     }
 
     const client = boxService.getBoxClient();

@@ -71,11 +71,21 @@ class InviteService {
 
   /**
    * Resend invitation email with fresh token.
+   * @param {string} inviteId
+   * @param {{ requesterEmail?: string, requesterRole?: string }} [opts]
    */
-  async resendInvite(inviteId) {
+  async resendInvite(inviteId, opts = {}) {
     const record = await this.inviteRepo.findById(inviteId);
     if (!record) throw createHttpError('Invite not found', 404);
     if (record.status === 'accepted') throw createHttpError('Cannot resend — invite already accepted', 400);
+
+    if (
+      opts.requesterRole === 'employee' &&
+      opts.requesterEmail &&
+      String(record.employee_email || '').toLowerCase() !== String(opts.requesterEmail).toLowerCase()
+    ) {
+      throw createHttpError('Invite not found', 404);
+    }
 
     // Rate limit check
     const resendCount = await this.inviteRepo.getResendCountInWindow(inviteId);

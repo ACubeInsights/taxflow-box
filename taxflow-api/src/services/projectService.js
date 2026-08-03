@@ -15,7 +15,7 @@ import notificationService from './notificationService.js';
 import boxDocumentStatusService from './boxDocumentStatusService.js';
 import boxEntityService from './boxEntityService.js';
 import boxDocumentRequestService from './boxDocumentRequestService.js';
-import { isMinimalSchema } from '../db/schemaMode.js';
+import { isBoxFirstSchema } from '../db/schemaMode.js';
 import { createHttpError } from '../utils/httpError.js';
 import {
   clients as seedClients,
@@ -56,7 +56,7 @@ export class ProjectService {
    * @param {{ clientRepo?: object, projectRepo?: object, docRequestRepo?: object, activityRepo?: object }} repos
    */
   setRepositories({ clientRepo, projectRepo, docRequestRepo, activityRepo, userRepo, minimalMode } = {}) {
-    this._minimalMode = minimalMode ?? isMinimalSchema();
+    this._minimalMode = minimalMode ?? isBoxFirstSchema();
     if (userRepo) this._userRepo = userRepo;
     if (clientRepo) this._clientRepo = clientRepo;
     if (projectRepo) this._projectRepo = projectRepo;

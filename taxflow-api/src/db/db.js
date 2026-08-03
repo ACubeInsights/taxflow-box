@@ -1,5 +1,6 @@
 import knex from 'knex';
 import { config } from '../config.js';
+import { getMigrationsDirectoryName } from './schemaMode.js';
 import { logger } from '../utils/logger.js';
 
 let db = null;
@@ -61,9 +62,7 @@ async function cleanupExpired() {
 export async function initDatabase() {
   const { dbDialect, databaseUrl, dbPoolMin, dbPoolMax, dbSchema } = config;
 
-  const migrationsDir = dbSchema === 'minimal'
-    ? new URL('./migrations-minimal', import.meta.url).pathname
-    : new URL('./migrations', import.meta.url).pathname;
+  const migrationsDir = new URL(`./${getMigrationsDirectoryName()}`, import.meta.url).pathname;
 
   let knexConfig;
 
